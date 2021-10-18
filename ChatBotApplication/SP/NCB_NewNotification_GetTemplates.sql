@@ -5,6 +5,16 @@ DELIMITER //
 
 CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_NewNotification_GetTemplates`(
 	IN notificationTypeID SMALLINT
+	 /*
+		Creator: Dominic@20191211
+        Task: 	
+		DB: DBCB-ChatBot
+        Param:
+
+        Revisions:
+				- 20191211@Dominic: First Commit
+
+    */
 )
 NCB_NewNotification_GetTemplates:BEGIN
 	SELECT nt.NotificationTemplateId
