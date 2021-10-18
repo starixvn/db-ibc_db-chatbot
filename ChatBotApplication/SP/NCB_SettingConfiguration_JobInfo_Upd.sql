@@ -6,7 +6,7 @@ DELIMITER //
 CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_SettingConfiguration_JobInfo_Upd`(
     IN      id              INT
     ,IN     batchSize       INT
-    ,IN     testingGroup    INT
+    ,IN     testingGroup    TEXT
     ,IN     modifiedBy      INT
     ,OUT	errCode			SMALLINT
     ,OUT	errMsg			VARCHAR (100)
@@ -17,6 +17,7 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_SettingConfiguration_JobInfo_U
 
         Revisions:
             - 20200422@Merlin: Update job info - RedmineID: #132039
+			- 20210513@Malcolm: Integrate Telegram [RedmineID: #151807]
     */
 )
 SQL SECURITY DEFINER

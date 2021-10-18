@@ -16,6 +16,7 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_EditNotification_Sel`(
         Revisions:
 				- 20190408@Dominic: First Commit
 				- 20200305@Oliver: Fix issue copy paste list recipient not effected. RedmineID: 129762
+                 - 20210513@Malcolm: Integrate Telegram [RedmineID: #151807]
         
     */
 )
@@ -24,8 +25,9 @@ BEGIN
 	DECLARE RECIPIENT_TYPE_LICENSEES 	SMALLINT DEFAULT 1;
 	DECLARE RECIPIENT_TYPE_INTERNAL_CSD SMALLINT DEFAULT 3;
 	#1st dataset: Main info of Notification
-	SELECT n.NotificationID, n.NotificationTypeID, nt.NotificationTypeName,  n.ProductID, p.ProductName, n.Title, n.Content, n.SendImmediately, n.ConfigSendTime
+	SELECT n.NotificationID, n.NotificationTypeID, nt.NotificationTypeName,  n.ProductID, p.ProductName, n.Title, n.Content, n.SendImmediately, n.ConfigSendTime, n.ChannelID, c.ChannelName
     FROM Notification n
+		INNER JOIN ConversationChannel c ON c.ChannelID = n.ChannelID
 		INNER JOIN NotificationType nt ON n.NotificationTypeID = nt.NotificationTypeID
         LEFT JOIN Product p ON n.ProductID = p.ProductID
     WHERE n.NotificationID = notificationID AND n.StatusID = 4;

@@ -6,6 +6,7 @@ DELIMITER //
 CREATE DEFINER = 'ChatBotSystem'@'%'  PROCEDURE NCB_NewNotification_Recipient_Sel (
 	IN notificationTypeID SMALLINT
 	,IN productID SMALLINT
+	,IN ChannelIdLst VARCHAR(100)
     /*
 		Creator: Dominic@20190401
 		Task:
@@ -17,6 +18,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%'  PROCEDURE NCB_NewNotification_Recipient_Se
                 - 20191211@Dominic: Filter active chat group - Redmine: #125085
 				- 20200211@Oliver: Add check notification chat group type has been changed [RedmineID: #128273]
 				- 20200214@Percy: Special Delete - Integrate Abnormal Bets [RedmineID: #127944]
+				- 20210513@Malcolm: Integrate Telegram - RedmineID: #151807
         
     */
 )
@@ -29,20 +31,33 @@ BEGIN
     #Local variables
     DECLARE nowGMTMinus4 DATETIME;
     
+	DROP TEMPORARY TABLE IF EXISTS tmp_ChannelIdLst;
+	CREATE TEMPORARY TABLE tmp_ChannelIdLst(ChannelId TINYINT UNSIGNED);
+	
+	SET @sqlCommand = REPLACE(ChannelIdLst, ',', '),(');
+	SET @sqlCommand = CONCAT('(', @sqlCommand, ')');
+	SET @sqlCommand = CONCAT('INSERT INTO tmp_ChannelIdLst VALUES', @sqlCommand);
+	PREPARE stmt FROM @sqlCommand;
+	EXECUTE stmt;
+	DEALLOCATE PREPARE stmt;
+	
 	DROP TEMPORARY TABLE IF EXISTS tmp_recipientLst;
-	CREATE TEMPORARY TABLE tmp_recipientLst(
-																	RecipientTypeID SMALLINT
-																	, RecipientID INT
-																	, RecipientName VARCHAR(200)
-                                                                    , SourceID INT
-																);
+	CREATE TEMPORARY TABLE tmp_recipientLst
+	(
+		RecipientTypeID SMALLINT
+		,RecipientID INT
+		,RecipientName VARCHAR(200)
+		,SourceID INT
+	);
     
     #Get a list of mapped-status Recipients by NotificationTypeID
-    INSERT INTO tmp_recipientLst(RecipientTypeID
-														, RecipientID
-                                                        , RecipientName
-                                                        , SourceID
-													)
+    INSERT INTO tmp_recipientLst
+	(
+		RecipientTypeID
+		,RecipientID
+		,RecipientName
+		,SourceID
+	)
     SELECT DISTINCT r.RecipientTypeID
 					, r.RecipientID
                     , r.RecipientName
@@ -69,7 +84,8 @@ BEGIN
 							SELECT nct.ChatGroupTypeID
 							FROM NotificationChatGroupType nct
 							WHERE nct.NotificationTypeID = notificationTypeID
-		);
+		)
+		AND con.ChannelId IN (SELECT tcl.ChannelId FROM tmp_ChannelIdLst tcl);
     
     #Delete InActive Licensee
     DELETE main

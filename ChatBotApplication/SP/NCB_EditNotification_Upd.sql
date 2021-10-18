@@ -26,16 +26,19 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_EditNotification_Upd`(
 				- 20190819@Elton: Update Error Message
                 - 20191021@Dominic: Not check recipients who have at least 1 mapped chat group
 				- 20200211@Oliver: Add check notification chat group type has been changed [RedmineID: #128273]
-                - 20211001@Malcolm: Only get group which have IsActive = 1 [RedmineID: #162583]
+				- 20211001@Malcolm: Only get group which have IsActive = 1 [RedmineID: #162583]
+                - 20210927@Malcolm: Integrate Telegram [RedmineID: #151807]
+                
     */
 )
 NCB_EditNotification_Upd:BEGIN
 
 	#Variables used to write User Logs
-	DECLARE startTime 			DATETIME(3);
+	DECLARE startTime 		DATETIME(3);
     DECLARE finishTime 		DATETIME(3); 
-    DECLARE duration 			INT;							
+    DECLARE duration 		INT;							
     DECLARE logContent 		TEXT CHARACTER SET utf8mb4;
+    DECLARE _ChannelId		TINYINT UNSIGNED;
     DECLARE ACTION_ID 		INT DEFAULT 5;
     
     #constants
@@ -61,8 +64,8 @@ NCB_EditNotification_Upd:BEGIN
     DECLARE productID INT;
     DECLARE notificationTypeID SMALLINT;
     
-    SELECT n.NotificationTypeID, n.ProductID
-    INTO notificationTypeID, productID
+    SELECT n.NotificationTypeID, n.ProductID, n.ChannelID
+    INTO notificationTypeID, productID,_ChannelId
     FROM Notification n
     WHERE n.NotificationID = notificationID;
     
@@ -123,8 +126,8 @@ NCB_EditNotification_Upd:BEGIN
 			ON bcri.ConversationGroupID = bcr.ConversationGroupID
 	INNER JOIN ConversationGroupBot cgb
 			ON cgb.ConversationGroupID = bcr.ConversationGroupID
-	INNER JOIN ConversationGroup con ON con.ConversationGroupID = bcr.ConversationGroupID
-    WHERE con.IsActive = 1;
+	INNER JOIN ConversationGroup g ON g.ConversationGroupID = bcr.ConversationGroupID
+    WHERE g.ChannelID = _ChannelId AND g.IsActive = 1;
             
     #Check Not-Mapping/Removed-Bot Recipients
     IF EXISTS(
@@ -311,14 +314,14 @@ NCB_EditNotification_Upd:BEGIN
     FROM tmp_recipientIDLst re
 		INNER JOIN ConversationGroupRecipient gr 
 			ON re.RecipientID = gr.RecipientID
-		INNER JOIN ConversationGroup con ON con.ConversationGroupID = gr.ConversationGroupID
+		INNER JOIN ConversationGroup g ON g.ConversationGroupID = gr.ConversationGroupID
 		LEFT JOIN ConversationGroupExtraInfo gri 
 			ON gri.ConversationGroupID = gr.ConversationGroupID
     WHERE gri.ChatGroupTypeID IN (
 						SELECT cgt.ChatGroupTypeID 
 						FROM NotificationChatGroupType  cgt
                         WHERE cgt.NotificationTypeID = notificationTypeID
-	) AND con.IsActive = 1;
+	) AND g.ChannelID = _ChannelId AND g.IsActive = 1;
     
     #Deleted notification recipients
 	DROP TEMPORARY TABLE IF EXISTS tmp_deletedNotificationRecipientList;

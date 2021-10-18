@@ -19,6 +19,7 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_ResendNotification_Sel`(
         Revisions:
 				- 20200116@Percy: Initialize SP [RedmineID: #127217]
 				- 20200305@Oliver: Fix issue copy paste list recipient not effected. RedmineID: 129762
+				- 20210513@Malcolm: Integrate Telegram - RedmineID: #151807
     */
 )
 BEGIN
@@ -35,10 +36,13 @@ BEGIN
 		, p.ProductName
 		, n.Title
         , n.Content
+		, n.ChannelId
+		, cc.ChannelName
 		, 1 AS SendImmediately
 		, n.ConfigSendTime
     FROM Notification n
 		INNER JOIN NotificationType nt ON n.NotificationTypeID = nt.NotificationTypeID
+		INNER JOIN ConversationChannel cc ON cc.ChannelId = n.ChannelId
 		LEFT JOIN Product p ON n.ProductID = p.ProductID
     WHERE n.NotificationID = notificationID;
     
