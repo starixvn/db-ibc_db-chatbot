@@ -40,7 +40,7 @@ BEGIN
         INNER JOIN Recipient R on NRL.RecipientID = R.RecipientID
     )
 	WHERE NRL.NotificationID = notificationID
-    ORDER BY NRL.NotificationID, NRL.SentTime
+    ORDER BY NRL.SentTime DESC
     LIMIT rowStart, pageSize; 
 END
 //

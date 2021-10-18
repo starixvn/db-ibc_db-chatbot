@@ -40,7 +40,7 @@ BEGIN
 		INNER JOIN ConversationGroup CG on CG.ConversationID = CML.ToConversationID
     )
 	WHERE CML.ReferenceID = notificationID
-    ORDER BY CML.ReferenceID, CML.SentTime
+    ORDER BY CML.SentTime DESC
     LIMIT rowStart, pageSize; 
     
     SELECT R.RecipientID, R.RecipientName, CG.ConversationID
