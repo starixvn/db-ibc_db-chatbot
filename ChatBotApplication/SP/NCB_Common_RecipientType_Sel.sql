@@ -8,6 +8,8 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE `NCB_Common_RecipientType_Sel`(
 		Task:		
 		DB: DBCB-ChatBot
         Description: Get list of all recipient types
+		Task:
+		DB: DBCB-ChatBot
         Revisions:
 				- 20190423@Dominic: Create        
     */

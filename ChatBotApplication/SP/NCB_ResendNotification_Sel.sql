@@ -9,6 +9,7 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_ResendNotification_Sel`(
     /*
 		Creator: 20200116@Percy
         Task: Chatbot For Licensee - Resend Notification
+		DB: DBCB-ChatBot
         Redmine: https://nexdev.net/issues/127217
 		DB: DBCB-ChatBot
         Param:

@@ -7,6 +7,8 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_Channel_Sel (
     ,IN Name VARCHAR(45) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
 	  /*
 		Creator: 20210627@Malcolm  
+		Task: get Channel 
+		DB: DBCB-ChatBot
         Revisions:
 				- 20210627@Malcolm: First Commit [RedmineID : #151807]      
     */

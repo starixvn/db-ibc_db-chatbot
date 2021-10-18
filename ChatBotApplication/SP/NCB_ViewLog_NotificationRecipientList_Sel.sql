@@ -9,6 +9,7 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_ViewLog_NotificationRecipientL
 	/*
 		Creator: Otis@20211018
         Task: add Log for ChatBot
+		DB: DBCB-ChatBot
         Param:
         Revisions:
 				- 20211018@Otis: First Commit [RedmineID: #151807]

@@ -8,6 +8,8 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE `NCB_Common_MappingStatus_Sel`(
 		Task:		
 		DB: DBCB-ChatBot
         Description: Get list of chat group mapping status
+		Task:
+		DB: DBCB-ChatBot
         Revisions:
 				- 20190423@Dominic: Create        
     */

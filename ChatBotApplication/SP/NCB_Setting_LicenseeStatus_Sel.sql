@@ -8,6 +8,8 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE `NCB_Setting_LicenseeStatus_Sel`(
 		Task:
 		DB: DBCB-ChatBot
         Description: Get list of all LicenseeStatus
+		Task:
+		DB: DBCB-ChatBot
         Revisions:
 				- 20190404@Scofield: Create        
     */
