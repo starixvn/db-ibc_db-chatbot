@@ -5,9 +5,9 @@ DELIMITER //
 CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE `NCB_Common_MappingStatus_Sel`(
 	/*
 		Creator: Dominic@20190423
-        Description: Get list of chat group mapping status
-		Task:
+		Task:		
 		DB: DBCB-ChatBot
+        Description: Get list of chat group mapping status
         Revisions:
 				- 20190423@Dominic: Create        
     */
