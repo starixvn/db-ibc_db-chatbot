@@ -1,8 +1,7 @@
 /*<info serverAlias="DBCB-ChatBot" databaseType="2" executers="ncb.admin" isFunction="0" isNested="0"></info>*/
 /*
   Created: 20210627@Malcolm
-  DB: ChatBot
-  Ip: 10.40.40.78:3306
+  DB: DBCB-ChatBot
   Task: Update Setting [RedmineId : #151807]
 */
 ALTER TABLE Notification
