@@ -7,6 +7,8 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_NotificationTemplate_Sel`(
 	IN notificationTemplateID INT
 	/*
 		Creator: Elton@20190913
+		Task:
+		DB: DBCB-ChatBot
         Revisions:
 			- 20190910@Elton: First Commit
 			- 20191218@Merlin.Le: Get additional UnRemovable field -- Redmine ID: #125707

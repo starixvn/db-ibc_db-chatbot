@@ -6,6 +6,8 @@ DELIMITER //
 CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_SettingConfiguration_MappingSettingTypeList_Sel`(
     /*
 		Creator: 20200417@Merlin
+		Task:
+		DB: DBCB-ChatBot
 
         Revisions:
             - 20200508@Merlin: Select list mapping setting type - RedmineID: #132039

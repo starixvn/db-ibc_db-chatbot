@@ -5,7 +5,9 @@ DELIMITER //
 CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE `NCB_Setting_SearchRecipient_Sel`(
 	IN keyword VARCHAR(200)
 	/*
-		Creator: Scofield@20190404       
+		Creator: Scofield@20190404    
+		Task:
+		DB: DBCB-ChatBot		
         Revisions:
 				- 20190404@Scofield: Create
         

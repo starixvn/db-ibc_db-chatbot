@@ -8,6 +8,8 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_NotificationList_UpdatedNotifi
     /*
 		Creator: Oliver@20201401
         Redmine: https://nexdev.net/issues/129363
+		Task:
+		DB: DBCB-ChatBot
         Param:
 				- notificationIds
 		Return Data Set:

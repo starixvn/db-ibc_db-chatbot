@@ -5,7 +5,8 @@ DELIMITER //
 CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_MsgSetting_SpecialDelete_Sel(
     /*
 		Creator: Dominic@20191211
-        Task: Chatbot For Licensee - Phase 2: Integrate Special Delete - Redmine:#122905
+        Task: Chatbot For Licensee - Phase 2: Integrate Special Delete - Redmine:#122905		
+		DB: DBCB-ChatBot
         Param:
 
         Revisions:

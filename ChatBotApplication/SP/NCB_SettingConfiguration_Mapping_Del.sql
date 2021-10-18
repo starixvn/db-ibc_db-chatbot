@@ -12,6 +12,8 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_SettingConfiguration_Mapping_D
     ,OUT    errMsg                  VARCHAR (100)
     /*
 		Creator: 20200423@Merlin
+		Task:
+		DB: DBCB-ChatBot
 
         Revisions:
             - 20200423@Merlin: Delete mapping - RedmineID: #132039

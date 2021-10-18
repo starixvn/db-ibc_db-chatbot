@@ -9,6 +9,8 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_NotificationTemplateList_Sel`(
     ,IN pageIndex INT
     ,IN pageSize INT
 	/*
+		Task:
+		DB: DBCB-ChatBot
         Revisions:
 			- 20191218@Merlin.Le: Get additional UnRemovable field -- Redmine ID: #125707
             - 20190215@Oliver: unremovable abnormalbes settings - Redmine: #128430

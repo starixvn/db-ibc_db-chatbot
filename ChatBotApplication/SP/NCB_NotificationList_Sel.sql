@@ -15,6 +15,7 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_NotificationList_Sel`(
     /*
 		Creator: Dominic@20190408
         Task: Chatbot For Licensee - Phase 1: Sending UM notification using Skype bot
+		DB: DBCB-ChatBot
         Redmine: https://nexdev.net/issues/110890
         Param:
 				- notificationTypeIDLst, recipientIDLst, creatorIDLst, notificationStatusIDLst: Comma separated strings for filtering

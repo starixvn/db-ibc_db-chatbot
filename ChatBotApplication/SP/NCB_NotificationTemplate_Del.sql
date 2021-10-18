@@ -10,6 +10,8 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_NotificationTemplate_Del`(
 	,OUT	errMsg					VARCHAR(100)
 	/*
 	Creator: Elton@20190913
+		Task:
+		DB: DBCB-ChatBot
 		Revisions:
 			- 20190910@Elton: First Commit
             - 20191218@Merlin.Le: Check not setting template before delete -- Redmine ID: #125707

@@ -5,6 +5,8 @@ DELIMITER //
 CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE `NCB_Setting_RecipientType_Sel`(
 	/*
 		Creator: Scofield@20190404
+		Task:
+		DB: DBCB-ChatBot
         Description: Get list of all recipient types
         Revisions:
 				- 20190404@Scofield: Create        

@@ -14,7 +14,8 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_EditNotification_Upd`(
 	, OUT errMsg TEXT
     /*
 		Creator: Dominic@20190401
-        Task: Chatbot For Licensee - Phase 1: Sending UM notification using Skype bot
+        Task: Chatbot For Licensee - Phase 1: Sending UM notification using Skype bot	
+		DB: DBCB-ChatBot
         Redmine: https://nexdev.net/issues/110890
         Param:
 				- ProductID: Applied to filter licensees who are offered a specific product

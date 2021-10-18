@@ -10,6 +10,8 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_SendNotification_RecipientSe
 	, OUT errMsg VARCHAR(100)
     /*
 		Creator: Dominic@20190401
+		Task:
+		DB: DBCB-ChatBot
         Param:
                 - sentStatus: in JSON format
 						[  

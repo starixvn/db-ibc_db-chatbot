@@ -14,6 +14,8 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_NotificationTemplate_Upd`(
 	,OUT	errMsg						VARCHAR(100)
 	/*
 		Creator: Elton@20190913
+		Task:
+		DB: DBCB-ChatBot
 		Revisions:
 			- 20190910@Elton: First Commit
 			- 20191217@Merlin: Check valid content before update -- Redmine ID: #125707

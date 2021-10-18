@@ -7,6 +7,8 @@ CREATE DEFINER=`ChatBotSystem` PROCEDURE `NCB_Conversation_Sel`(
     , IN botName VARCHAR(70)
     /*
 		Creator: Quinn@20190805
+		Task:		
+		DB: DBCB-ChatBot
         Param:
                 - conversationId: Conversation Id of Group
                 - botName: name of bot.

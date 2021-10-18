@@ -6,6 +6,8 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_Common_NotificationTemplate_
 	IN notificationTypeID SMALLINT
     /*
 		Creator: Dominic@20190401
+		Task:		
+		DB: DBCB-ChatBot
         Param:
 
         Revisions:

@@ -8,6 +8,8 @@ CREATE DEFINER = 'ChatBotSystem'@'%'  PROCEDURE NCB_NewNotification_Recipient_Se
 	,IN productID SMALLINT
     /*
 		Creator: Dominic@20190401
+		Task:
+		DB: DBCB-ChatBot
         Param:
 				- ProductID: Applied to filter licensees who are offered a specific product, NULL if not specified
         Revisions:

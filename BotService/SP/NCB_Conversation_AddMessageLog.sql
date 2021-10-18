@@ -13,6 +13,8 @@ CREATE DEFINER=`ChatBotSystem` PROCEDURE `NCB_Conversation_AddMessageLog`(
 	, OUT errMsg VARCHAR(100)
     /*
 		Creator: Quinn@20190814
+		Task:		
+		DB: DBCB-ChatBot
         Param:
 				- fromConversationId: Conversation Id of bot
                 - toConversationId: Conversation Id of personal/ group which received msg.

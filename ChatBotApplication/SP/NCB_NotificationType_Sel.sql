@@ -8,6 +8,8 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_NotificationType_Sel(
     OUT totalItems INT
 	/*
 		Creator: Oliver@20190820
+			Task:
+			DB: DBCB-ChatBot
 			Params:
 				- pageIndex: Page Index for paging
 				- pageSize: Page Size for paging

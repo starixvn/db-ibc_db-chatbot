@@ -6,6 +6,8 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE `NCB_Setting_SearchChatGroup_Sel`
 	IN keyword VARCHAR(200)
 	/*
 		Creator: Oliver@20190823
+		Task:
+		DB: DBCB-ChatBot
         Param:
         Revisions:
 				- 20190823@Oliver: First Commit

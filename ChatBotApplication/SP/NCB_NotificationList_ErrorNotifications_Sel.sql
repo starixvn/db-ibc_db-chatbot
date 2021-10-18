@@ -6,6 +6,8 @@ DELIMITER //
 CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_NotificationList_ErrorNotifications_Sel`(
     /*
 		Creator: 20200204@Oliver
+		Task:
+		DB: DBCB-ChatBot
 
         Revisions:
             - 20200204@Oliver: init SP

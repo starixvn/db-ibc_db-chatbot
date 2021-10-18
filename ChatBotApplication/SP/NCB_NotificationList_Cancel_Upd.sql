@@ -10,6 +10,8 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_NotificationList_Cancel_Upd(
 	, OUT errMsg VARCHAR(100)
     /*
 		Creator: Dominic@20190409
+		Task:
+		DB: DBCB-ChatBot
         Param:
 
         Revisions:

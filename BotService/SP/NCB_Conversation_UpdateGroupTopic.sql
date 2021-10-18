@@ -10,6 +10,8 @@ CREATE DEFINER=`ChatBotSystem` PROCEDURE `NCB_Conversation_UpdateGroupTopic`(
 	, OUT errMsg VARCHAR(100)
     /*
 		Creator: Quinn@20190726
+		Task:		
+		DB: DBCB-ChatBot
         Param:
                 - conversationId: Conversation Id of Group
                 - groupName: topic of group chat

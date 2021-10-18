@@ -18,6 +18,8 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_SettingConfiguration_Mapping_U
     ,OUT    errMsg                      VARCHAR (100)
     /*
 		Creator: 20200423@Merlin
+		Task:
+		DB: DBCB-ChatBot
 
         Revisions:
             - 20200423@Merlin: Update mapping - RedmineID: #132039

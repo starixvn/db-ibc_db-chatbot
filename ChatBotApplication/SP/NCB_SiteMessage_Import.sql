@@ -11,6 +11,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_SiteMessage_Import(
   /*
     Creator   : 20200305@Percy
     Task      : NAP ChatBot - Import data from Site Message
+	DB: DBCB-ChatBot
     Params    :
       - @MessageHeader
 							[  

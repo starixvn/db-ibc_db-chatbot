@@ -11,6 +11,8 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_UserLog_RunSP_Ins(
     , IN duration INT
     /*
 		Creator: Dominic@20190401
+		Task:
+		DB: DBCB-ChatBot
         Param:
 				- actionID: ActionID for SP
                 - referenceID: ObjectID of main target object such as Notification.NotificationID 

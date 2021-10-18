@@ -5,6 +5,8 @@ DELIMITER //
 CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_Common_NotificationType_Sel(
     /*
 		CREATOR: DOMINIC@20190401
+		Task:		
+		DB: DBCB-ChatBot
         PARAM:
 
         REVISIONS:

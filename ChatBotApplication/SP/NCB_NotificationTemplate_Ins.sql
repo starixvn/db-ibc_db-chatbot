@@ -14,6 +14,8 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_NotificationTemplate_Ins`(
 	,OUT errMsg VARCHAR(100)
 	/*
 		Creator: Elton@20190910
+		Task:
+		DB: DBCB-ChatBot
         Revisions:
 				- 20190910@Elton: First Commit
     */

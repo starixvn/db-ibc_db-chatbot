@@ -13,6 +13,8 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_OIC_SyncData(
 
     /*
 		Creator: Oliver@20190909
+		Task:
+		DB: DBCB-ChatBot
         Param:
 
         Revisions:

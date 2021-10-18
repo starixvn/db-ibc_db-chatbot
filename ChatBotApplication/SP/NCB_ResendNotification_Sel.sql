@@ -10,6 +10,7 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_ResendNotification_Sel`(
 		Creator: 20200116@Percy
         Task: Chatbot For Licensee - Resend Notification
         Redmine: https://nexdev.net/issues/127217
+		DB: DBCB-ChatBot
         Param:
 				- isSendAll = 0: Resend Error
 		Return Data Set:

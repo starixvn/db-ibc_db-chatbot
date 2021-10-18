@@ -9,6 +9,8 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_NotificationType_Del(
 	OUT errMsg VARCHAR(100)
 	/*
 		Creator: Scofield@20190912
+			Task:
+			DB: DBCB-ChatBot
 			Params:
 				- notificationTypeId: notification type id
 			Revisions:

@@ -8,6 +8,8 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_EditNotification_Recipient_Sel
 	,IN productID SMALLINT
     /*
 		Creator: Elton@20190821
+		Task:		
+		DB: DBCB-ChatBot
         Revisions:
 				- 20190821@Elton: First Commit
                 - 20191211@Dominic: Filter active chat group - Redmine: #125085

@@ -8,6 +8,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_SendNotification_GetPlanRetr
 		Creator: Dominic@20190417
         Task: Chatbot For Licensee - Phase 1: Sending UM notification using Skype bot
         Redmine: https://nexdev.net/issues/110890
+		DB: DBCB-ChatBot
         Param:
 		Result Dataset:
 				 #1st dataset: Main Notification Info such as title, content

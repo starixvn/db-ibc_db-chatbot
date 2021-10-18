@@ -6,6 +6,8 @@ DELIMITER //
 CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_SettingConfiguration_MsgContentsTypeList_Sel`(
     /*
 		Creator: 20200423@Merlin
+		Task:
+		DB: DBCB-ChatBot
 
         Revisions:
             - 20200423@Merlin: Get msg contents type list - RedmineID: #132039

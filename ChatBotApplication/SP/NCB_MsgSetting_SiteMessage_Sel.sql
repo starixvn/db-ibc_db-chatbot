@@ -5,7 +5,8 @@ DELIMITER //
 CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_MsgSetting_SiteMessage_Sel(
   /*
     Creator   : 20200305@Percy
-    Task      : NAP ChatBot - Get Setting for Site Message
+    Task      : NAP ChatBot - Get Setting for Site Message	
+	DB: DBCB-ChatBot
     Params    :
 
     Revisions :

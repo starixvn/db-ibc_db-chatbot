@@ -13,6 +13,8 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE `NCB_ChatGroupMapping_Upd`(
 	OUT errMsg VARCHAR(100)
 	/*
 		Creator: Scofield@20190404
+		Task:		
+		DB: DBCB-ChatBot
         Params:
 				- groupID: Bot Conversation ID
                 - recipientTypeID: Recipient Type ID

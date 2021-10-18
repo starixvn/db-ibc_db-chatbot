@@ -8,6 +8,8 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_SendNotification_GetImmedNot
 	, OUT errMsg VARCHAR(100)
     /*
 		Creator: Dominic@20190417
+		Task:
+		DB: DBCB-ChatBot
         Param:
         Result Dataset:
 				 #1st dataset: Main Notification Info such as title, content

@@ -16,6 +16,8 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_NewNotification_Ins`(
 	, OUT errMsg TEXT
     /*
 		Creator: Dominic@20190401
+		Task:
+		DB: DBCB-ChatBot
         Param:
 				- ProductID: Applied to filter licensees who are offered a specific product, NULL if not specified
                 - NotificationID: ID of created Notification

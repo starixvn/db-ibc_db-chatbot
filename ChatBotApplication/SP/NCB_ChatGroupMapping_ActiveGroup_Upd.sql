@@ -10,6 +10,8 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_ChatGroupMapping_ActiveGroup_
 	,OUT errMsg VARCHAR(100)
 /*
 		Creator: Merlin@20191212
+		Task:		
+		DB: DBCB-ChatBot
         Param:
         Revisions:
 				- 20191212@Merlin: Create [RedmineID: 125345]

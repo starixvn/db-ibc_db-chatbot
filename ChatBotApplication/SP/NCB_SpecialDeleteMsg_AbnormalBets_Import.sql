@@ -11,6 +11,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_SpecialDeleteMsg_AbnormalBets
   /*
     Creator   : 20200214@Percy
     Task      : NAP ChatBot - Get Setting for Abnormal Bets
+	DB: DBCB-ChatBot
     Params    :
       - @MessageHeader
 							[  

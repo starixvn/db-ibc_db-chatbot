@@ -12,6 +12,8 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_SettingConfiguration_JobInfo_U
     ,OUT	errMsg			VARCHAR (100)
     /*
 		Creator: 20200422@Merlin
+		Task:
+		DB: DBCB-ChatBot
 
         Revisions:
             - 20200422@Merlin: Update job info - RedmineID: #132039

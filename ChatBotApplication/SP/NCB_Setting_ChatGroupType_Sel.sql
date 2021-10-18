@@ -4,7 +4,9 @@ DELIMITER //
 
 CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE `NCB_Setting_ChatGroupType_Sel`(
 	/*
-		Creator: Scofield@20190404        
+		Creator: Scofield@20190404
+		Task:
+		DB: DBCB-ChatBot        
         Revisions:
 				- 20190404@Scofield: Create        
     */

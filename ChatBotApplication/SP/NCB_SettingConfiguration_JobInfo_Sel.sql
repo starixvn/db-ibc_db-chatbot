@@ -7,7 +7,8 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_SettingConfiguration_JobInfo_S
     IN      jobId       INT
     /*
 		Creator: 20200417@Merlin
-
+		Task:
+		DB: DBCB-ChatBot
         Revisions:
             - 20200417@Merlin: Get job info - RedmineID: #132039
     */

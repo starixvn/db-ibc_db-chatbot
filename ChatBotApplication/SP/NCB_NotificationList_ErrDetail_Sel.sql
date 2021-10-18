@@ -7,6 +7,8 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_NotificationList_ErrDetail_Sel
      IN notificationID INT
     /*
 		Creator: Dominic@20190408
+		Task:
+		DB: DBCB-ChatBot
         Param:
         
 		Result Dataset:

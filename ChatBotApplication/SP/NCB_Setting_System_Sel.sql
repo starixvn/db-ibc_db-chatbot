@@ -6,6 +6,8 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE `NCB_Setting_System_Sel`(
 	/*
 		Creator: Scofield@20190911
         Description: Get list of all system
+		Task:
+		DB: DBCB-ChatBot
         Revisions:
 				- 20190911@Scofield: Create        				
     */

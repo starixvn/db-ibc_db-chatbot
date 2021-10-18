@@ -10,6 +10,8 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_SettingConfiguration_SettingTy
 	,OUT    errMsg      VARCHAR (100)
     /*
 		Creator: 20200415@Merlin
+		Task:
+		DB: DBCB-ChatBot
 
         Revisions:
             - 20200415@Merlin: Delete setting type - RedmineID: #132039

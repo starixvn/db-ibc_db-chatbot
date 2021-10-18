@@ -5,6 +5,8 @@ DELIMITER //
 CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_Common_Product_Sel(
     /*
 		Creator: Dominic@20190401
+		Task:		
+		DB: DBCB-ChatBot
         Param:
 
         Revisions:

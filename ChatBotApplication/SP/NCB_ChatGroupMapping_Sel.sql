@@ -14,6 +14,8 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_ChatGroupMapping_Sel (
         OUT totalItems INT
 		 /*
 			Creator: Scofield@20190404
+			Task:		
+			DB: DBCB-ChatBot
 			Params:
 					- botIDs: Bot names, ex: "bot name 1,bot name 2"
 					- recipientTypeIds: Recipient Type Ids, ex: "1,2"

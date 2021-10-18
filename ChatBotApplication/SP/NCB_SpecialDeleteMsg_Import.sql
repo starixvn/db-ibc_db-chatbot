@@ -11,6 +11,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_SpecialDeleteMsg_Import(
     /*
 		Creator: Dominic@20191211
         Task: Chatbot For Licensee - Phase 2: Integrate Special Delete - Redmine:#122905
+		DB: DBCB-ChatBot
         Param:
 				-  @MessageHeader:
 							[  

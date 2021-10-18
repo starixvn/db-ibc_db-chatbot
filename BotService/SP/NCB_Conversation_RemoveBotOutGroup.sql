@@ -10,6 +10,8 @@ CREATE DEFINER=`ChatBotSystem` PROCEDURE `NCB_Conversation_RemoveBotOutGroup`(
 	, OUT errMsg VARCHAR(100)
     /*
 		Creator: Quinn@20190726
+		Task:		
+		DB: DBCB-ChatBot
         Param:
 				- botConversationId: Conversation Id of Bot
                 - onversationId: Conversation Id of Group

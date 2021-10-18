@@ -7,6 +7,8 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_SettingConfiguration_Notificat
 	IN notificationTypeId INT
     /*
 		Creator: 20200423@Merlin
+		Task:
+		DB: DBCB-ChatBot
 
         Revisions:
             - 20200423@Merlin: Get notification type data - RedmineID: #132039

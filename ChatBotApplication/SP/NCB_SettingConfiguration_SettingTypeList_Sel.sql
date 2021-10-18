@@ -9,6 +9,8 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_SettingConfiguration_SettingTy
     ,IN     settingType INT
     /*
 		Creator: 20200410@Merlin
+		Task:
+		DB: DBCB-ChatBot
 
         Revisions:
             - 20200410@Merlin: Get setting type list - RedmineID: #132039
