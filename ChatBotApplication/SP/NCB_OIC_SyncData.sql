@@ -23,6 +23,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_OIC_SyncData(
                 - 20190215@Oliver: Skip update internal recipients - Redmine: #128430
                 - 20210928@Malcolm: Fix deadlock - Redmine: #162379
                 - 20211011@Malcolm: Fix deadlock - Redmine: #163037
+                - 20211021@Malcolm: add Product Status - Redmine: #161727
     */
 )
 SQL SECURITY DEFINER
@@ -315,10 +316,10 @@ BEGIN
 ############################ Products ###########################################
 
     DROP TEMPORARY TABLE IF EXISTS tmp_Product;
-    CREATE TEMPORARY TABLE IF NOT EXISTS tmp_Product(ProductId TINYINT UNSIGNED PRIMARY KEY, ProductName VARCHAR(50) CHARACTER SET 'utf8mb4'  COLLATE 'utf8mb4_unicode_ci');
+    CREATE TEMPORARY TABLE IF NOT EXISTS tmp_Product(ProductId TINYINT UNSIGNED PRIMARY KEY, ProductName VARCHAR(50) CHARACTER SET 'utf8mb4'  COLLATE 'utf8mb4_unicode_ci', IsDisabled BIT);
     
-    INSERT INTO tmp_Product(ProductId, ProductName)
-    SELECT t.ProductId, NULLIF(t.ProductName, NULL)
+    INSERT INTO tmp_Product(ProductId, ProductName, IsDisabled)
+    SELECT t.ProductId, NULLIF(t.ProductName, NULL), t.IsDisabled
     FROM 
 		JSON_TABLE
         (
@@ -327,24 +328,26 @@ BEGIN
             COLUMNS
             (
 				ProductId TINYINT UNSIGNED PATH "$.ProductId", 
-                ProductName VARCHAR(50) CHARACTER SET 'utf8mb4'  COLLATE 'utf8mb4_unicode_ci' PATH "$.ProductName"
+                ProductName VARCHAR(50) CHARACTER SET 'utf8mb4'  COLLATE 'utf8mb4_unicode_ci' PATH "$.ProductName",
+                IsDisabled BOOLEAN PATH "$.IsDisabled"
             )
         ) AS t;
     
 	DROP TEMPORARY TABLE IF EXISTS tmp_Data;
-    CREATE TEMPORARY TABLE IF NOT EXISTS tmp_Data(ProductId TINYINT UNSIGNED PRIMARY KEY, ProductName VARCHAR(50) CHARACTER SET 'utf8mb4'  COLLATE 'utf8mb4_unicode_ci', IsDeleted INT);
+    CREATE TEMPORARY TABLE IF NOT EXISTS tmp_Data(ProductId TINYINT UNSIGNED PRIMARY KEY, ProductName VARCHAR(50) CHARACTER SET 'utf8mb4'  COLLATE 'utf8mb4_unicode_ci', IsDisabled BIT, IsDeleted INT);
     
-    INSERT INTO tmp_Data (ProductId, ProductName, IsDeleted)
-    SELECT p.ProductId, p.ProductName, -1
+    INSERT INTO tmp_Data (ProductId, ProductName, IsDisabled, IsDeleted)
+    SELECT p.ProductId, p.ProductName, p.IsDisabled, -1
     FROM Product p
     WHERE NOT EXISTS (SELECT 1 FROM tmp_Product tp WHERE tp.ProductId = p.ProductId);
     
-	INSERT INTO tmp_Data (ProductId, ProductName, IsDeleted)
-    SELECT tp.ProductId, tp.ProductName, CASE WHEN p.ProductId IS NULL THEN 1 ELSE 0 END
+	INSERT INTO tmp_Data (ProductId, ProductName, IsDisabled, IsDeleted)
+    SELECT tp.ProductId, tp.ProductName, tp.IsDisabled, CASE WHEN p.ProductId IS NULL THEN 1 ELSE 0 END
     FROM tmp_Product tp
 		LEFT JOIN Product p ON p.ProductId = tp.ProductId 
 	WHERE p.ProductId IS NULL 
-		OR IFNULL(p.ProductName, '') <> IFNULL(tp.ProductName, '');
+		OR IFNULL(p.ProductName, '') <> IFNULL(tp.ProductName, '') 
+        OR IFNULL(p.IsDisabled, '') <> IFNULL(tp.IsDisabled, '');
         
 	IF EXISTS (SELECT 1 FROM tmp_Data WHERE IsDeleted = -1) 
 	THEN	
@@ -359,13 +362,14 @@ BEGIN
 		UPDATE Product p
 		INNER JOIN tmp_Data td ON p.ProductId = td.ProductId 
 			SET p.ProductName = td.ProductName
+				,p.IsDisabled = td.IsDisabled
 		WHERE td.IsDeleted = 0;
     END IF;
     
     IF EXISTS (SELECT 1 FROM tmp_Data WHERE IsDeleted = 1) 
 	THEN	
-		INSERT INTO Product (ProductId, ProductName)
-        SELECT td.ProductId, td.ProductName
+		INSERT INTO Product (ProductId, ProductName, IsDisabled)
+        SELECT td.ProductId, td.ProductName, td.IsDisabled
         FROM tmp_Data td
         WHERE td.IsDeleted = 1;
     END IF;
