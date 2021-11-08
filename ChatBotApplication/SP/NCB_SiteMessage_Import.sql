@@ -251,7 +251,7 @@ NCB_SiteMessage_Import:BEGIN
           MsgContentsType IN (1, 3, 7)
           AND (
               TemplateContent NOT LIKE '%{Sport EN CN}%'
-              OR TemplateContent NOT LIKE '%{Kick Off Lable}%'
+              OR TemplateContent NOT LIKE '%{Kick Off Label}%'
               OR TemplateContent NOT LIKE '%{KO Time}%'
               OR TemplateContent NOT LIKE '%{League Name EN CN}%'
               OR TemplateContent NOT LIKE '%{Team Name EN CN}%'
@@ -271,7 +271,7 @@ NCB_SiteMessage_Import:BEGIN
           MsgContentsType IN (1, 3, 7)
           AND (
               TemplateContent NOT LIKE '%{Sport EN CN}%'
-              OR TemplateContent NOT LIKE '%{Kick Off Lable}%'
+              OR TemplateContent NOT LIKE '%{Kick Off Label}%'
               OR TemplateContent NOT LIKE '%{KO Time}%'
               OR TemplateContent NOT LIKE '%{League Name EN CN}%'
               OR TemplateContent NOT LIKE '%{Team Name EN CN}%'
@@ -439,7 +439,7 @@ NCB_SiteMessage_Import:BEGIN
 	  				  , '{EN Announcement}', h.Content_en)
 	  				, '{CN Announcement}', h.Content_cs)
 	  			  , '{Sport EN CN}', IFNULL(CONCAT(h.SportNameEN, ' / ', h.SportNameCS), ''))
-	  			, '{Kick Off Lable}', CASE h.SportNameEN WHEN 'Soccer' THEN 'Kick Off' WHEN 'Basketball' THEN 'Tip Off' ELSE 'Event Start Time' END)
+	  			, '{Kick Off Label}', CASE h.SportNameEN WHEN 'Soccer' THEN 'Kick Off' WHEN 'Basketball' THEN 'Tip Off' ELSE 'Event Start Time' END)
 	  		  , '{KO Time}', IFNULL(h.KickOffTime, ''))
 	  		, '{League Name EN CN}', IFNULL(CONCAT(h.LeagueNameEN, ' [', h.LeagueNameCS, ']'), ''))
 	  	  , '{Team Name EN CN}', IFNULL(CONCAT('***', h.HomeNameEN, ' - vs - ' , h.AwayNameEN, ' [',h.HomeNameCS, ' - vs - ' , h.AwayNameCS, ']', '***'), ''))
