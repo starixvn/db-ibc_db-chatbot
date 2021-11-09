@@ -2,7 +2,9 @@
 DROP PROCEDURE IF EXISTS NCB_JobInfo_Upd;
 DELIMITER //
 CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_JobInfo_Upd`(
-	IN JobInfo JSON
+	IN JobInfo 		JSON
+    ,OUT errCode	SMALLINT  
+	,OUT errMsg		VARCHAR(100) 
     /*
 		Creator: 20211010@Malcolm
 		Task: Get information of Job
@@ -24,6 +26,8 @@ BEGIN
 		JobIdentify TINYINT, 
         MessageId   INT UNSIGNED
     );
+    
+    SET errCode = 0, errMsg = '';
     
     INSERT INTO tmp_JobInfo (JobIdentify, MessageId)
     SELECT t.JobIdentify, t.MessageId
