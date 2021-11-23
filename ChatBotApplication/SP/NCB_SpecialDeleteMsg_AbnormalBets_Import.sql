@@ -26,9 +26,11 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_SpecialDeleteMsg_AbnormalBets
 	  - 20210405@Malcolm: Import data for voiding abnormal accounts [RedmineId : #152175]
       - 20210722@Malcolm: Change msg content type for abnormal accounts [RedmineId : #158723] 
 	  - 20210513@Malcolm: Integrate Telegram [RedmineID: #151807]
+      - 20211123@Malcolm: Voiding abnormalbet for Mix parlay [RedmineID: #163777]
 	Param's Explanation:
 		- Type = 1: for message of abnormal bets (issue type = 11, 15)
 		- Type = 2: for message of abnormal accounts (issue type = 13)
+        - Type = 3: for message of abnormal bets (mix parlay (Filterby = 1))
   */
 )
 SQL SECURITY DEFINER
@@ -232,6 +234,32 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
         , IFNULL(Content_cs, '')
         )
 	WHERE Type = 2;
+	
+    UPDATE tmp_MsgHeader
+    SET Content_Detail = CONCAT(
+        'Request No.: ', RequestIDLst
+        , '\r\n', '\r\n'
+        , '**Affected Credit sites:', CASE WHEN CreditSiteLst > '' THEN CONCAT(' ', CreditSiteLst, '**') ELSE '**' END
+        , '\r\n'
+        , '**Affected Licensee sites:', CASE WHEN DepositSiteLst > '' THEN CONCAT(' ', DepositSiteLst, '**') ELSE '**' END
+        , '\r\n', '\r\n'
+        , 'Bettype: ', TypeNameLst
+        , '\r\n'
+        , 'Total: ', IFNULL(CONVERT(TotalTickets USING latin1), '')
+        , '\r\n'
+        , 'Reason: ', ReasonLst
+        , '\r\n'
+        , 'Decided by: ', DecidedByLst
+        , '\r\n'
+        , 'Requested by: ', RequestByLst
+        , '\r\n'
+        , 'Voided by: ', VoidByLst
+        , '\r\n', '\r\n'
+        , IFNULL(Content_en, '')
+        , '\r\n', '\r\n'
+        , IFNULL(Content_cs, '')
+        )
+	WHERE Type = 3;
 
   /*Step 2: Parse JSON data for message template, notification type*/
   DROP TEMPORARY TABLE IF EXISTS Tmp_templateNotifcationType;
