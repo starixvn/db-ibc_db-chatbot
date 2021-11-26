@@ -18,6 +18,7 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_NotificationList_ErrDetail_Sel
         Revisions:
 				- 20190408@Dominic: First Commit
 				- 20190814@Elton: remove unnecessary columns on select
+				- 20210513@Malcolm: Integrate Telegram [RedmineID: #151807]
     */
 )
 BEGIN
@@ -25,8 +26,9 @@ BEGIN
     DECLARE SENT_STATUSID_RESOLVED TINYINT UNSIGNED DEFAULT 5;
     
 	#1st dataset: Main Notification Info
-	SELECT n.NotificationID, n.title, n.ConfigSendTime, IFNULL(n.ResolvedRemark, '') AS resolvedRemark, n.StatusID, n.ResolvedBy, c.username AS ResolvedByUsername
+	SELECT n.NotificationID, n.title, n.ConfigSendTime, IFNULL(n.ResolvedRemark, '') AS resolvedRemark, n.StatusID, n.ResolvedBy, c.username AS ResolvedByUsername, n.ChannelId, cc.ChannelName
     FROM Notification n
+		INNER JOIN ConversationChannel cc ON cc.ChannelID = n.ChannelID 
 		LEFT JOIN Customer c ON n.ResolvedBy = c.custid
     WHERE n.NotificationID = notificationID;
     

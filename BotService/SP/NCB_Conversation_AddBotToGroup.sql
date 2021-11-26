@@ -6,7 +6,8 @@ CREATE DEFINER=`ChatBotSystem` PROCEDURE `NCB_Conversation_AddBotToGroup`(
 	IN botConversationId VARCHAR(200)  
 	, IN botName VARCHAR(70)
     , IN conversationId VARCHAR(200)  
-	, IN channelId VARCHAR(45)
+    , IN groupName VARCHAR(500) CHARACTER SET 'utf8mb4' COLLATE 'utf8mb4_unicode_ci'
+	, IN channelId TINYINT UNSIGNED
     , IN serviceUrl VARCHAR(500)
 	, IN updatedBy VARCHAR(200)
 	, OUT errCode SMALLINT
@@ -20,11 +21,12 @@ CREATE DEFINER=`ChatBotSystem` PROCEDURE `NCB_Conversation_AddBotToGroup`(
                 - botName: Bot Name
                 - conversationId: Conversation Id of Group
                 - groupName: Topic of Group
-                - channelId: Channel Id (skype, telegram, facebook, ..)
+                - channelId: Channel Id of Channel 
                 - serviceUrl: 
                 - updatedBy: Conversation of user which add BOT into group.
         Revisions:
 				- 20190726@Quinn: First Commit
+				- 20210513@Malcolm: add ChannelId - RedmineID: #151807
         
     */
 )
@@ -49,8 +51,8 @@ BEGIN
     
 	IF (NOT EXISTS (SELECT 1 FROM ConversationBot AS cb WHERE cb.ConversationId = botConversationId)) 
     THEN
-		INSERT INTO ConversationBot(`ConversationId`, `Name`)
-        VALUES (botConversationId, botName);
+		INSERT INTO ConversationBot(`ConversationId`, `Name`, `ChannelID`)
+        VALUES (botConversationId, botName, ChannelID);
         
         SET conversationBotID = LAST_INSERT_ID();
 	ELSE 
@@ -64,12 +66,14 @@ BEGIN
     THEN
 		INSERT INTO ConversationGroup(
             `ConversationID`
+            ,`Name`
             ,`ChannelID`
             ,`ServiceUrl`
             ,`UpdatedBy`
             ,`LastUpdate`)
         VALUES (
 			conversationId
+            ,groupName
             ,channelId
             ,serviceUrl
             ,updatedBy
@@ -107,6 +111,7 @@ BEGIN
     
     #Get Log Content, JSON format
     SET logContent = json_object('conversationGroupId', conversationGroupId
+										,'groupName', groupName
 										, 'conversationBotID', conversationBotID
                                         , 'botName', botName
                                         , 'channelId', channelId

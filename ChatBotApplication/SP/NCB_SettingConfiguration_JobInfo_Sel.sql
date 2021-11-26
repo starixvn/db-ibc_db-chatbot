@@ -11,6 +11,7 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_SettingConfiguration_JobInfo_S
 		DB: DBCB-ChatBot
         Revisions:
             - 20200417@Merlin: Get job info - RedmineID: #132039
+			- 20210513@Malcolm: Integrate Telegram [RedmineID: #151807]
     */
 )
 SQL SECURITY DEFINER
@@ -18,7 +19,7 @@ BEGIN
     DECLARE jobStatus       VARCHAR (10);
     DECLARE jobBatchSize    INT;
     DECLARE maxMessageId    INT;
-    DECLARE testingGroup    INT;
+    DECLARE testingGroup    TEXT;
 
     SELECT ss.Value INTO jobStatus
     FROM SystemSetting ss
@@ -39,7 +40,7 @@ BEGIN
     FROM SystemSetting ss
     WHERE ss.JobIdentify = jobId
         AND ss.Description LIKE '%Chat group ID%';
-
+		
     SELECT
         jobId           AS  Id
         ,jobStatus      AS  Status

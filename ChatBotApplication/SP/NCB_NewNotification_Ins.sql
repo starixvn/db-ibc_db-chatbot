@@ -7,11 +7,11 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_NewNotification_Ins`(
 	, IN productID SMALLINT
 	, IN recipientIDLst TEXT
 	, IN title VARCHAR(300) CHARACTER SET utf8mb4
-	, IN content MEDIUMTEXT CHARACTER SET utf8mb4
+	, IN ContentLst JSON
 	, IN configSendTime DATETIME
     , IN sendImmediately BIT
 	, IN creatorID INT
-    , OUT notificationID INT
+    , OUT notificationIDLst JSON
 	, OUT errCode SMALLINT
 	, OUT errMsg TEXT
     /*
@@ -26,17 +26,30 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_NewNotification_Ins`(
 				- 20190401@Dominic: First Commit
 				- 20190819Q@Elton: Update Error Message
                 - 20191211@Dominic: Filter active chat group - Redmine: #125085
+				- 20210513@Malcolm: Integrate Telegram - RedmineID: #151807
+		Param's Explanation:
+		- ContentLst:
+				[
+					{"ChannelId" : "1", "Content" : "Content_skype"}
+                    ,{"ChannelId" : "2", "Content" : "Content_telegram"}
+                ]
     */
 )
 SQL SECURITY DEFINER
 NCB_NewNotification_Ins:BEGIN
 
 	#Variables used to write User Logs
-	DECLARE startTime 			DATETIME(3);
+	DECLARE startTime 		DATETIME(3);
     DECLARE finishTime 		DATETIME(3); 
-    DECLARE duration 			INT;							
+    DECLARE duration 		INT;							
     DECLARE logContent 		TEXT CHARACTER SET utf8mb4;
     DECLARE ACTION_ID 		INT DEFAULT 1;
+	DECLARE iLoop           INT;
+	DECLARE _Content 		MEDIUMTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+	DECLARE _ChannelId 		TINYINT UNSIGNED;
+	DECLARE _recipientIDLst	TEXT;
+	DECLARE _NotificationID INT UNSIGNED;
+	DECLARE _notificationIDLst VARCHAR(2000) DEFAULT '';
     
     #constants
     DECLARE RECIPIENT_TYPE_LICENSEES 	SMALLINT DEFAULT 1;
@@ -59,8 +72,8 @@ NCB_NewNotification_Ins:BEGIN
                                     WHERE nt.NotificationTypeID = notificationTypeID ) THEN
 		SET errCode=101, errMsg='Invalid NotificationTypeID';
         LEAVE NCB_NewNotification_Ins;
-    ELSEIF IFNULL(title,'') = '' OR IFNULL(content,'') = '' THEN
-		SET errCode=102, errMsg='Title and Content must not be empty';
+    ELSEIF IFNULL(title,'') = '' THEN
+		SET errCode=102, errMsg='Title must not be empty';
         LEAVE NCB_NewNotification_Ins;
 	ELSEIF IFNULL(recipientIDLst,'') = '' THEN
 		SET errCode=103, errMsg='Recipient list must not be empty';
@@ -73,6 +86,39 @@ NCB_NewNotification_Ins:BEGIN
         LEAVE NCB_NewNotification_Ins;
 	END IF;
 	
+	#Insert Content 
+	DROP TEMPORARY TABLE IF EXISTS tmpContent;
+    CREATE TEMPORARY TABLE tmpContent (ChannelId TINYINT UNSIGNED NOT NULL, Content MEDIUMTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci);
+    
+    SET iLoop = 0;
+    WHILE (JSON_EXTRACT(ContentLst, CONCAT('$[', iLoop, '].ChannelId')) IS NOT NULL) DO
+		INSERT INTO tmpContent (ChannelId, Content)
+        VALUES 
+        (
+			JSON_UNQUOTE(JSON_EXTRACT(ContentLst, CONCAT('$[', iLoop, '].ChannelId'))),
+            JSON_UNQUOTE(JSON_EXTRACT(ContentLst, CONCAT('$[', iLoop, '].Content')))
+        );
+        SET iLoop := iLoop + 1;
+    END WHILE;
+	
+	#Check content
+	
+	IF EXISTS (
+		SELECT 1 FROM tmpContent tc 
+		WHERE IFNULL(tc.Content, '') = ''
+	) THEN
+		SET errCode=111, errMsg = 'Content must not be empty';
+		LEAVE NCB_NewNotification_Ins;
+	END IF;
+	
+	IF EXISTS (
+		SELECT 1 FROM tmpContent tc 
+		WHERE NOT EXISTS (SELECT 1 FROM ConversationChannel c WHERE c.ChannelId = tc.ChannelId)
+	) THEN
+		SET errCode=111, errMsg = 'Invalid ChannelId';
+		LEAVE NCB_NewNotification_Ins;
+	END IF;
+
     #Insert comma seperated list RecipientIDLst to temporary tables
     DROP TEMPORARY TABLE IF EXISTS tmp_recipientIDLst;
 	CREATE TEMPORARY TABLE tmp_recipientIDLst(RecipientID INT);
@@ -87,10 +133,10 @@ NCB_NewNotification_Ins:BEGIN
 	DEALLOCATE PREPARE stmt;
     
     DROP TEMPORARY TABLE IF EXISTS tmp_mappedRecipientIDLst;
-	CREATE TEMPORARY TABLE tmp_mappedRecipientIDLst(RecipientID INT);
+	CREATE TEMPORARY TABLE tmp_mappedRecipientIDLst(RecipientID INT, ChannelId TINYINT UNSIGNED);
 	
-	INSERT INTO tmp_mappedRecipientIDLst(RecipientID)
-	SELECT main.RecipientID 
+	INSERT INTO tmp_mappedRecipientIDLst(RecipientID, ChannelId)
+	SELECT main.RecipientID, con.ChannelId
 	FROM tmp_recipientIDLst main
 	INNER JOIN ConversationGroupRecipient bcr
 			ON bcr.RecipientID = main.RecipientID
@@ -99,7 +145,11 @@ NCB_NewNotification_Ins:BEGIN
 	INNER JOIN ConversationGroup con
 				ON con.ConversationGroupID = bcr.ConversationGroupID AND con.IsActive = 1
 	INNER JOIN ConversationGroupBot cgb
-			ON cgb.ConversationGroupID = bcr.ConversationGroupID;
+			ON cgb.ConversationGroupID = bcr.ConversationGroupID
+	WHERE bcri.ChatGroupTypeID IN (SELECT cgt.ChatGroupTypeID FROM NotificationChatGroupType  cgt WHERE cgt.NotificationTypeID = notificationTypeID) 
+		AND con.ChannelId IN (SELECT tcl.ChannelId FROM tmpContent tcl);
+	
+	DELETE FROM tmpContent tc WHERE NOT EXISTS (SELECT 1 FROM tmp_mappedRecipientIDLst r WHERE r.ChannelId = tc.ChannelId);
                 
     #Check Not-Mapping/Removed-Bot Recipients
     IF EXISTS(
@@ -238,82 +288,122 @@ NCB_NewNotification_Ins:BEGIN
 			LEAVE NCB_NewNotification_Ins;
     END IF;
     
+	-- Get Log 
+	DROP TEMPORARY TABLE IF EXISTS tmpNotificationRecipient;
+	CREATE TEMPORARY TABLE tmpNotificationRecipient (notificationID INT, RecipientID INT);
+	
+	DROP TEMPORARY TABLE IF EXISTS tmpNotificationContent;
+	CREATE TEMPORARY TABLE tmpNotificationContent (notificationID INT, ChannelId TINYINT UNSIGNED,Content mediumtext CHARACTER SET 'utf8mb4' COLLATE 'utf8mb4_unicode_ci');
+	
     #Insert a new Notification
-    INSERT INTO Notification(NotificationTypeID
-											, ProductID
-											, Title
-                                            , Content
-                                            , ConfigSendTime
-                                            , SendImmediately
-                                            , CreatorID
-                                            , CreatedDate
-                                            , Status
-                                            , StatusID)
-    SELECT notificationTypeID
-					, productID
-					, title
-                    , content
-                    , configSendTime
-                    , sendImmediately
-                    , creatorID
-                    , UTC_TIMESTAMP()
-                    , CREATING_NOTIFICATION_STATUS
-                    , CREATING_NOTIFICATION_STATUSID;
-    
-    SET notificationID = LAST_INSERT_ID();
-    
-    #Insert recipient list
-    INSERT INTO NotificationRecipientList(NotificationID, ConversationGroupID
-                                                                    , ChatGroupTypeID, RecipientID
-                                                                    , Status, StatusID)
-    SELECT notificationID, IFNULL(gri.ConversationGroupID, -1)
-					, IFNULL(gri.ChatGroupTypeID,-1), re.RecipientID
-                    , NEW_NOTIFICATION_STATUS
-                    , NEW_NOTIFICATION_STATUSID
-    FROM tmp_recipientIDLst re
-		INNER JOIN ConversationGroupRecipient gr 
-			ON re.RecipientID = gr.RecipientID
-		INNER JOIN ConversationGroup con
-				ON con.ConversationGroupID = gr.ConversationGroupID AND con.IsActive = 1
-		LEFT JOIN ConversationGroupExtraInfo gri 
-			ON gri.ConversationGroupID = gr.ConversationGroupID
-    WHERE gri.ChatGroupTypeID IN (
-						SELECT cgt.ChatGroupTypeID 
-						FROM NotificationChatGroupType  cgt
-                        WHERE cgt.NotificationTypeID = notificationTypeID
-	);
-    
-    UPDATE Notification n
-    SET	StatusID = NEW_NOTIFICATION_STATUSID 
-		, Status = NEW_NOTIFICATION_STATUS
-    WHERE n.NotificationID = notificationID;
+	
+	WHILE (EXISTS(SELECT 1 FROM tmpContent)) DO
+		
+		SELECT tc.ChannelId, tc.Content INTO _ChannelId, _Content
+		FROM tmpContent tc 
+		ORDER BY tc.ChannelId ASC
+		LIMIT 1;
+		
+		INSERT INTO Notification
+		(
+			NotificationTypeID
+			,ChannelId
+		    ,ProductID
+            ,Title
+		    ,Content
+			,ConfigSendTime
+			,SendImmediately
+			,CreatorID
+			,CreatedDate
+			,Status
+			,StatusID
+		)
+		SELECT 
+			notificationTypeID
+			,_ChannelId
+			,productID
+			,title
+			,_Content
+			,configSendTime
+			,sendImmediately
+			,creatorID
+			,UTC_TIMESTAMP()
+			,CREATING_NOTIFICATION_STATUS
+			,CREATING_NOTIFICATION_STATUSID;
+		
+		SET _notificationID = LAST_INSERT_ID();
+		
+		SET _notificationIDLst = CONCAT('{"NotificationId" : ', _notificationID, "},", _notificationIDLst);
+		
+		#Insert recipient list
+		INSERT INTO NotificationRecipientList(NotificationID, ConversationGroupID, ChatGroupTypeID, RecipientID, Status, StatusID)
+		SELECT _notificationID, IFNULL(gri.ConversationGroupID, -1), IFNULL(gri.ChatGroupTypeID,-1), re.RecipientID, NEW_NOTIFICATION_STATUS, NEW_NOTIFICATION_STATUSID
+		FROM tmp_recipientIDLst re
+			INNER JOIN ConversationGroupRecipient gr 
+				ON re.RecipientID = gr.RecipientID
+			INNER JOIN ConversationGroup con
+					ON con.ConversationGroupID = gr.ConversationGroupID AND con.IsActive = 1
+			LEFT JOIN ConversationGroupExtraInfo gri 
+				ON gri.ConversationGroupID = gr.ConversationGroupID
+		WHERE gri.ChatGroupTypeID IN (
+							SELECT cgt.ChatGroupTypeID 
+							FROM NotificationChatGroupType  cgt
+							WHERE cgt.NotificationTypeID = notificationTypeID
+		) AND con.ChannelId = _ChannelId;
+		
+		UPDATE Notification n
+		SET	StatusID = NEW_NOTIFICATION_STATUSID 
+			, Status = NEW_NOTIFICATION_STATUS
+		WHERE n.NotificationID = _notificationID;
+		
+		INSERT INTO tmpNotificationRecipient (NotificationID, RecipientID)
+		SELECT DISTINCT NotificationID, RecipientID
+		FROM NotificationRecipientList
+		WHERE NotificationID = _notificationID;
+		
+		INSERT INTO tmpNotificationContent(NotificationID, Content, ChannelId)
+		VALUES (_notificationID, _Content, _ChannelId);
+		
+		DELETE FROM tmpContent WHERE ChannelId = _ChannelId;
+	END WHILE;
+	
+	SET notificationIDLst = CONCAT('[', LEFT(_notificationIDLst, LENGTH(_notificationIDLst) - 1),']');
     
      #Get Finish Time to calcualte execution duration
     SET finishTime = UTC_TIMESTAMP(3);
-    SET duration =  TIMESTAMPDIFF(MICROSECOND
-																		, startTime
-                                                                        , finishTime)  / 1000; 	#miliseconds
+    SET duration =  TIMESTAMPDIFF(MICROSECOND, startTime, finishTime)  / 1000; 	#miliseconds
     
     #Get Log Content, JSON format
-    SET logContent = json_object('NotificationTypeID', notificationTypeID
+	WHILE (EXISTS (SELECT 1 FROM tmpNotificationContent)) DO
+		 SELECt NotificationID, Content, ChannelId INTO _notificationID, _Content, _ChannelId FROM tmpNotificationContent LIMIT 1;
+		 
+		 SELECT GROUP_CONCAT(DISTINCT re.RecipientID ORDER BY re.RecipientID SEPARATOR ', ')  
+         INTO _RecipientIDLst
+         FROM tmpNotificationRecipient re;
+		
+		 SET logContent = json_object('NotificationTypeID', notificationTypeID
 										, 'ProductID', productID
-                                        , 'RecipientIDLst', recipientIDLst
+                                        , 'RecipientIDLst', _RecipientIDLst
 										, 'Title', title
-                                        , 'Content', content
+										, 'ChannelId', _ChannelId
+                                        , 'content', _content
                                         , 'ConfigSendTime', configSendTime
                                         , 'SendImmediately', sendImmediately
-                                        , 'NotificationID', notificationID
+                                        , 'notificationID', _notificationID
 					) ;
                     
 		#Write User Log
         CALL NCB_UserLog_RunSP_Ins(
 											ACTION_ID #actionID
-                                            , notificationID #referenceID
+                                            , _notificationID #referenceID
 											, creatorID #UserID
                                             , logContent #LogContent
                                             , startTime #logtime
                                             , duration	#Duration
                                             );
+		DELETE FROM tmpNotificationContent WHERE NotificationID = _notificationID;
+	END WHILE;
+   
 END;
 
 //

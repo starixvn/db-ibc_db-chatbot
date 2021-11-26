@@ -17,6 +17,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_NotificationType_Del(
 				- 20190912@Scofield: Create
 				- 20192312@Merlin.Le: Check not setting type before delete -- Redmine ID: #125707
 				- 20200323@Oliver: Integrate Site Message -- Redmine ID: #129979
+                - 20210513@Malcolm: Integrate Telegram - RedmineID: #151807
     */
    )
 SQL SECURITY DEFINER
@@ -27,80 +28,71 @@ BEGIN
     DECLARE duration 		INT;							
     DECLARE logContent 		TEXT CHARACTER SET utf8mb4;
     DECLARE ACTION_ID 		INT DEFAULT 17;
-	DECLARE jsonValue   	JSON;
-	DECLARE voidTicketSettings   JSON;
-	DECLARE abnormalBetsSettings JSON;
-	DECLARE siteMessageSettings JSON;
-    DECLARE indexLoop   	INT;
+	DECLARE jsonSetting     JSON;
+    DECLARE iLoop   	    INT;
+	DECLARE jLoop   	    INT;
 	
 	-- Get Start Time to calcualte execution duration
     SET startTime = UTC_TIMESTAMP(3);
     SET errCode = 0, errMsg = '';
     
-	SELECT Value INTO voidTicketSettings FROM SystemSetting WHERE ID = 4 LIMIT 1;
-	SELECT Value INTO abnormalBetsSettings FROM SystemSetting WHERE ID = 9 LIMIT 1;
-	SELECT Value INTO siteMessageSettings FROM SystemSetting WHERE ID = 14 LIMIT 1;
+    DROP TEMPORARY TABLE IF EXISTS tmpSetting;
+    CREATE TEMPORARY TABLE tmpSetting (Id INT AUTO_INCREMENT NOT NULL, SettingId INT UNSIGNED NOT NULL, PRIMARY KEY (Id));
+    INSERT INTO tmpSetting (SettingId)
+    VALUES (4), (9), (14);
 
     DROP TEMPORARY TABLE IF EXISTS tmpParseJsonTable;
     CREATE TEMPORARY TABLE IF NOT EXISTS tmpParseJsonTable(NotificationTypeID INT);
-    SET indexLoop = 0;
-    WHILE (JSON_EXTRACT(voidTicketSettings, CONCAT('$[',indexLoop, '].NotificationTypeID'))) DO 
-		INSERT INTO tmpParseJsonTable(NotificationTypeID)
-        VALUES (
-            CASE
-                WHEN JSON_UNQUOTE(JSON_EXTRACT(voidTicketSettings, CONCAT('$[', indexLoop, '].NotificationTypeID'))) = 'null'
-                THEN NULL
-                ELSE JSON_UNQUOTE(JSON_EXTRACT(voidTicketSettings, CONCAT('$[', indexLoop, '].NotificationTypeID')))
-            END
-		);
-        
-        SET indexLoop := indexLoop + 1;
-    END WHILE;
     
-	#Get setting from Special Delete AbnormalBets voiding ticket for internal settings
-	SET indexLoop = 0;
-    WHILE (JSON_EXTRACT(abnormalBetsSettings, CONCAT('$[',indexLoop, '].NotificationTypeID'))) DO 
-		INSERT INTO tmpParseJsonTable(NotificationTypeID)
-        VALUES (
-            CASE
-                WHEN JSON_UNQUOTE(JSON_EXTRACT(abnormalBetsSettings, CONCAT('$[', indexLoop, '].NotificationTypeID'))) = 'null'
-                THEN NULL
-                ELSE JSON_UNQUOTE(JSON_EXTRACT(abnormalBetsSettings, CONCAT('$[', indexLoop, '].NotificationTypeID')))
-            END
-		);
-        
-        SET indexLoop := indexLoop + 1;
+    SET jLoop = 1;
+    WHILE (SELECT 1 FROM tmpSetting WHERE Id = jLoop) DO
+		SELECT s.Value INTO jsonSetting
+        FROM SystemSetting s
+			INNER JOIN tmpSetting t ON t.SettingId = s.Id
+		WHERE t.Id = jLoop;
+		
+		SET iLoop = 0;
+		WHILE (JSON_EXTRACT(jsonSetting, CONCAT('$[',iLoop, '].NotificationTypeID'))) DO 
+			INSERT INTO tmpParseJsonTable(NotificationTypeID)
+			VALUES 
+			(
+				NULLIF(JSON_UNQUOTE(JSON_EXTRACT(jsonSetting, CONCAT('$[', iLoop, '].NotificationTypeID'))), 'null')
+			);
+			
+			SET iLoop := iLoop + 1;
+		END WHILE;
+		
+        SET jLoop := jLoop + 1;
     END WHILE;
-
-	#Get setting from Site Message settings
-	SET indexLoop = 0;
-    WHILE (JSON_EXTRACT(siteMessageSettings, CONCAT('$[',indexLoop, '].NotificationTypeID'))) DO 
-		INSERT INTO tmpParseJsonTable(NotificationTypeID)
-        VALUES (
-            CASE
-                WHEN JSON_UNQUOTE(JSON_EXTRACT(siteMessageSettings, CONCAT('$[', indexLoop, '].NotificationTypeID'))) = 'null'
-                THEN NULL
-                ELSE JSON_UNQUOTE(JSON_EXTRACT(siteMessageSettings, CONCAT('$[', indexLoop, '].NotificationTypeID')))
-            END
-		);
-        
-        SET indexLoop := indexLoop + 1;
-    END WHILE;
-	
-    IF (EXISTS(SELECT * FROM Notification WHERE Notification.NotificationTypeID = notificationTypeId) 
-		OR EXISTS(SELECT * FROM NotificationTemplate WHERE NotificationTemplate.NotificationTypeID = notificationTypeId)) THEN
-			SELECT 1 INTO errCode;
-			SELECT "Unable to delete the notification type because one or many assigned notification(s) exist(s)" INTO errMsg;
-	ELSEIF (
-		EXISTS (
-			SELECT 1 FROM tmpParseJsonTable tmppjt
+    IF 
+    (
+		EXISTS
+		(
+			SELECT 1 
+            FROM Notification 
+            WHERE Notification.NotificationTypeID = notificationTypeId
+		) 
+		OR 
+        EXISTS
+        (
+			SELECT 1 
+            FROM NotificationTemplate 
+            WHERE NotificationTemplate.NotificationTypeID = notificationTypeId)
+		) THEN
+			SELECT 1 , "Unable to delete the notification type because one or many assigned notification(s) exist(s)" INTO errCode, errMsg;
+	ELSEIF 
+    (
+		EXISTS 
+        (
+			SELECT 1 
+            FROM tmpParseJsonTable tmppjt
 			WHERE tmppjt.NotificationTypeID = notificationTypeID
 		)
 	) THEN
-		SELECT 2 INTO errCode;
-		SELECT "Unable to delete the notification type because of system setting" INTO errMsg;
+		SELECT 2, "Unable to delete the notification type because of system setting" INTO errCode, errMsg;
     ELSE
-		DELETE FROM NotificationType
+		DELETE 
+        FROM NotificationType
 		WHERE NotificationType.notificationTypeId = notificationTypeId;
 		
 		-- Get Finish Time to calcualte execution duration

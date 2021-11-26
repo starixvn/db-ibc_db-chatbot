@@ -30,6 +30,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_SpecialDeleteMsg_Import(
 				- 20200214@Percy: Special Delete - Integrate Abnormal Bets [RedmineID: #127944]
 				- 20200327@Percy: Just send notification to active licensees [RedmineID: #131240]
 				- 20201029@Percy: Remove sent recipients for rescan messages [RedmineID: #144274]
+				- 20210513@Malcolm: Integrate Telegram [RedmineID: #151807]
         
     */
 )
@@ -42,7 +43,7 @@ NCB_SpecialDeleteMsg_Import:BEGIN
     DECLARE duration 		INT;							
     DECLARE logContent 		MEDIUMTEXT CHARACTER SET utf8mb4;
     DECLARE templateNotifcationType JSON;
-    DECLARE ccConversationGroupID 	INT;
+    DECLARE ccConversationGroupID TEXT;
     DECLARE maxMessageID 	INT;
     DECLARE lastPostTime 	DATETIME;
     DECLARE ccIsNew 		TINYINT;
@@ -50,9 +51,10 @@ NCB_SpecialDeleteMsg_Import:BEGIN
     DECLARE createdDate DATETIME(3);
     DECLARE ccMessageID INT;
     DECLARE ccNotificationID INT UNSIGNED;
+	DECLARE ccChannelId TINYINT UNSIGNED;
 
     #Constants
-	DECLARE ACTION_ID 	INT DEFAULT 18;
+	DECLARE ACTION_ID 	INT DEFAULT 19;
     DECLARE VALUE_4_RUNNING 	TEXT  DEFAULT 'Running';
     DECLARE VALUE_4_DONE 	TEXT DEFAULT 'Done';
     DECLARE RECIPIENT_TYPE_LICENSEE INT DEFAULT 1;
@@ -258,16 +260,18 @@ NCB_SpecialDeleteMsg_Import:BEGIN
         , StatusID TINYINT UNSIGNED
         , Status VARCHAR(10)
         , LicenseeStatusID INT
+		, ChannelID TINYINT UNSIGNED
         , INDEX Index_MessageID(MessageID)
       );
             
-	INSERT INTO tmp_NotificationRecipientList(MessageID, Site, RecipientID, ConversationGroupID, ChatGroupTypeID, StatusID, Status, LicenseeStatusID)       
+	INSERT INTO tmp_NotificationRecipientList(MessageID, Site, RecipientID, ConversationGroupID, ChatGroupTypeID, StatusID, Status, LicenseeStatusID, ChannelID)       
     SELECT DISTINCT d.MessageID, d.Site, d.RecipientID
 					, gri.ConversationGroupID
 					, gri.ChatGroupTypeID
           , tpl.StatusID
           , tpl.Status
           , d.LicenseeStatusID
+		  , g.ChannelID
     FROM tmp_MsgHeader h
         INNER JOIN tmp_MsgDetail d ON d.MessageID = h.MessageID
         INNER JOIN  tmp_MsgContentTypeTemplate tpl ON tpl.MsgContentsType = h.MsgContentsType
@@ -293,127 +297,167 @@ NCB_SpecialDeleteMsg_Import:BEGIN
     
     UPDATE tmp_MsgHeader h
     SET h.CheckMsgDetail = NULL;
+    DROP TEMPORARY TABLE IF EXISTS tmpMessageChannel;
+	CREATE TEMPORARY TABLE tmpMessageChannel (MessageID INT, ChannelID TINYINT, INDEX Index_PK (MessageID, ChannelID));
+  
+	INSERT INTO tmpMessageChannel (MessageID, ChannelId)
+	SELECT DISTINCT MessageId, ChannelId
+	FROM tmp_NotificationRecipientList r
+	WHERE r.LicenseeStatusID = ACTIVE_LICENSEE_STATUS;
 
-  /*Step 8: Insert Notification and NotificationSystemMsg*/
-  SET iLoop = 1;
-  SET createdDate = UTC_TIMESTAMP();
-  WHILE (EXISTS (SELECT 1 FROM tmp_MsgHeader WHERE Id = iLoop)) DO
-    SELECT MessageID, IsNew INTO ccMessageID, ccIsNew FROM tmp_MsgHeader WHERE Id = iLoop;
-    
-    IF ccIsNew = 0 THEN
-		DELETE t
-        FROM tmp_NotificationRecipientList t
-			INNER JOIN NotificationSystemMsg nsm ON t.MessageID = nsm.MessageID
-            INNER JOIN NotificationRecipientList nrl ON nsm.NotificationID = nrl.NotificationID
-		WHERE t.RecipientID = nrl.RecipientID;
-		END IF;
-
-    IF EXISTS (SELECT 1 FROM tmp_NotificationRecipientList WHERE MessageID = ccMessageID AND LicenseeStatusID = ACTIVE_LICENSEE_STATUS) THEN
-      # Insert Notification
-      INSERT INTO Notification(NotificationTypeID, Title, Content, ConfigSendTime, SendImmediately, CreatorID, CreatedDate, Status, StatusID)
-        SELECT DISTINCT ct.NotificationTypeID, ct.TemplateTitle, REPLACE(REPLACE(REPLACE(ct.TemplateContent, '{EN Announcement}', h.Content_en), '{CN Announcement}', h.Content_cs), '@@', '') Content, startTime, 0, STARIXIT_CUSTID, CreatedDate, CREATING_NOTIFICATION_STATUS, CREATING_NOTIFICATION_STATUSID
-          FROM tmp_MsgHeader h
-          INNER JOIN tmp_MsgContentTypeTemplate ct ON ct.MsgContentsType = h.MsgContentsType
-          WHERE MessageID = ccMessageID;
-
-      SELECT LAST_INSERT_ID() INTO ccNotificationID;
-
-      INSERT INTO tmp_Notification(NotificationID)
-        VALUES (ccNotificationID);
+  	/*Step 8: Insert Notification and NotificationSystemMsg*/
+    SET iLoop = 1;
+    SET createdDate = UTC_TIMESTAMP();
+    WHILE (EXISTS (SELECT 1 FROM tmp_MsgHeader WHERE Id = iLoop)) DO
+      SELECT MessageID, IsNew INTO ccMessageID, ccIsNew FROM tmp_MsgHeader WHERE Id = iLoop;
       
-      # Insert NotificationSystemMsg
-      INSERT INTO NotificationSystemMsg(MessageID, NotificationID, CheckMsg, CreatedDate)
-        SELECT h.MessageID, ccNotificationID, h.CheckMsg, startTime
-          FROM tmp_MsgHeader h
-          WHERE h.MessageID = ccMessageID;
-
-      #Insert recipient list
-      INSERT INTO NotificationRecipientList(NotificationID, ConversationGroupID, ChatGroupTypeID, RecipientID, Status, StatusID)
-        SELECT ccNotificationID, d.ConversationGroupID, d.ChatGroupTypeID, d.RecipientID, d.Status, d.StatusID
-        FROM tmp_NotificationRecipientList d
-        WHERE d.MessageID = ccMessageID
-		   AND LicenseeStatusID = ACTIVE_LICENSEE_STATUS;
-
-      #Update Status for Notification
-      UPDATE Notification n
-        INNER JOIN NotificationSystemMsg nm ON nm.NotificationID = n.NotificationID
-        INNER JOIN (SELECT DISTINCT nrl.MessageID, nrl.Status, nrl.StatusID FROM tmp_NotificationRecipientList nrl) AS t ON t.MessageID = nm.MessageID
-        SET n.Status = t.Status,
-				    n.StatusID = t.StatusID
-        WHERE n.NotificationID = ccNotificationID;
-      END IF;
-
-    SET iLoop := iLoop + 1;
-    END WHILE;
-
-  /*Step 9: Update Setting*/
-    #Update Max MsgID
-		SELECT MAX(MessageID) INTO maxMessageID FROM tmp_MsgHeader WHERE IsNew = 1;
-        
-        IF maxMessageID IS NOT NULL THEN
-			UPDATE SystemSetting
-			SET Value = (SELECT MAX(MessageID) FROM tmp_MsgHeader)
-			WHERE ID = 3;
-		END IF;
-        
-        #Update Last PostTime
-        SELECT MAX(CAST(PostTime AS DATETIME)) INTO lastPostTime FROM tmp_MsgHeader WHERE IsNew = 1;
-        
-		IF lastPostTime IS NOT NULL THEN
-			UPDATE SystemSetting
-			SET Value = lastPostTime
-			WHERE ID = 17;
-		END IF;
-        
-        #Update flag to 'Done'
-		UPDATE SystemSetting 
-		SET Value = VALUE_4_DONE
-		WHERE ID = 1 AND Value = VALUE_4_RUNNING;
-
-/*Step 10:Return imported messages*/   		
-		#Get ChatGroupID which receives carbon coppies of all imported messages
-        SELECT Value INTO ccConversationGroupID
-        FROM SystemSetting WHERE ID = 5;
-        
-        #Return Bot, Chatgroup
-        SELECT g.ConversationID AS ChatGroupConversationID
-					, g.ServiceUrl
-                    , g.ChannelID
-                    , b.ConversationID AS BotConversationID 
-                    , b.Name AS BotName
-        FROM ConversationGroup g
-        INNER JOIN ConversationGroupBot gb ON g.ConversationGroupID = gb.ConversationGroupID
-        INNER JOIN ConversationBot b ON b.ConversationBotID = gb.ConversationBotID
-        WHERE g.ConversationGroupID = ccConversationGroupID
-        LIMIT 1;
-        
-        #Return all imported message content
-        SELECT n.NotificationID, n.Title, n.Content
-		    FROM Notification n
-        WHERE n.NotificationID IN (SELECT t.NotificationID FROM tmp_Notification t);                                 
-    
-		 #Get Finish Time to calcualte execution duration
-		SET finishTime = UTC_TIMESTAMP(3);
-		SET duration =  TIMESTAMPDIFF(MICROSECOND
-																			, startTime
-																			, finishTime)  / 1000; 	#miliseconds
+      IF ccIsNew = 0 THEN
+    	DELETE t
+          FROM tmp_NotificationRecipientList t
+    		INNER JOIN NotificationSystemMsg nsm ON t.MessageID = nsm.MessageID
+              INNER JOIN NotificationRecipientList nrl ON nsm.NotificationID = nrl.NotificationID
+    	WHERE t.RecipientID = nrl.RecipientID;	
 		
-		#Get Log Content, JSON format
-		SET logContent = json_object('MessageHeader', messageHeader
-											, 'MessageDetail', messageDetail
-						) ;
-						
-		#Write User Log
-		IF EXISTS (SELECT 1 FROM tmp_MsgHeader) THEN
-			CALL NCB_UserLog_RunSP_Ins(
-													ACTION_ID #actionID
-													, -1  #referenceID
-													, STARIXIT_CUSTID #UserID
-													, logContent #LogContent
-													, startTime #logtime
-													, duration	#Duration
-													);
-		END IF;
+		DELETE tmc
+		  FROM tmpMessageChannel tmc
+		WHERE tmc.MessageID = ccMessageID
+			AND NOT EXISTS (
+				SELECT 1 FROM tmp_NotificationRecipientList t 
+				WHERE t.MessageId = ccMessageID AND t.ChannelId = tmc.ChannelID);
+    	END IF;
+    
+      WHILE EXISTS(SELECT 1 FROM tmpMessageChannel m WHERE m.MessageId = ccMessageID) DO
+        SELECT ChannelId INTO ccChannelId FROM tmpMessageChannel m WHERE m.MessageId = ccMessageID LIMIT 1; 
+    
+        # Insert Notification
+        INSERT INTO Notification(NotificationTypeID, Title, Content, ConfigSendTime, SendImmediately, CreatorID, CreatedDate, Status, StatusID, ChannelID)
+        SELECT DISTINCT 
+    	ct.NotificationTypeID
+    	,ct.TemplateTitle
+    	,REPLACE(
+    		REPLACE(
+    			REPLACE(ct.TemplateContent, '{EN Announcement}', h.Content_en)
+    			       ,'{CN Announcement}', h.Content_cs)
+    	    , '@@', '') Content
+    	 ,startTime, 0, STARIXIT_CUSTID, CreatedDate, CREATING_NOTIFICATION_STATUS, CREATING_NOTIFICATION_STATUSID, ccChannelId
+        FROM tmp_MsgHeader h
+        INNER JOIN tmp_MsgContentTypeTemplate ct ON ct.MsgContentsType = h.MsgContentsType 
+        WHERE MessageID = ccMessageID;
+    
+        SELECT LAST_INSERT_ID() INTO ccNotificationID;
+    
+        INSERT INTO tmp_Notification(NotificationID)
+          VALUES (ccNotificationID);
+        
+        # Insert NotificationSystemMsg
+        INSERT INTO NotificationSystemMsg(MessageID, NotificationID, CheckMsg, CreatedDate)
+          SELECT h.MessageID, ccNotificationID, h.CheckMsg, startTime
+            FROM tmp_MsgHeader h
+            WHERE h.MessageID = ccMessageID;
+    
+        #Insert recipient list
+        INSERT INTO NotificationRecipientList(NotificationID, ConversationGroupID, ChatGroupTypeID, RecipientID, Status, StatusID)
+          SELECT ccNotificationID, d.ConversationGroupID, d.ChatGroupTypeID, d.RecipientID, d.Status, d.StatusID
+          FROM tmp_NotificationRecipientList d
+          WHERE d.MessageID = ccMessageID
+    	   AND LicenseeStatusID = ACTIVE_LICENSEE_STATUS
+    	   AND d.ChannelID = ccChannelId;
+    
+        #Update Status for Notification
+        UPDATE Notification n
+          INNER JOIN NotificationSystemMsg nm ON nm.NotificationID = n.NotificationID
+          INNER JOIN (SELECT DISTINCT nrl.MessageID, nrl.Status, nrl.StatusID FROM tmp_NotificationRecipientList nrl) AS t ON t.MessageID = nm.MessageID
+          SET n.Status = t.Status,
+    			    n.StatusID = t.StatusID
+          WHERE n.NotificationID = ccNotificationID;
+	   DELETE FROM tmpMessageChannel m WHERE m.MessageID = ccMessageID AND m.ChannelId = ccChannelId;
+	   END WHILE;
+      SET iLoop := iLoop + 1;
+     END WHILE;
+
+	/*Step 9: Update Setting*/
+     #Update Max MsgID
+	 SELECT MAX(MessageID) INTO maxMessageID FROM tmp_MsgHeader WHERE IsNew = 1;
+     
+     IF maxMessageID IS NOT NULL THEN
+	 	UPDATE SystemSetting
+	 	SET Value = (SELECT MAX(MessageID) FROM tmp_MsgHeader)
+	 	WHERE ID = 3;
+	 END IF;
+     
+     #Update Last PostTime
+     SELECT MAX(CAST(PostTime AS DATETIME)) INTO lastPostTime FROM tmp_MsgHeader WHERE IsNew = 1;
+     
+	 IF lastPostTime IS NOT NULL THEN
+	 	UPDATE SystemSetting
+	 	SET Value = lastPostTime
+	 	WHERE ID = 17;
+	 END IF;
+     
+     #Update flag to 'Done'
+	 UPDATE SystemSetting 
+	 SET Value = VALUE_4_DONE
+	 WHERE ID = 1 AND Value = VALUE_4_RUNNING;
+	 
+	 /*Step 10:Return imported messages*/   		
+	 #Get ChatGroupID which receives carbon coppies of all imported messages
+     SELECT Value INTO ccConversationGroupID
+     FROM SystemSetting WHERE ID = 5;
+	 
+	 DROP TEMPORARY TABLE IF EXISTS tmp_Carbon;
+     CREATE TEMPORARY TABLE tmp_Carbon(ConversationGroupID INT UNSIGNED);
+    
+     IF IFNULL(ccConversationGroupID, '') <> '' THEN
+		SET @SqlCommand = REPLACE(ccConversationGroupID, ',', '''),(''');
+		SET @SqlCommand = CONCAT('(''', @SqlCommand, ''')');
+		SET @SqlCommand= CONCAT('INSERT INTO tmp_Carbon VALUES', @SqlCommand); 
+		
+		PREPARE Stmt FROM  @SqlCommand;
+		EXECUTE Stmt;
+		DEALLOCATE PREPARE Stmt;
+	END IF;
+     
+     #Return Bot, Chatgroup
+     SELECT g.ConversationID AS ChatGroupConversationID
+	 			, g.ServiceUrl
+                 , g.ChannelID
+				 , cc.ChannelName
+                 , b.ConversationID AS BotConversationID 
+                 , b.Name AS BotName
+     FROM ConversationGroup g
+     INNER JOIN ConversationGroupBot gb ON g.ConversationGroupID = gb.ConversationGroupID
+	 INNER JOIN ConversationChannel cc ON cc.ChannelId = g.ChannelId
+     INNER JOIN ConversationBot b ON b.ConversationBotID = gb.ConversationBotID
+     WHERE g.ConversationGroupID IN (SELECT ConversationGroupID FROM tmp_Carbon);    
+     
+     #Return all imported message content
+     SELECT n.NotificationID, n.Title, n.Content, n.ChannelID, c.ChannelName
+	 FROM Notification n
+		INNER JOIN ConversationChannel c ON c.ChannelID = n.ChannelID 
+     WHERE n.NotificationID IN (SELECT t.NotificationID FROM tmp_Notification t);                                 
+     
+	  #Get Finish Time to calcualte execution duration
+	 SET finishTime = UTC_TIMESTAMP(3);
+	 SET duration =  TIMESTAMPDIFF(MICROSECOND
+	 																	, startTime
+	 																	, finishTime)  / 1000; 	#miliseconds
+	 
+	 #Get Log Content, JSON format
+	 SET logContent = json_object('MessageHeader', messageHeader
+	 									, 'MessageDetail', messageDetail
+	 				) ;
+	 				
+	 #Write User Log
+	 IF EXISTS (SELECT 1 FROM tmp_MsgHeader) THEN
+	 	CALL NCB_UserLog_RunSP_Ins(
+	 											ACTION_ID #actionID
+	 											, -1  #referenceID
+	 											, STARIXIT_CUSTID #UserID
+	 											, logContent #LogContent
+	 											, startTime #logtime
+	 											, duration	#Duration
+	 											);
+	 END IF;
 END;
 
 //

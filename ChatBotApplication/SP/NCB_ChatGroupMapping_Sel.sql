@@ -4,6 +4,7 @@ DELIMITER //
 
 CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_ChatGroupMapping_Sel (
 		IN botIDs VARCHAR(500) ,
+		IN channelIDs VARCHAR(100),
         IN recipientTypeIds VARCHAR(1000),
         IN recipientName VARCHAR(100)  ,
         IN groupName VARCHAR(500) ,
@@ -29,6 +30,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_ChatGroupMapping_Sel (
                     - 20190418@Dominic: Improve performance
 					- 20191212@Merlin.Le: Get additional field IsActive -- Redmine ID: #125345
 					- 20200214@Percy: Special Delete - Integrate Abnormal Bets [RedmineID: #127944]
+                    - 20210513@Malcolm: Integrate Telegram [RedmineID: #151807]
 		*/
     )
 SQL SECURITY DEFINER
@@ -56,12 +58,11 @@ BEGIN
     IF groupName IS NULL THEN SET groupName = ''; END IF;
     IF mappingStatusIds IS NULL THEN SET mappingStatusIds = ''; END IF;    
 	IF licenseeStatusIds IS NULL THEN SET licenseeStatusIds = ''; END IF;
+    SET channelIDs = IFNULL(channelIDs, '');
     
 	-- Split recipientTypeIds into temporary table tmp_RecipientTypeIds
     DROP TEMPORARY TABLE IF EXISTS tmp_BotIDs;
-	CREATE TEMPORARY TABLE tmp_BotIDs(
-									BotID INT
-							);
+	CREATE TEMPORARY TABLE tmp_BotIDs(BotID INT);
     
     IF IFNULL(botIDs, '') <> '' THEN
 		SET @SqlCommand = REPLACE(botIDs, ',', '''),(''');
@@ -114,6 +115,19 @@ BEGIN
 		EXECUTE Stmt;
 		DEALLOCATE PREPARE Stmt;
 	END IF;
+    
+    DROP TEMPORARY TABLE IF EXISTS tmp_ChannelIDs;
+    CREATE TEMPORARY TABLE tmp_ChannelIDs (ChannelID TINYINT UNSIGNED);
+    
+    IF ChannelIDs <> '' THEN
+		SET @SqlCommand = REPLACE(ChannelIDs, ',', '''),(''');
+        SET @SqlCommand = CONCAT('(''', @SqlCommand, ''')');
+        SET @SqlCommand = CONCAT('INSERT INTO tmp_ChannelIDs VALUES', @SqlCommand);
+        
+        PREPARE Stmt FROM @SqlCommand;
+        EXECUTE Stmt;
+        DEALLOCATE PREPARE Stmt;
+	END IF;
 
 	DROP TEMPORARY TABLE IF EXISTS tmp_RecipientIDByLicenseeStatus;
 	CREATE TEMPORARY TABLE tmp_RecipientIDByLicenseeStatus(RecipientID INT, UNIQUE INDEX Index_RecipientID(RecipientID));
@@ -123,17 +137,13 @@ BEGIN
     FROM Recipient r
     INNER JOIN Licensee l ON r.SourceId = l.LicenseeID 
 			AND r.RecipientTypeId = RECIPIENT_TYPE_LICENSEE
-    WHERE l.LicenseeStatusId IN (
-														SELECT tls.LicenseeStatusId 
-                                                        FROM tmp_LicenseeStatusIds tls 
-                                                        WHERE tls.LicenseeStatusId <> LICENSEE_STATUSID_NA
-													);
+    WHERE l.LicenseeStatusId IN (SELECT tls.LicenseeStatusId FROM tmp_LicenseeStatusIds tls WHERE tls.LicenseeStatusId <> LICENSEE_STATUSID_NA);
 	
-    IF EXISTS(
-						SELECT 1 
-						FROM tmp_LicenseeStatusIds tls 
-                        WHERE tls.LicenseeStatusId = LICENSEE_STATUSID_NA
-                        )
+    IF EXISTS (
+		SELECT 1 
+		FROM tmp_LicenseeStatusIds tls 
+		WHERE tls.LicenseeStatusId = LICENSEE_STATUSID_NA
+    )
 	THEN
 		INSERT INTO tmp_RecipientIDByLicenseeStatus(RecipientID)
 		SELECT r.RecipientID
@@ -146,11 +156,12 @@ BEGIN
         
 	
     DROP TEMPORARY TABLE IF EXISTS tmp_ConversationID_FIRSTBot;
-	CREATE TEMPORARY TABLE tmp_ConversationID_FIRSTBot(
-																					ConversationGroupID INT
-                                                                                    , ConversationBotID INT
-                                                                                    , UNIQUE INDEX Index_ConversationGroupID(ConversationGroupID)
-																		);
+	CREATE TEMPORARY TABLE tmp_ConversationID_FIRSTBot
+	(
+		ConversationGroupID INT
+		,ConversationBotID INT
+	    ,UNIQUE INDEX Index_ConversationGroupID(ConversationGroupID)
+	);
      
 	INSERT INTO tmp_ConversationID_FIRSTBot (ConversationGroupID, ConversationBotID)
 	SELECT GroupBot.ConversationGroupID, MIN(GroupBot.ConversationBotID) ConversationBotID
@@ -167,6 +178,7 @@ BEGIN
     DROP TEMPORARY TABLE IF EXISTS tmp_AllBotConversation;
     CREATE TEMPORARY TABLE tmp_AllBotConversation
     SELECT DISTINCT cgrp.Name AS GroupName
+				,cgrp.ChannelID
 				, cgrp.ConversationGroupID AS GroupID
                 , cgt.ChatGroupTypeID
                 , cgt.ChatGroupTypeName
@@ -198,33 +210,24 @@ BEGIN
 		AND EXISTS (
 			SELECT 1 
             FROM tmp_MappingStatusIDs t1 
-            WHERE t1.MappingStatusID = CASE 
-																	WHEN FirstBot.ConversationBotID IS NULL 
-																		THEN MAPPING_STATUS_BOT_REMOVED
-																	 WHEN r.RecipientName IS NULL  OR  grpinfo.ChatGroupTypeID IS NULL 
-																		THEN MAPPING_STATUS_NOT_MAPPED
-																	WHEN r.RecipientName IS NOT NULL  AND grpinfo.ChatGroupTypeID IS NOT NULL 
-																		THEN MAPPING_STATUS_MAPPED
-                                                            END
+            WHERE t1.MappingStatusID = CASE WHEN FirstBot.ConversationBotID IS NULL THEN MAPPING_STATUS_BOT_REMOVED
+											WHEN r.RecipientName IS NULL OR grpinfo.ChatGroupTypeID IS NULL THEN MAPPING_STATUS_NOT_MAPPED
+											WHEN r.RecipientName IS NOT NULL AND grpinfo.ChatGroupTypeID IS NOT NULL THEN MAPPING_STATUS_MAPPED
+                                       END
 		)
-        AND (
-					IFNULL(r.RecipientId, RECIPIENT_ID_NA) IN (SELECT rbls.RecipientId FROM tmp_RecipientIDByLicenseeStatus rbls)
-		)
-		AND (
-					IFNULL(r.RecipientTypeID, RECIPIENT_TYPE_ID_NA)  IN (SELECT trt.RecipientTypeId FROM tmp_RecipientTypeIds trt)
-		)
-        AND (
-					IFNULL(r.RecipientName,'') LIKE CONCAT('%', recipientName, '%') 
-		)
-		AND (
-					IFNULL(cgrp.Name,'') LIKE CONCAT( '%', groupName, '%') 
-		);
+        AND (IFNULL(r.RecipientId, RECIPIENT_ID_NA) IN (SELECT rbls.RecipientId FROM tmp_RecipientIDByLicenseeStatus rbls))
+		AND (IFNULL(r.RecipientTypeID, RECIPIENT_TYPE_ID_NA)  IN (SELECT trt.RecipientTypeId FROM tmp_RecipientTypeIds trt))
+        AND (IFNULL(r.RecipientName,'') LIKE CONCAT('%', recipientName, '%'))
+		AND (IFNULL(cgrp.Name,'') LIKE CONCAT( '%', groupName, '%') )
+		AND (cgrp.ChannelID IN (SELECT tmp_c.ChannelID FROM tmp_ChannelIDs tmp_c));
     
 	-- Get BotConversations for current paging page
     DROP TEMPORARY TABLE IF EXISTS tmp_PagedBotConversation;
     CREATE TEMPORARY TABLE tmp_PagedBotConversation
     SELECT tmp.GroupName, 
 		tmp.GroupID, 
+		tmp.ChannelID,
+        c.ChannelName,
         tmp.ChatGroupTypeID, 
         tmp.ChatGroupTypeName, 
         tmp.ConversationID, 
@@ -236,6 +239,7 @@ BEGIN
         tmp.BotMemberID,
         tmp.IsActive
 	FROM tmp_AllBotConversation tmp
+		INNER JOIN ConversationChannel c ON c.ChannelId = tmp.ChannelID
     ORDER BY tmp.GroupName
     LIMIT rowStart, pageSize;
     
@@ -247,6 +251,8 @@ BEGIN
 	-- and satisfy RecipientTypeIds filtering condition
     SELECT tmp.GroupName, 
 		tmp.GroupID, 
+		tmp.ChannelID,
+        tmp.ChannelName,
         tmp.ChatGroupTypeID, 
         tmp.ChatGroupTypeName, 
         tmp.ConversationID, 

@@ -23,8 +23,9 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_SpecialDeleteMsg_AbnormalBets
       - 20200214@Percy: Initiliaze SP [RedmineID: #127944]
       - 2020603@Oliver: Add MaxMessageID param [RedmineID: #135312]
       - 2020610@Oliver: remove MaxMessageID [RedmineID: #135686]
-	  - 20210405@Malcolm: Import data for voiding abnormal accounts [RedmineId : #152175] 
-	  - 20210722@Malcolm: Change msg content type for abnormal accounts [RedmineId : #158723] 
+	  - 20210405@Malcolm: Import data for voiding abnormal accounts [RedmineId : #152175]
+      - 20210722@Malcolm: Change msg content type for abnormal accounts [RedmineId : #158723] 
+	  - 20210513@Malcolm: Integrate Telegram [RedmineID: #151807]
 	Param's Explanation:
 		- Type = 1: for message of abnormal bets (issue type = 11, 15)
 		- Type = 2: for message of abnormal accounts (issue type = 13)
@@ -40,15 +41,16 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
   DECLARE duration INT;
   DECLARE logContent TEXT CHARACTER SET utf8mb4;
   DECLARE templateNotifcationType JSON;
-  DECLARE ccConversationGroupID INT;
+  DECLARE ccConversationGroupID TEXT;
 
   DECLARE createdDate DATETIME(3);
   DECLARE ccMessageID INT;
   DECLARE ccNotificationID INT UNSIGNED;
   DECLARE ccIsTest TINYINT;
+  DECLARE ccChannelId TINYINT UNSIGNED;
 
   # Constants
-	DECLARE ACTION_ID INT DEFAULT 18;
+  DECLARE ACTION_ID INT DEFAULT 18;
   DECLARE VALUE_RUNNING TEXT DEFAULT 'Running';
   DECLARE VALUE_DONE TEXT DEFAULT 'Done';
   DECLARE RECIPIENT_TYPE_INTERNAL_CSD INT DEFAULT 3;
@@ -62,7 +64,7 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
     
   DECLARE PLANNED_NOTIFICATION_STATUSID	TINYINT UNSIGNED DEFAULT 0;
   DECLARE PLANNED_NOTIFICATION_STATUS	VARCHAR(10) DEFAULT 'Planned';
-
+  
   SET startTime = UTC_TIMESTAMP();
   SET errCode = 0, errMsg = '';
 
@@ -244,7 +246,7 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
     NotificationTypeID INT,
     NotificationTemplateID INT,
     TemplateTitle VARCHAR(300),
-    TemplateContent MEDIUMTEXT,
+	TemplateContent MEDIUMTEXT,
     IsTest TINYINT,
     StatusID TINYINT UNSIGNED,
     Status VARCHAR(10),
@@ -354,11 +356,12 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
     ChatGroupTypeID SMALLINT,
     StatusID TINYINT UNSIGNED,
     Status VARCHAR(10),
+	ChannelId TINYINT UNSIGNED,
     INDEX Index_MessageID(MessageID)
     );
 
-  INSERT INTO tmp_NotificationRecipientList(MessageID, RecipientID, ConversationGroupID, ChatGroupTypeID, StatusID, Status)
-    SELECT h.MessageID, r.RecipientID, gr.ConversationGroupID, ngt.ChatGroupTypeID, tpl.StatusID, tpl.Status
+  INSERT INTO tmp_NotificationRecipientList(MessageID, RecipientID, ConversationGroupID, ChatGroupTypeID, StatusID, Status, ChannelId)
+    SELECT h.MessageID, r.RecipientID, gr.ConversationGroupID, ngt.ChatGroupTypeID, tpl.StatusID, tpl.Status, g.ChannelId
       FROM tmp_MsgHeader h
         INNER JOIN tmp_MsgContentTypeTemplate tpl ON h.Type = tpl.Type
         INNER JOIN NotificationChatGroupType ngt ON tpl.NotificationTypeID = ngt.NotificationTypeID
@@ -371,19 +374,28 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
   UPDATE tmp_MsgHeader h
     SET h.CheckMsg = CONCAT(h.CheckMsg, '- Internal CSD recipients do not have any suitable chat groups')
     WHERE h.MessageID NOT IN (SELECT MessageID FROM tmp_NotificationRecipientList);
-
+	
   /*Step 7: Insert Notification and NotificationSystemMsg*/
+  DROP TEMPORARY TABLE IF EXISTS tmpMessageChannel;
+  CREATE TEMPORARY TABLE tmpMessageChannel (MessageID INT, ChannelID TINYINT, INDEX Index_PK (MessageID, ChannelID));
+  
+  INSERT INTO tmpMessageChannel (MessageID, ChannelId)
+  SELECT DISTINCT MessageId, ChannelId
+  FROM tmp_NotificationRecipientList r;
+
   SET iLoop = 1;
   SET createdDate = UTC_TIMESTAMP();
   WHILE (EXISTS (SELECT 1 FROM tmp_MsgHeader WHERE Id = iLoop)) DO
     SELECT MessageID, IsTest INTO ccMessageID, ccIsTest FROM tmp_MsgHeader WHERE Id = iLoop;
 
-    IF EXISTS (SELECT 1 FROM tmp_NotificationRecipientList WHERE MessageID = ccMessageID) THEN
+    WHILE EXISTS(SELECT 1 FROM tmpMessageChannel m WHERE m.MessageId = ccMessageID) DO
+	  SELECT ChannelId INTO ccChannelId FROM tmpMessageChannel m WHERE m.MessageId = ccMessageID LIMIT 1; 
+
       # Insert Notification
-      INSERT INTO Notification(NotificationTypeID, Title, Content, ConfigSendTime, SendImmediately, CreatorID, CreatedDate, Status, StatusID)
-        SELECT DISTINCT ct.NotificationTypeID, ct.TemplateTitle, REPLACE(REPLACE(ct.TemplateContent, '{General Info}', h.Content_Detail), '@@', '') Content, startTime, 0 SendImmediately, STARIXIT_CUSTID, CreatedDate, CREATING_NOTIFICATION_STATUS, CREATING_NOTIFICATION_STATUSID
+      INSERT INTO Notification(NotificationTypeID, Title, Content, ConfigSendTime, SendImmediately, CreatorID, CreatedDate, Status, StatusID, ChannelId)
+        SELECT DISTINCT ct.NotificationTypeID, ct.TemplateTitle, REPLACE(REPLACE(ct.TemplateContent, '{General Info}', h.Content_Detail), '@@', '') Content, startTime, 0 SendImmediately, STARIXIT_CUSTID, CreatedDate, CREATING_NOTIFICATION_STATUS, CREATING_NOTIFICATION_STATUSID, ccChannelId
           FROM tmp_MsgHeader h
-          INNER JOIN tmp_MsgContentTypeTemplate ct ON ct.Type = h.Type
+          INNER JOIN tmp_MsgContentTypeTemplate ct ON ct.Type = h.Type 
           WHERE h.MessageID = ccMessageID;
 
       SELECT LAST_INSERT_ID() INTO ccNotificationID;
@@ -401,7 +413,7 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
       INSERT INTO NotificationRecipientList(NotificationID, ConversationGroupID, ChatGroupTypeID, RecipientID, Status, StatusID)
         SELECT ccNotificationID, d.ConversationGroupID, d.ChatGroupTypeID, d.RecipientID, d.Status, d.StatusID
         FROM tmp_NotificationRecipientList d
-        WHERE d.MessageID = ccMessageID;
+        WHERE d.MessageID = ccMessageID AND d.ChannelId = ccChannelId;
 
       #Update Status for Notification
       IF ccIsTest = 1 THEN
@@ -421,41 +433,56 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
           SET n.Status = t.Status,
   				    n.StatusID = t.StatusID
           WHERE n.NotificationID = ccNotificationID;
-        END IF;
       END IF;
+	  DELETE FROM tmpMessageChannel m WHERE m.MessageId = ccMessageID AND m.ChannelId = ccChannelId;
+	 END WHILE;
 
     SET iLoop := iLoop + 1;
-    END WHILE;
+  END WHILE;
 
-  /*Step 9: Update Setting*/
+	/*Step 9: Update Setting*/
   #Update Max MsgID
   UPDATE SystemSetting
-	SET Value = (SELECT MAX(MessageID) FROM tmp_MsgHeader)
-		WHERE ID = 8;
-        
+  	SET Value = (SELECT MAX(MessageID) FROM tmp_MsgHeader)
+  WHERE ID = 8;
+         
   #Update flag to 'Done'
   UPDATE SystemSetting
-    SET Value = VALUE_DONE
-		WHERE ID = 6 AND Value = VALUE_RUNNING;
-
+  	SET Value = VALUE_DONE
+  WHERE ID = 6 AND Value = VALUE_RUNNING;
+  
   /*Step 10: Return imported messages*/
   #Get ChatGroupID which receives carbon coppies of all imported messages
   SELECT Value INTO ccConversationGroupID
-    FROM SystemSetting
-    WHERE ID = 10;
-
+     FROM SystemSetting
+     WHERE ID = 10;
+	 
+  DROP TEMPORARY TABLE IF EXISTS tmp_Carbon;
+  CREATE TEMPORARY TABLE tmp_Carbon(ConversationGroupID INT UNSIGNED);
+    
+    IF IFNULL(ccConversationGroupID, '') <> '' THEN
+		SET @SqlCommand = REPLACE(ccConversationGroupID, ',', '''),(''');
+		SET @SqlCommand = CONCAT('(''', @SqlCommand, ''')');
+		SET @SqlCommand= CONCAT('INSERT INTO tmp_Carbon VALUES', @SqlCommand); 
+		
+		PREPARE Stmt FROM  @SqlCommand;
+		EXECUTE Stmt;
+		DEALLOCATE PREPARE Stmt;
+	END IF;
+  
   #Return Bot, Chatgroup
-  SELECT g.ConversationID AS ChatGroupConversationID, g.ServiceUrl, g.ChannelID, b.ConversationID AS BotConversationID, b.Name AS BotName
+  SELECT g.ConversationID AS ChatGroupConversationID, g.ServiceUrl, g.ChannelID, cc.ChannelName,b.ConversationID AS BotConversationID, b.Name AS BotName
   FROM ConversationGroup g
-    INNER JOIN ConversationGroupBot gb ON g.ConversationGroupID = gb.ConversationGroupID
-    INNER JOIN ConversationBot b ON b.ConversationBotID = gb.ConversationBotID
-    WHERE g.ConversationGroupID = ccConversationGroupID
-  LIMIT 1;
-
+  	INNER JOIN ConversationGroupBot gb ON g.ConversationGroupID = gb.ConversationGroupID
+  	INNER JOIN ConversationBot b ON b.ConversationBotID = gb.ConversationBotID
+	INNER JOIN ConversationChannel cc ON cc.ChannelId = g.ChannelId
+  	WHERE g.ConversationGroupID IN (SELECT ConversationGroupID FROM tmp_Carbon);
+  
   #Return all imported message content
-  SELECT n.NotificationID, n.Title, n.Content
-		FROM Notification n
-    WHERE n.NotificationID IN (SELECT t.NotificationID FROM tmp_Notification t);
+  SELECT n.NotificationID, n.Title, n.Content, n.ChannelID, c.ChannelName
+  FROM Notification n
+	INNER JOIN ConversationChannel c ON c.ChannelID = n.ChannelId
+  WHERE n.NotificationID IN (SELECT t.NotificationID FROM tmp_Notification t);
   
   #Get Finish Time to calculate execution duration
   SET finishTime = UTC_TIMESTAMP(3);
