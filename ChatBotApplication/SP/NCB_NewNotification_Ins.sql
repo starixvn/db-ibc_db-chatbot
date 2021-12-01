@@ -27,6 +27,7 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_NewNotification_Ins`(
 				- 20190819Q@Elton: Update Error Message
                 - 20191211@Dominic: Filter active chat group - Redmine: #125085
 				- 20210513@Malcolm: Integrate Telegram - RedmineID: #151807
+                - 20211201@Malcolm: Change Logs - RedmineID: #163777
 		Param's Explanation:
 		- ContentLst:
 				[
@@ -383,10 +384,10 @@ NCB_NewNotification_Ins:BEGIN
 		
 		 SET logContent = json_object('NotificationTypeID', notificationTypeID
 										, 'ProductID', productID
-                                        , 'RecipientIDLst', _RecipientIDLst
+                                        , 'RecipientIDLst', recipientIDLst
 										, 'Title', title
 										, 'ChannelId', _ChannelId
-                                        , 'content', _content
+                                        , 'content', ContentLst
                                         , 'ConfigSendTime', configSendTime
                                         , 'SendImmediately', sendImmediately
                                         , 'notificationID', _notificationID
