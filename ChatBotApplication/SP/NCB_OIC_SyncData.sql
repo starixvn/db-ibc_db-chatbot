@@ -24,6 +24,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_OIC_SyncData(
                 - 20210928@Malcolm: Fix deadlock - Redmine: #162379
                 - 20211011@Malcolm: Fix deadlock - Redmine: #163037
                 - 20211021@Malcolm: add Product Status - Redmine: #161727
+                - 20211021@Malcolm: Integrate the change of Licensee type from OIC - Redmine: #163779
     */
 )
 SQL SECURITY DEFINER
@@ -258,7 +259,7 @@ BEGIN
 ############################ Licensee Types ###########################################
 
     DROP TEMPORARY TABLE IF EXISTS tmp_LicenseeType;
-    CREATE TEMPORARY TABLE IF NOT EXISTS tmp_LicenseeType(LicenseeTypeId TINYINT UNSIGNED PRIMARY KEY, LicenseeTypeName VARCHAR(40) CHARACTER SET 'utf8mb4'  COLLATE 'utf8mb4_unicode_ci');
+    CREATE TEMPORARY TABLE IF NOT EXISTS tmp_LicenseeType(LicenseeTypeId TINYINT UNSIGNED PRIMARY KEY, LicenseeTypeName VARCHAR(50) CHARACTER SET 'utf8mb4'  COLLATE 'utf8mb4_unicode_ci');
 
 	INSERT INTO tmp_LicenseeType(LicenseeTypeId, LicenseeTypeName)
     SELECT t.LicenseeTypeId, NULLIF(t.LicenseeTypeName, NULL)
@@ -270,12 +271,12 @@ BEGIN
             COLUMNS
             (
 				LicenseeTypeId TINYINT UNSIGNED PATH "$.LicenseeTypeId", 
-                LicenseeTypeName VARCHAR(40) CHARACTER SET 'utf8mb4'  COLLATE 'utf8mb4_unicode_ci' PATH "$.LicenseeTypeName" 
+                LicenseeTypeName VARCHAR(50) CHARACTER SET 'utf8mb4'  COLLATE 'utf8mb4_unicode_ci' PATH "$.LicenseeTypeName" 
             )
         ) AS t;
     
     DROP TEMPORARY TABLE IF EXISTS tmp_Data;
-    CREATE TEMPORARY TABLE IF NOT EXISTS tmp_Data(LicenseeTypeId TINYINT UNSIGNED PRIMARY KEY, LicenseeTypeName VARCHAR(40) CHARACTER SET 'utf8mb4'  COLLATE 'utf8mb4_unicode_ci', IsDeleted INT);
+    CREATE TEMPORARY TABLE IF NOT EXISTS tmp_Data(LicenseeTypeId TINYINT UNSIGNED PRIMARY KEY, LicenseeTypeName VARCHAR(50) CHARACTER SET 'utf8mb4'  COLLATE 'utf8mb4_unicode_ci', IsDeleted INT);
     
     INSERT INTO tmp_Data (LicenseeTypeId, LicenseeTypeName, IsDeleted)
     SELECT lt.LicenseeTypeId, lt.LicenseeTypeName, -1
