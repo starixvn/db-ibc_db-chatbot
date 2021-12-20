@@ -15,6 +15,7 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_SettingConfiguration_MappingLi
 
         Revisions:
             - 20200417@Merlin: Select list mapping - RedmineID: #132039
+            - 20211130@Malcolm: get distinct template for abnormal bets - RedmineID: #163777
     */
 )
 SQL SECURITY DEFINER
@@ -38,52 +39,46 @@ BEGIN
         ,NotificationTypeID     INT
         ,TemplateRequiredParams VARCHAR (4000)
     );
-
-    WHILE (
-		JSON_EXTRACT(jsonValue, CONCAT('$[', iLoop, '].MsgContentsType')) IS NOT NULL
-	) DO
-        INSERT INTO MappingSettingConfigurationTable (
-            IsTest
-            ,MsgContentsType
-            ,NotificationTemplateID
-            ,NotificationTypeID
-            ,TemplateRequiredParams
-        )
-        SELECT
-            JSON_EXTRACT(jsonValue, CONCAT('$[', iLoop, '].IsTest'))
-            ,JSON_EXTRACT(jsonValue, CONCAT('$[', iLoop, '].MsgContentsType'))
-            ,JSON_EXTRACT(jsonValue, CONCAT('$[', iLoop, '].NotificationTemplateID'))
-            ,JSON_EXTRACT(jsonValue, CONCAT('$[', iLoop, '].NotificationTypeID'))
-            ,JSON_UNQUOTE(JSON_EXTRACT(jsonValue, CONCAT('$[', iLoop, '].TemplateRequiredParams')));
-            
-		SET iLoop = iLoop + 1;
-    END WHILE;
     
+    INSERT INTO MappingSettingConfigurationTable (IsTest, MsgContentsType, NotificationTemplateID, NotificationTypeID, TemplateRequiredParams)
+    SELECT DISTINCT t.IsTest, t.MsgContentsType, t.NotificationTemplateID, t.NotificationTypeID, t.TemplateRequiredParams
+    FROM 
+		JSON_TABLE 
+        (
+			jsonValue,
+            "$[*]"
+            COLUMNS
+            (
+				IsTest INT PATH "$.IsTest",
+				MsgContentsType INT PATH "$.MsgContentsType",
+				NotificationTemplateID INT PATH "$.NotificationTemplateID",
+				NotificationTypeID INT PATH "$.NotificationTypeID",
+				TemplateRequiredParams VARCHAR(4000) PATH "$.TemplateRequiredParams"
+            )
+        ) AS t;
+        
     SET iLoop = 0;
     SELECT ss.Value INTO jsonValue
     FROM SystemSetting ss
     WHERE ss.Id = 9999;
 
     DROP TEMPORARY TABLE IF EXISTS SettingTypeTable;
-    CREATE TEMPORARY TABLE SettingTypeTable (
-        MsgContentsType INT
-        ,Name           VARCHAR (250)
-    );
-
-    WHILE (
-		JSON_EXTRACT(jsonValue, CONCAT('$[', iLoop, '].MsgContentsType')) IS NOT NULL
-	) DO
-        INSERT INTO SettingTypeTable (
-            MsgContentsType
-            ,Name
-        )
-        SELECT
-            JSON_EXTRACT(jsonValue, CONCAT('$[', iLoop, '].MsgContentsType'))
-            ,JSON_UNQUOTE(JSON_EXTRACT(jsonValue, CONCAT('$[', iLoop, '].Name')));
-            
-		SET iLoop = iLoop + 1;
-    END WHILE;
+    CREATE TEMPORARY TABLE SettingTypeTable (MsgContentsType INT, Name VARCHAR (250));
     
+	INSERT INTO SettingTypeTable (MsgContentsType, Name)
+    SELECT t.MsgContentsType, t.Name
+    FROM 
+		JSON_TABLE 
+		(	
+			jsonValue,
+            "$[*]"
+            COLUMNS
+            (
+				MsgContentsType INT PATH "$.MsgContentsType",
+                Name VARCHAR(250) PATH "$.Name"
+            )
+		) AS t;
+        
     SELECT COUNT(msct.NotificationTypeID) INTO total
 	FROM MappingSettingConfigurationTable msct
     INNER JOIN NotificationType nty ON nty.NotificationTypeID = msct.NotificationTypeID
