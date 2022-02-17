@@ -6,15 +6,17 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_EditNotification_Recipient_Sel
 	IN notificationID INT
     ,IN notificationTypeID SMALLINT
 	,IN productID SMALLINT
+	,IN Platforms TEXT
     /*
 		Creator: Elton@20190821
-		Task:		
+		Task: CHATBOT-> Notification List -> Edit (Status = Canceled)		
 		DB: DBCB-ChatBot
         Revisions:
 				- 20190821@Elton: First Commit
                 - 20191211@Dominic: Filter active chat group - Redmine: #125085
 				- 20200211@Oliver: Add check notification chat group type has been changed [RedmineID: #128273]
 				- 20200214@Percy: Special Delete - Integrate Abnormal Bets [RedmineID: #127944]
+				- 20220218@Malcolm: Add Platform for licensee [RedmineID: #167946]
         
     */
 )
@@ -26,6 +28,20 @@ BEGIN
     
     #Local variables
     DECLARE nowGMTMinus4 DATETIME;
+	
+	DROP TEMPORARY TABLE IF EXISTS tmp_Platforms;
+	CREATE TEMPORARY TABLE tmp_Platforms (PlatformId TINYINT UNSIGNED);
+	
+	IF IFNULL(Platforms,'') <> ''THEN
+		SET @sqlCommand = REPLACE(Platforms, ',', '),(');
+		SET @sqlCommand = CONCAT('(', @sqlCommand, ')');
+		SET @sqlCommand = CONCAT('INSERT INTO tmp_Platforms VALUES'
+															, @sqlCommand); 
+                                                            
+		PREPARE stmt FROM  @sqlCommand;
+		EXECUTE stmt;
+		DEALLOCATE PREPARE stmt;
+	END IF;
     
 	DROP TEMPORARY TABLE IF EXISTS tmp_recipientLst;
 	CREATE TEMPORARY TABLE tmp_recipientLst(
@@ -83,7 +99,8 @@ BEGIN
 	INNER JOIN Licensee l
 			ON l.LicenseeId = main.SourceID
 				AND main.RecipientTypeID = RECIPIENT_TYPE_LICENSEES
-	WHERE  l.LicenseeStatusId <> LICENSEE_STATUS_ACTIVE;
+	WHERE  l.LicenseeStatusId <> LICENSEE_STATUS_ACTIVE
+		OR NOT EXISTS (SELECT 1 FROM tmp_Platforms p WHERE p.PlatformId = l.PlatformId);
     
     #Delete exception cases
 	DELETE main

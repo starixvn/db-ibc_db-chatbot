@@ -8,6 +8,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_OIC_SyncData(
 	IN LicenseeStatuses JSON, 
 	IN LicenseeTypes JSON, 
 	IN Products JSON, 
+	IN Platforms JSON,
     OUT errCode INT,
     OUT errMsg VARCHAR(200)
 
@@ -49,11 +50,12 @@ BEGIN
             RegisteredLicenseeName VARCHAR(50) CHARACTER SET 'utf8mb4' COLLATE 'utf8mb4_unicode_ci', 
             LicenseeStatusId TINYINT UNSIGNED, 
             LicenseeTypeId TINYINT UNSIGNED,
+			PlatformId  TINYINT UNSIGNED,
             PRIMARY KEY (LicenseeId)
 	);
     
-    INSERT INTO tmp_Licensee(LicenseeId, LicenseeName, RegisteredLicenseeName, LicenseeStatusId, LicenseeTypeId)
-    SELECT t.LicenseeId, NULLIF(t.LicenseeName, 'NULL'), NULLIF(t.RegisteredLicenseeName, 'NULL'), t.LicenseeStatusId, t.LicenseeTypeId
+    INSERT INTO tmp_Licensee(LicenseeId, LicenseeName, RegisteredLicenseeName, LicenseeStatusId, LicenseeTypeId, PlatformId)
+    SELECT t.LicenseeId, NULLIF(t.LicenseeName, 'NULL'), NULLIF(t.RegisteredLicenseeName, 'NULL'), t.LicenseeStatusId, t.LicenseeTypeId, t.PlatformId
     FROM 
 		JSON_TABLE
         (
@@ -65,7 +67,8 @@ BEGIN
 				LicenseeName VARCHAR(50) CHARACTER SET 'utf8mb4'  COLLATE 'utf8mb4_unicode_ci' PATH "$.LicenseeName", 
 				RegisteredLicenseeName VARCHAR(50) CHARACTER SET 'utf8mb4'  COLLATE 'utf8mb4_unicode_ci' PATH "$.RegisteredLicenseeName", 
 				LicenseeStatusId TINYINT UNSIGNED PATH "$.LicenseeStatusId", 
-				LicenseeTypeId TINYINT UNSIGNED PATH "$.LicenseeTypeId"
+				LicenseeTypeId TINYINT UNSIGNED PATH "$.LicenseeTypeId",
+				PlatformId TINYINT UNSIGNED PATH "$.PlatformId"
             )
         ) AS t;
     
@@ -77,24 +80,26 @@ BEGIN
             RegisteredLicenseeName VARCHAR(50) CHARACTER SET 'utf8mb4' COLLATE 'utf8mb4_unicode_ci', 
             LicenseeStatusId TINYINT UNSIGNED, 
             LicenseeTypeId TINYINT UNSIGNED,
+			PlatformId TINYINT UNSIGNED,
             IsDeleted INT,
             PRIMARY KEY (LicenseeId)
 	);
     
-    INSERT INTO tmp_Data (LicenseeId, LicenseeName, RegisteredLicenseeName, LicenseeStatusId, LicenseeTypeId, IsDeleted)
-    SELECT l.LicenseeId, l.LicenseeName, l.RegisteredLicenseeName, l.LicenseeStatusId, l.LicenseeTypeId, -1
+    INSERT INTO tmp_Data (LicenseeId, LicenseeName, RegisteredLicenseeName, LicenseeStatusId, LicenseeTypeId, PlatformId, IsDeleted)
+    SELECT l.LicenseeId, l.LicenseeName, l.RegisteredLicenseeName, l.LicenseeStatusId, l.LicenseeTypeId, PlatformId, -1
     FROM Licensee l
     WHERE NOT EXISTS (SELECT 1 FROM tmp_Licensee tl WHERE tl.LicenseeId = l.LicenseeId);
     
-	INSERT INTO tmp_Data (LicenseeId, LicenseeName, RegisteredLicenseeName, LicenseeStatusId, LicenseeTypeId, IsDeleted)
-    SELECT tl.LicenseeId, tl.LicenseeName, tl.RegisteredLicenseeName, tl.LicenseeStatusId, tl.LicenseeTypeId, CASE WHEN l.LicenseeId IS NULL THEN 1 ELSE 0 END
+	INSERT INTO tmp_Data (LicenseeId, LicenseeName, RegisteredLicenseeName, LicenseeStatusId, LicenseeTypeId, PlatformId, IsDeleted)
+    SELECT tl.LicenseeId, tl.LicenseeName, tl.RegisteredLicenseeName, tl.LicenseeStatusId, tl.LicenseeTypeId, tl.PlatformId, CASE WHEN l.LicenseeId IS NULL THEN 1 ELSE 0 END
     FROM tmp_Licensee tl
 		LEFT JOIN Licensee l ON l.LicenseeId = tl.LicenseeId 
 	WHERE l.LicenseeId IS NULL 
 		OR IFNULL(tl.LicenseeName, '') <> IFNULL(l.LicenseeName, '')
         OR IFNULL(tl.RegisteredLicenseeName, '') <> IFNULL(l.RegisteredLicenseeName, '')
         OR IFNULL(tl.LicenseeStatusId, 0) <> IFNULL(l.LicenseeStatusId, 0)
-        OR IFNULL(tl.LicenseeTypeId, 0) <> IFNULL(l.LicenseeTypeId, 0);
+        OR IFNULL(tl.LicenseeTypeId, 0) <> IFNULL(l.LicenseeTypeId, 0)
+		OR IFNULL(tl.PlatformId, 0) <> IFNULL(l.PlatformId, 0);
         
 	IF EXISTS (SELECT 1 FROM tmp_Data WHERE IsDeleted = -1) 
 	THEN	
@@ -111,14 +116,15 @@ BEGIN
 			SET l.LicenseeName = td.LicenseeName, 
 				l.RegisteredLicenseeName = td.RegisteredLicenseeName, 
                 l.LicenseeStatusId = td.LicenseeStatusId,
-                l.LicenseeTypeId = td.LicenseeTypeId
+                l.LicenseeTypeId = td.LicenseeTypeId,
+				l.PlatformId = td.PlatformId
 		WHERE td.IsDeleted = 0;
     END IF;
     
     IF EXISTS (SELECT 1 FROM tmp_Data WHERE IsDeleted = 1) 
 	THEN	
-		INSERT INTO Licensee (LicenseeId, LicenseeName, RegisteredLicenseeName, LicenseeStatusId, LicenseeTypeId)
-        SELECT td.LicenseeId, td.LicenseeName, td.RegisteredLicenseeName, td.LicenseeStatusId, td.LicenseeTypeId
+		INSERT INTO Licensee (LicenseeId, LicenseeName, RegisteredLicenseeName, LicenseeStatusId, LicenseeTypeId, PlatformId)
+        SELECT td.LicenseeId, td.LicenseeName, td.RegisteredLicenseeName, td.LicenseeStatusId, td.LicenseeTypeId, td.PlatformId
         FROM tmp_Data td
         WHERE td.IsDeleted = 1;
     END IF;
@@ -371,6 +377,64 @@ BEGIN
 	THEN	
 		INSERT INTO Product (ProductId, ProductName, IsDisabled)
         SELECT td.ProductId, td.ProductName, td.IsDisabled
+        FROM tmp_Data td
+        WHERE td.IsDeleted = 1;
+    END IF;
+	
+############################ Platform ###########################################
+
+	DROP TEMPORARY TABLE IF EXISTS tmp_Platform;
+    CREATE TEMPORARY TABLE IF NOT EXISTS tmp_Platform (PlatformId TINYINT UNSIGNED PRIMARY KEY, PlatformName VARCHAR(50) CHARACTER SET 'utf8mb4'  COLLATE 'utf8mb4_unicode_ci');
+    
+    INSERT INTO tmp_Platform (PlatformId, PlatformName)
+    SELECT t.PlatformId, NULLIF(t.PlatformName, NULL)
+    FROM 
+		JSON_TABLE
+        (
+			Platforms,
+            "$[*]"
+            COLUMNS
+            (
+				PlatformId TINYINT UNSIGNED PATH "$.PlatformId", 
+                PlatformName VARCHAR(50) CHARACTER SET 'utf8mb4'  COLLATE 'utf8mb4_unicode_ci' PATH "$.PlatformName"
+            )
+        ) AS t;
+    
+	DROP TEMPORARY TABLE IF EXISTS tmp_Data;
+    CREATE TEMPORARY TABLE IF NOT EXISTS tmp_Data(PlatformId TINYINT UNSIGNED PRIMARY KEY, PlatformName VARCHAR(50) CHARACTER SET 'utf8mb4'  COLLATE 'utf8mb4_unicode_ci', IsDeleted INT);
+    
+    INSERT INTO tmp_Data (PlatformId, PlatformName, IsDeleted)
+    SELECT p.PlatformId, p.PlatformName, -1
+    FROM Platform p
+    WHERE NOT EXISTS (SELECT 1 FROM tmp_Platform tp WHERE tp.PlatformId = p.PlatformId);
+    
+	INSERT INTO tmp_Data (PlatformId, PlatformName, IsDeleted)
+    SELECT tp.PlatformId, tp.PlatformName, CASE WHEN p.PlatformId IS NULL THEN 1 ELSE 0 END
+    FROM tmp_Platform tp
+		LEFT JOIN Platform p ON p.PlatformId = tp.PlatformId 
+	WHERE p.PlatformId IS NULL 
+		OR IFNULL(p.PlatformName, '') <> IFNULL(tp.PlatformName, '');
+        
+	IF EXISTS (SELECT 1 FROM tmp_Data WHERE IsDeleted = -1) 
+	THEN	
+		DELETE p
+        FROM Platform p
+			INNER JOIN tmp_Data td ON p.PlatformId = td.PlatformId
+		WHERE td.IsDeleted = -1;
+    END IF;
+    
+    IF EXISTS (SELECT 1 FROM tmp_Data WHERE IsDeleted = 0) 
+	THEN	
+		UPDATE Platform p
+		INNER JOIN tmp_Data td ON p.PlatformId = td.PlatformId 
+			SET p.PlatformName = td.PlatformName
+		WHERE td.IsDeleted = 0;
+    END IF;
+    
+    IF EXISTS (SELECT 1 FROM tmp_Data WHERE IsDeleted = 1) 
+	THEN	
+		INSERT INTO Platform (PlatformId, PlatformName)
+        SELECT td.PlatformId, td.PlatformName
         FROM tmp_Data td
         WHERE td.IsDeleted = 1;
     END IF;

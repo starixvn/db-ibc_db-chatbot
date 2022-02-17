@@ -4,13 +4,14 @@ AS
 /*
 	Created: Oliver
 	Date: 20190910
-	Task: Sync data from OIC [RedmineID #119934]
+	Task: Sync data from OIC (DBOIC.bodb_OIC)[RedmineID #119934]
 	DB: DBOIC/bodb_OIC  
 
 	Revisions:
 		- 20190910@Oliver: init
 		- 20211021@Malcolm: Add Product Status [RedmineId: 161727]
 		- 20211118@Malcolm: Integrate the change of Licensee type [RedmineId: 163779]
+		- 20220217@Malcolm: Add Platform [RedmineId: 167946]
 */
 BEGIN
 
@@ -21,6 +22,7 @@ BEGIN
 		  ,l.RegisteredLicenseeName
 		  ,l.LicenseeStatusId
 		  ,l.TypeId AS LicenseeTypeId
+		  ,l.PlatformId
 	FROM dbo.Licensee l WITH (NOLOCK)
 	ORDER BY l.LicenseeId
 
@@ -46,7 +48,11 @@ BEGIN
 		  ,~p.Active AS [IsDisabled]
 	FROM dbo.Product p WITH (NOLOCK)
 	ORDER BY p.ProductId
+
+	SELECT 
+		PlatformId
+		,PlatformName
+	FROM Platform WITH(NOLOCK)
 	
 END
-
 GO

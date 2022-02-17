@@ -5,6 +5,7 @@ DELIMITER //
 CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_NewNotification_Ins`(
 	IN notificationTypeID SMALLINT
 	, IN productID SMALLINT
+	, IN Platforms TEXT
 	, IN recipientIDLst TEXT
 	, IN title VARCHAR(300) CHARACTER SET utf8mb4
 	, IN ContentLst JSON
@@ -28,6 +29,7 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_NewNotification_Ins`(
                 - 20191211@Dominic: Filter active chat group - Redmine: #125085
 				- 20210513@Malcolm: Integrate Telegram - RedmineID: #151807
                 - 20211201@Malcolm: Change Logs - RedmineID: #163777
+				- 20220218@Malcolm: Add Platform for licensee [RedmineID: #167946]
 		Param's Explanation:
 		- ContentLst:
 				[
@@ -132,6 +134,19 @@ NCB_NewNotification_Ins:BEGIN
     PREPARE stmt FROM  @sqlCommand;
 	EXECUTE stmt;
 	DEALLOCATE PREPARE stmt;
+	
+	#Insert comma seperated list Platforms to temporary tables
+    DROP TEMPORARY TABLE IF EXISTS tmp_Platform;
+	CREATE TEMPORARY TABLE tmp_Platform(PlatformId TINYINT UNSIGNED);
+    
+	SET @sqlCommand = REPLACE(Platforms, ',', '),(');
+	SET @sqlCommand = CONCAT('(', @sqlCommand, ')');
+	SET @sqlCommand= CONCAT('INSERT INTO tmp_Platform VALUES'
+														, @sqlCommand); 
+	
+    PREPARE stmt FROM  @sqlCommand;
+	EXECUTE stmt;
+	DEALLOCATE PREPARE stmt;
     
     DROP TEMPORARY TABLE IF EXISTS tmp_mappedRecipientIDLst;
 	CREATE TEMPORARY TABLE tmp_mappedRecipientIDLst(RecipientID INT, ChannelId TINYINT UNSIGNED);
@@ -200,6 +215,39 @@ NCB_NewNotification_Ins:BEGIN
 			);
             
 		SET errMsg = CONCAT('Licensee is Inactive: ' , errMsg);
+        LEAVE NCB_NewNotification_Ins;
+    END IF;
+	
+	#Check Platform
+     IF EXISTS(
+						SELECT 1 
+						FROM tmp_recipientIDLst main
+                        INNER JOIN Recipient re 
+							ON re.RecipientID = main.RecipientID 
+								AND re.RecipientTypeID = RECIPIENT_TYPE_LICENSEES
+                        INNER JOIN Licensee l
+							ON l.LicenseeId = re.SourceID
+						WHERE  l.LicenseeStatusId = LICENSEE_STATUS_ACTIVE
+							AND NOT EXISTS (SELECT 1 FROM tmp_Platform p WHERE p.PlatformId = l.PlatformId)
+	) THEN
+		SET errCode=111;
+        
+        SELECT GROUP_CONCAT(re.RecipientName ORDER BY re.RecipientName  SEPARATOR ', ')  
+        INTO errMsg
+        FROM Recipient re
+        WHERE re.RecipientID IN (
+						SELECT main. RecipientID
+						FROM tmp_recipientIDLst main
+                        INNER JOIN Recipient re 
+							ON re.RecipientID = main.RecipientID 
+								AND re.RecipientTypeID = RECIPIENT_TYPE_LICENSEES
+                        INNER JOIN Licensee l
+							ON l.LicenseeId = re.SourceID
+						WHERE  l.LicenseeStatusId = LICENSEE_STATUS_ACTIVE
+							AND NOT EXISTS (SELECT 1 FROM tmp_Platform p WHERE p.PlatformId = l.PlatformId)
+			);
+            
+		SET errMsg = CONCAT('Licensee does not belong to selected Platform: ' , errMsg);
         LEAVE NCB_NewNotification_Ins;
     END IF;
     

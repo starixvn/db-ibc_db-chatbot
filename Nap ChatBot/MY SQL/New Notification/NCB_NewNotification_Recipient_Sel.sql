@@ -5,11 +5,12 @@ DELIMITER //
 
 CREATE DEFINER = 'ChatBotSystem'@'%'  PROCEDURE NCB_NewNotification_Recipient_Sel (
 	IN notificationTypeID SMALLINT
+	,IN Platforms TEXT
 	,IN productID SMALLINT
 	,IN ChannelIdLst VARCHAR(100)
     /*
 		Creator: Dominic@20190401
-		Task:
+		Task: CHATBOT -> New Notification -> Recipients
 		DB: DBCB-ChatBot
         Param:
 				- ProductID: Applied to filter licensees who are offered a specific product, NULL if not specified
@@ -19,6 +20,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%'  PROCEDURE NCB_NewNotification_Recipient_Se
 				- 20200211@Oliver: Add check notification chat group type has been changed [RedmineID: #128273]
 				- 20200214@Percy: Special Delete - Integrate Abnormal Bets [RedmineID: #127944]
 				- 20210513@Malcolm: Integrate Telegram - RedmineID: #151807
+				- 20220218@Malcolm: Add Platform for licensee [RedmineID: #167946]
         
     */
 )
@@ -37,6 +39,17 @@ BEGIN
 	SET @sqlCommand = REPLACE(ChannelIdLst, ',', '),(');
 	SET @sqlCommand = CONCAT('(', @sqlCommand, ')');
 	SET @sqlCommand = CONCAT('INSERT INTO tmp_ChannelIdLst VALUES', @sqlCommand);
+	PREPARE stmt FROM @sqlCommand;
+	EXECUTE stmt;
+	DEALLOCATE PREPARE stmt;
+	
+	#Get Platform
+	DROP TEMPORARY TABLE IF EXISTS tmp_Platforms;
+	CREATE TEMPORARY TABLE tmp_Platforms(PlatformId TINYINT UNSIGNED);
+	
+	SET @sqlCommand = REPLACE(Platforms, ',', '),(');
+	SET @sqlCommand = CONCAT('(', @sqlCommand, ')');
+	SET @sqlCommand = CONCAT('INSERT INTO tmp_Platforms VALUES', @sqlCommand);
 	PREPARE stmt FROM @sqlCommand;
 	EXECUTE stmt;
 	DEALLOCATE PREPARE stmt;
@@ -87,13 +100,14 @@ BEGIN
 		)
 		AND con.ChannelId IN (SELECT tcl.ChannelId FROM tmp_ChannelIdLst tcl);
     
-    #Delete InActive Licensee
+    #Delete InActive Licensee and filter platform
     DELETE main
 	FROM tmp_recipientLst main
 	INNER JOIN Licensee l
 			ON l.LicenseeId = main.SourceID
-				AND main.RecipientTypeID = RECIPIENT_TYPE_LICENSEES
-	WHERE  l.LicenseeStatusId <> LICENSEE_STATUS_ACTIVE;
+				AND main.RecipientTypeID = RECIPIENT_TYPE_LICENSEES	
+	WHERE  l.LicenseeStatusId <> LICENSEE_STATUS_ACTIVE 
+		OR NOT EXISTS (SELECT 1 FROM tmp_Platforms p WHERE p.PlatformId = l.PlatformId);
     
     #Delete exception cases
 	DELETE main
