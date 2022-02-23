@@ -18,6 +18,7 @@ AS
 		- 20200715@Percy: Return isTest [RedmineID: #135686]
 		- 20210618@Percy: Migrate DBMSG to new server [RedmineID: #157217]
 		- 20211012@Malcolm: Rescan messageid <= @MessageId [RedmineID: #162825]
+		- 20220223@Malcolm: Remove SABA text out of the league name for China View platform [RedmineID: #168798]
 */
 
 BEGIN
@@ -37,15 +38,26 @@ BEGIN
 	FROM @xml.nodes('//root/r') AS RECORDS(r)
 	WHERE LEN(ISNULL(r.value('.', 'NVARCHAR(15)'), '')) > 0
 
-	DECLARE @DepositSite TABLE (SiteName VARCHAR(50), PRIMARY KEY (SiteName))
-	INSERT INTO @DepositSite (SiteName)
-	SELECT site FROM DBACC.bodb02.dbo.Site WITH (NOLOCK) WHERE isDeposit = 1
+	DECLARE @DepositSite TABLE (SiteName VARCHAR(50), IsChinaView BIT, PRIMARY KEY (SiteName))
+	INSERT INTO @DepositSite (SiteName, IsChinaView)
+	SELECT site, ISNULL(IsChinaView, 0) FROM DBACC.bodb02.dbo.Site WITH (NOLOCK) WHERE isDeposit = 1
 
-	DECLARE @Msg TABLE (MessageId INT, MsgContentsType TINYINT, MatchId INT, Content_en NVARCHAR(4000), Content_cs NVARCHAR(4000), PostTime DATETIME, IsNew TINYINT, IsTest TINYINT)
+	DECLARE @Msg TABLE 
+	(
+		MessageId INT
+		,MsgContentsType TINYINT
+		,MatchId INT
+		,Content_en NVARCHAR(4000)
+		,Content_cs NVARCHAR(4000)
+		,PostTime DATETIME
+		,IsNew TINYINT
+		,IsTest TINYINT
+		,LeagueGroupID SMALLINT
+	)
 	
 	-- New messages from @MessageID
-	INSERT INTO @Msg (MessageId, MsgContentsType, MatchId, Content_en, Content_cs, PostTime, IsNew, IsTest)
-	SELECT TOP (@BatchSize) m.MessageId, m.MsgContentsType, m.MatchId, m.Content_en, m.Content_cs, m.PostTime, 1, ISNULL(m.IsTest, 0)
+	INSERT INTO @Msg (MessageId, MsgContentsType, MatchId, Content_en, Content_cs, PostTime, IsNew, IsTest, LeagueGroupID)
+	SELECT TOP (@BatchSize) m.MessageId, m.MsgContentsType, m.MatchId, m.Content_en, m.Content_cs, m.PostTime, 1, ISNULL(m.IsTest, 0), ISNULL(LeagueGroupID, 0)
 	FROM dbo.Msg m WITH (NOLOCK)
 	WHERE m.MessageId > @MessageID
 		AND m.msgtype = 3
@@ -65,8 +77,8 @@ BEGIN
 	OPTION(RECOMPILE)
 
 	-- Rescan messages from @LastPostTime
-	INSERT INTO @Msg (MessageId, MsgContentsType, MatchId, Content_en, Content_cs, PostTime, IsNew, IsTest)
-	SELECT m.MessageId, m.MsgContentsType, m.MatchId, m.Content_en, m.Content_cs, m.PostTime, 0, ISNULL(m.IsTest, 0)
+	INSERT INTO @Msg (MessageId, MsgContentsType, MatchId, Content_en, Content_cs, PostTime, IsNew, IsTest, LeagueGroupID)
+	SELECT m.MessageId, m.MsgContentsType, m.MatchId, m.Content_en, m.Content_cs, m.PostTime, 0, ISNULL(m.IsTest, 0), ISNULL(LeagueGroupID, 0)
 	FROM dbo.Msg m WITH (NOLOCK)
 	WHERE m.PostTime >= @LastPostTime
 		AND m.MessageId <= @MessageID
@@ -95,14 +107,12 @@ BEGIN
 	FROM @Msg
 	ORDER BY MessageId
 
-	SELECT mt.MessageId, mt.TargetId, ms.SiteName
+	SELECT mt.MessageId, mt.TargetId, ms.SiteName, m.LeagueGroupID, ds.IsChinaView
 	FROM dbo.MsgTarget mt WITH (NOLOCK)
 		INNER JOIN @Msg m ON mt.MessageId = m.MessageId
 		INNER JOIN dbo.MsgSite ms WITH (NOLOCK) ON mt.TargetId = ms.SiteId
-	WHERE
-		EXISTS (SELECT 1 FROM @DepositSite ds WHERE ms.SiteName = ds.SiteName)
-		AND (
-			m.IsNew = 1
+		INNER JOIN @DepositSite ds ON ds.SiteName = ms.SiteName
+	WHERE m.IsNew = 1
 			OR NOT EXISTS (
 				SELECT 1
 				FROM dbo.MsgChatBot mc WITH (NOLOCK)
@@ -111,7 +121,7 @@ BEGIN
 					AND mc.JobIdentify = 3
 					AND mc.Environment = @Environment
 			)
-		)
+		
 	ORDER BY mt.MessageId
 
 	DROP TABLE #MsgContentsTypeLst
