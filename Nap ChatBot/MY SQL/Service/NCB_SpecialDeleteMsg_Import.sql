@@ -123,7 +123,7 @@ NCB_SpecialDeleteMsg_Import:BEGIN
             RecipientID 	 INT,
             LicenseeStatusID INT,
 			LeagueGroupID    SMALLINT UNSIGNED,
-			IsChinaView      BIT,
+			IsChinaView      TINYINT,
             INDEX Index_MessageID(MessageID)
     );
     
@@ -139,7 +139,7 @@ NCB_SpecialDeleteMsg_Import:BEGIN
 				MessageID 		INT 		 		PATH "$.MessageID", 
 				Site 			INT 		 		PATH "$.Site", 
 				LeagueGroupID 	SMALLINT UNSIGNED 	PATH "$.LeagueGroupID", 
-				IsChinaView     BIT 		 		PATH "$.IsChinaView"
+				IsChinaView     TINYINT 		 	PATH "$.IsChinaView"
             )
         ) AS t;
     

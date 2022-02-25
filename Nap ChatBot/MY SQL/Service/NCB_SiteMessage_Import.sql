@@ -204,12 +204,12 @@ NCB_SiteMessage_Import:BEGIN
 	  RecipientID 		INT,
 	  LicenseeStatusID 	INT,
 	  LeagueGroupID 	SMALLINT UNSIGNED,
-	  IsChinaView 		BIT,
+	  IsChinaView 		TINYINT,
 	  INDEX Index_MessageID(MessageID)
    );
     
   INSERT INTO tmp_MsgDetail (MessageID, SiteName, LeagueGroupID, IsChinaView)
-  SELECT t.MessageID, t.Site, t.LeagueGroupID, t.IsChinaView
+  SELECT t.MessageID, t.SiteName, t.LeagueGroupID, t.IsChinaView
   FROM 
 	JSON_TABLE
     (
@@ -220,7 +220,7 @@ NCB_SiteMessage_Import:BEGIN
 			MessageID 		INT 		 		PATH "$.MessageID", 
 			SiteName 		TEXT 	     		PATH "$.SiteName", 
 			LeagueGroupID 	SMALLINT UNSIGNED 	PATH "$.LeagueGroupID", 
-			IsChinaView     BIT 	     		PATH "$.IsChinaView"
+			IsChinaView     TINYINT 	     	PATH "$.IsChinaView"
         )
      ) AS t;
 
@@ -497,8 +497,8 @@ NCB_SiteMessage_Import:BEGIN
 	  			REPLACE(
 	  			  REPLACE(
 	  				REPLACE(ct.TemplateContent
-	  				  , '{EN Announcement}', CASE WHEN ccIsRemoveSABA = 1 THEN REPLACE(h.Content_en, 'SABA ', '') ELSE h.Content_en END)
-	  				, '{CN Announcement}', CASE WHEN ccIsRemoveSABA = 1 THEN REPLACE(h.Content_cs, 'SABA ', '') ELSE h.Content_cs END)
+	  				  , '{EN Announcement}', CASE WHEN ccIsRemoveSABA = 1 THEN REPLACE(h.Content_en, 'SABA', '') ELSE h.Content_en END)
+	  				, '{CN Announcement}', CASE WHEN ccIsRemoveSABA = 1 THEN REPLACE(h.Content_cs, 'SABA', '') ELSE h.Content_cs END)
 	  			  , '{Sport EN CN}', IFNULL(CONCAT(h.SportNameEN, ' / ', h.SportNameCS), ''))
 	  			, '{Kick Off Label}', CASE h.SportNameEN WHEN 'Soccer' THEN 'Kick Off' WHEN 'Basketball' THEN 'Tip Off' ELSE 'Event Start Time' END)
 	  		  , '{KO Time}', IFNULL(h.KickOffTime, ''))
