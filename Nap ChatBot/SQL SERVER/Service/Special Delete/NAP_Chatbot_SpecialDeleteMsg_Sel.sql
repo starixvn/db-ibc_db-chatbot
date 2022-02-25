@@ -47,8 +47,8 @@ BEGIN
 	DECLARE @Msg TABLE (MessageId INT, MsgContentsType TINYINT, Content_en NVARCHAR(4000), Content_cs NVARCHAR(4000), PostTime DATETIME, IsNew TINYINT, LeagueGroupID SMALLINT)
 	
 	-- New messages from @MessageID
-	INSERT INTO @Msg (MessageId, MsgContentsType, Content_en, Content_cs, PostTime, IsNew, LeagueGroupID)
-	SELECT TOP (@BatchSize) m.MessageId, m.MsgContentsType, m.Content_en, m.Content_cs, m.PostTime, 1, ISNULL(m.LeagueGroupID, 0)
+	INSERT INTO @Msg (MessageId, IsNew)
+	SELECT TOP (@BatchSize) m.MessageId, 1
 	FROM dbo.Msg m WITH (NOLOCK)
 		INNER JOIN dbo.MsgTarget mt WITH (NOLOCK) ON m.MessageId = mt.MessageId
 		INNER JOIN @DepositSuper ds ON mt.TargetId = ds.CustId
@@ -59,13 +59,13 @@ BEGIN
 		AND mt.isDeleted = 0
 		AND m.Content_en LIKE '%@@%'
 		AND mt.BetTransId IS NOT NULL
-	GROUP BY m.MessageId, m.MsgContentsType, m.Content_en, m.Content_cs, m.PostTime, m.LeagueGroupID
+	GROUP BY m.MessageId
 	ORDER BY m.MessageId
 	OPTION (RECOMPILE)
 
 	-- Rescan messages from @LastPostTime
-	INSERT INTO @Msg (MessageId, MsgContentsType, Content_en, Content_cs, PostTime, IsNew, LeagueGroupID)
-	SELECT m.MessageId, m.MsgContentsType, m.Content_en, m.Content_cs, m.PostTime, 0, ISNULL(m.LeagueGroupID, 0)
+	INSERT INTO @Msg (MessageId, IsNew)
+	SELECT m.MessageId, 0
 	FROM dbo.Msg m WITH (NOLOCK)
 		INNER JOIN dbo.MsgTarget mt WITH (NOLOCK) ON m.MessageId = mt.MessageId
 		INNER JOIN @DepositSuper ds ON mt.TargetId = ds.CustId
@@ -81,7 +81,7 @@ BEGIN
 						WHERE mc.MessageId = mt.MessageId AND mc.TargetId = mt.TargetId
 							AND mc.JobIdentify = 1 AND mc.Environment = @Environment
 		)
-	GROUP BY m.MessageId, m.MsgContentsType, m.Content_en, m.Content_cs, m.PostTime, m.LeagueGroupID
+	GROUP BY m.MessageId
 	ORDER BY m.MessageId
 
 	-- Remove duplicate message if exists (for case update max message ID)
@@ -91,6 +91,13 @@ BEGIN
 		FROM @Msg
 	) m
 	WHERE m.RN > 1
+
+	UPDATE m
+		SET m.MsgContentsType = k.MsgContentsType, m.PostTime = k.PostTime, m.Content_en = k.Content_en, m.Content_cs = k.Content_cs, m.LeagueGroupID = k.LeagueGroupID
+	FROM @Msg m
+	CROSS APPLY (
+		SELECT MsgContentsType, PostTime, Content_en, Content_cs, ISNULL(LeagueGroupID,0) AS LeagueGroupID FROM dbo.Msg g WITH(NOLOCK) WHERE g.MessageId = m.MessageId
+	) AS k
 	
 	--1st dataset: message header
 	SELECT MessageId, MsgContentsType, Content_en, Content_cs, PostTime, IsNew
@@ -98,7 +105,7 @@ BEGIN
 	ORDER BY MessageId
 
 	--2nd dataset: message detail
-	SELECT mt.MessageId, mt.TargetId, ds.site, m.LeagueGroupID, ISNULL(ds.IsChinaView, 0)
+	SELECT mt.MessageId, mt.TargetId, ds.site, m.LeagueGroupID, ISNULL(ds.IsChinaView, 0) AS IsChinaView
 	FROM dbo.MsgTarget mt WITH (NOLOCK)
 		INNER JOIN @Msg m ON mt.MessageId = m.MessageId
 		INNER JOIN @DepositSuper ds ON mt.TargetId = ds.CustId
