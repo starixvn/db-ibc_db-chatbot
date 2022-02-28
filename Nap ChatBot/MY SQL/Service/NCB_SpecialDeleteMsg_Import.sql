@@ -137,7 +137,7 @@ NCB_SpecialDeleteMsg_Import:BEGIN
             COLUMNS
             (
 				MessageID 		INT 		 		PATH "$.MessageID", 
-				Site 			INT 		 		PATH "$.Site", 
+				Site 			TEXT 		 		PATH "$.Site", 
 				LeagueGroupID 	SMALLINT UNSIGNED 	PATH "$.LeagueGroupID", 
 				IsChinaView     TINYINT 		 	PATH "$.IsChinaView"
             )
@@ -162,20 +162,20 @@ NCB_SpecialDeleteMsg_Import:BEGIN
    );
    
    INSERT INTO tmp_MsgContentTypeTemplate (MsgContentsType, NotificationTypeID, NotificationTemplateID, IsTest)
-   SELECT t.MessageID, t.Site, t.LeagueGroupID, t.IsChinaView
+   SELECT t.MsgContentsType, t.NotificationTypeID, t.NotificationTemplateID, t.IsTest
     FROM 
 		JSON_TABLE
-        (
+		(
 			templateNotifcationType,
-            "$[*]"
-            COLUMNS
-            (
-				MsgContentsType 		INT 	PATH "$.MessageID", 
-				NotificationTypeID 		INT 	PATH "$.Site", 
-				NotificationTemplateID 	INT     PATH "$.LeagueGroupID", 
-				IsTest 					TINYINT PATH "$.IsChinaView"
-            )
-        ) AS t;       
+			"$[*]"
+			COLUMNS
+			(
+				MsgContentsType 		INT 	 PATH "$.MsgContentsType", 
+				NotificationTypeID 		INT 	 PATH "$.NotificationTypeID", 
+				NotificationTemplateID 	INT      PATH "$.NotificationTemplateID", 
+				IsTest     				TINYINT  PATH "$.IsTest"
+			)
+		) AS t;    
     
     #Update Default status: if IsTest=1 then 'Draft', else 'Planned'
     UPDATE tmp_MsgContentTypeTemplate t
