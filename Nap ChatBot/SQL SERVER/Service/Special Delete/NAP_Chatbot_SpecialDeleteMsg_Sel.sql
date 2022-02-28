@@ -39,10 +39,10 @@ BEGIN
 
 	DECLARE @DepositSuper TABLE (CustId INT, site VARCHAR(50), IsChinaView BIT)
 	INSERT INTO @DepositSuper (CustId, site, IsChinaView)
-	SELECT CustId, site, IsChinaView
+	SELECT CustId, site, ISNULL(IsChinaView, 0)
 	FROM OPENQUERY(DBACC, 'SELECT d.CustId, d.site, ISNULL(s.IsChinaView, 0) AS IsChinaView 
 						   FROM bodb02.dbo.Dep_CustSuper d WITH (NOLOCK) 
-		                       INNER JOIN bodb02.dbo.Site s WITH(NOLOCK) ON s.site = d.site 
+		                       LEFT JOIN bodb02.dbo.Site s WITH(NOLOCK) ON s.site = d.site 
 						   WHERE d.site IN (''spondemo'' ,''Athena000'') OR d.Currency NOT IN (20, 27, 28)')
 
 	DECLARE @Msg TABLE (MessageId INT, MsgContentsType TINYINT, Content_en NVARCHAR(4000), Content_cs NVARCHAR(4000), PostTime DATETIME, IsNew TINYINT, LeagueGroupID SMALLINT)
@@ -106,7 +106,7 @@ BEGIN
 	ORDER BY MessageId
 
 	--2nd dataset: message detail
-	SELECT mt.MessageId, mt.TargetId, ds.site, m.LeagueGroupID, ISNULL(ds.IsChinaView, 0) AS IsChinaView
+	SELECT mt.MessageId, mt.TargetId, ds.site, m.LeagueGroupID, ds.IsChinaView AS IsChinaView
 	FROM dbo.MsgTarget mt WITH (NOLOCK)
 		INNER JOIN @Msg m ON mt.MessageId = m.MessageId
 		INNER JOIN @DepositSuper ds ON mt.TargetId = ds.CustId

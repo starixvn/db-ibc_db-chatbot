@@ -528,7 +528,8 @@ NCB_SiteMessage_Import:BEGIN
 	  WHERE d.MessageID = ccMessageID
 	    AND d.LicenseeStatusID = ACTIVE_LICENSEE_STATUS
 	    AND d.RecipientID IS NOT NULL
-	    AND d.ChannelId = ccChannelId;
+	    AND d.ChannelId = ccChannelId
+		AND d.IsRemoveSABA = ccIsRemoveSABA;
 	  
 	  #Update Status for Notification
 	  IF ccIsInvalid = 1 OR ccIsTest = 1 THEN

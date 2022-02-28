@@ -357,7 +357,7 @@ NCB_SpecialDeleteMsg_Import:BEGIN
     	,REPLACE(
     		REPLACE(
     			REPLACE(ct.TemplateContent, '{EN Announcement}', CASE WHEN ccIsRemoveSABA = 1 THEN REPLACE(h.Content_en, 'SABA', '') ELSE h.Content_en END)
-    			       ,'{CN Announcement}', CASE WHEN ccIsRemoveSABA = 1 THEN REPLACE(h.Content_cs, 'SABA', '') ELSE h.Content_en END)
+    			       ,'{CN Announcement}', CASE WHEN ccIsRemoveSABA = 1 THEN REPLACE(h.Content_cs, 'SABA', '') ELSE h.Content_cs END)
     	    , '@@', '') Content
     	 ,startTime, 0, STARIXIT_CUSTID, CreatedDate, CREATING_NOTIFICATION_STATUS, CREATING_NOTIFICATION_STATUSID, ccChannelId
         FROM tmp_MsgHeader h
@@ -381,7 +381,8 @@ NCB_SpecialDeleteMsg_Import:BEGIN
           FROM tmp_NotificationRecipientList d
           WHERE d.MessageID = ccMessageID
     	   AND LicenseeStatusID = ACTIVE_LICENSEE_STATUS
-    	   AND d.ChannelID = ccChannelId;
+    	   AND d.ChannelID = ccChannelId
+		   AND d.IsRemoveSABA = ccIsRemoveSABA;
     
         #Update Status for Notification
         UPDATE Notification n
