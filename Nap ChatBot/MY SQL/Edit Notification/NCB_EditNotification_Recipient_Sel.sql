@@ -159,12 +159,15 @@ BEGIN
           , IFNULL(id.InternalDepartmentName, lt.LicenseeTypeName) AS LicenseeTypeName
 					, tmp.RecipientID
           , tmp.RecipientName
+          ,p.PlatformId
+          ,p.PlatformName
     FROM tmp_recipientLst tmp
     INNER JOIN RecipientType rt
 			ON rt.RecipientTypeID = tmp.RecipientTypeID
     LEFT JOIN Licensee lic 
 			ON tmp.RecipientTypeID = RECIPIENT_TYPE_LICENSEES
 				AND lic.LicenseeId = tmp.SourceID
+	LEFT JOIN Platform p ON p.PlatformId = lic.PlatformId
 	  LEFT JOIN LicenseeType lt
 			ON lt.LicenseeTypeId = lic.LicenseeTypeId
     LEFT JOIN InternalDepartment id
@@ -179,12 +182,15 @@ BEGIN
           , IFNULL(id.InternalDepartmentName, lt.LicenseeTypeName) AS LicenseeTypeName
 					, tmp.RecipientID
           , tmp.RecipientName
+           ,p.PlatformId
+          ,p.PlatformName
 		FROM tmp_errorNotificationRecipient tmp
         INNER JOIN RecipientType rt
 			ON rt.RecipientTypeID = tmp.RecipientTypeID
 		LEFT JOIN Licensee lic 
 			ON tmp.RecipientTypeID = RECIPIENT_TYPE_LICENSEES
 				AND lic.LicenseeId = tmp.SourceID
+		LEFT JOIN Platform p ON p.PlatformId = lic.PlatformId
 		LEFT JOIN LicenseeType lt
 			ON lt.LicenseeTypeId = lic.LicenseeTypeId
     LEFT JOIN InternalDepartment id
