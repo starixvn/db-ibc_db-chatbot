@@ -2,7 +2,7 @@
 DROP PROCEDURE IF EXISTS `NCB_Setting_Platform_Sel`;
 DELIMITER //
 
-CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE `NCB_Setting_Platform_Sel`(
+CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE `NCB_Common_Platform_Sel`(
 	IN notificationTypeID SMALLINT UNSIGNED
 	/*
 		Creator: Malcolm@20220218

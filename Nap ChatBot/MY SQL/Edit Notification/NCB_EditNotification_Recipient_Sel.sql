@@ -42,10 +42,10 @@ BEGIN
 		PREPARE stmt FROM  @sqlCommand;
 		EXECUTE stmt;
 		DEALLOCATE PREPARE stmt;
-	END IF;
+	END IF; 
     
     DROP TEMPORARY TABLE IF EXISTS tmp_Recipients;
-    CREATE TEMPORARY TABLE tmp_Recipients (RecipientId INT);
+    CREATE TEMPORARY TABLE tmp_Recipients (RecipientId INT UNSIGNED);
     
     IF IFNULL(RecipientIDs,'') <> ''THEN
 		SET @sqlCommand = REPLACE(RecipientIDs, ',', '),(');
@@ -62,7 +62,7 @@ BEGIN
 	CREATE TEMPORARY TABLE tmp_recipientLst
     (
 		RecipientTypeID SMALLINT
-		,RecipientID 	INT
+		,RecipientID 	INT UNSIGNED
 		,RecipientName 	VARCHAR(200)
         ,SourceID 		INT
 	);
@@ -71,7 +71,7 @@ BEGIN
 	CREATE TEMPORARY TABLE tmp_errorNotificationRecipient
     (
 		RecipientTypeID SMALLINT
-		,RecipientID 	INT
+		,RecipientID 	INT UNSIGNED
 		,RecipientName 	VARCHAR(200)
 		,SourceID 		INT
 	);
@@ -109,8 +109,7 @@ BEGIN
 	INNER JOIN Licensee l
 			ON l.LicenseeId = main.SourceID
 				AND main.RecipientTypeID = RECIPIENT_TYPE_LICENSEES
-	WHERE  l.LicenseeStatusId <> LICENSEE_STATUS_ACTIVE
-		OR NOT EXISTS (SELECT 1 FROM tmp_Platforms p WHERE p.PlatformId = l.PlatformId);
+	WHERE  l.LicenseeStatusId <> LICENSEE_STATUS_ACTIVE;
     
     #Delete exception cases
 	DELETE main
@@ -160,13 +159,14 @@ BEGIN
     (
 		RecipientTypeID 	SMALLINT
 		,RecipientTypeName 	VARCHAR(200)
-		,RecipientID 		INT
+		,RecipientID 		INT UNSIGNED
         ,RecipientName 		VARCHAR(200)
 		,LicenseeTypeId		TINYINT UNSIGNED
 		,LicenseeTypeName 	VARCHAR(50)
+        ,PlatformId 		TINYINT UNSIGNED
 	);
     
-    INSERT INTO tmp_Result (RecipientTypeID, RecipientTypeName, LicenseeTypeId, LicenseeTypeName, RecipientID, RecipientName)
+    INSERT INTO tmp_Result (RecipientTypeID, RecipientTypeName, LicenseeTypeId, LicenseeTypeName, RecipientID, RecipientName, PlatformId)
     (
 		SELECT 
 			tmp.RecipientTypeID
@@ -175,6 +175,7 @@ BEGIN
 			,IFNULL(id.InternalDepartmentName, lt.LicenseeTypeName) AS LicenseeTypeName
 			,tmp.RecipientID
 			,tmp.RecipientName
+            ,lic.PlatformId
 		FROM tmp_recipientLst tmp
 		INNER JOIN RecipientType rt
 			ON rt.RecipientTypeID = tmp.RecipientTypeID
@@ -194,6 +195,7 @@ BEGIN
             ,IFNULL(id.InternalDepartmentName, lt.LicenseeTypeName) AS LicenseeTypeName
 			,tmp.RecipientID
 			,tmp.RecipientName
+            ,lic.PlatformId
 		FROM tmp_errorNotificationRecipient tmp
         INNER JOIN RecipientType rt
 			ON rt.RecipientTypeID = tmp.RecipientTypeID
@@ -205,6 +207,11 @@ BEGIN
 			ON tmp.RecipientTypeID = RECIPIENT_TYPE_INTERNAL_CSD AND id.InternalDepartmentID = tmp.SourceID
     );
     
+    -- Filer platformId
+    DELETE t 
+    FROM tmp_Result t
+	WHERE t.PlatformId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM tmp_Platforms p WHERE p.PlatformId = t.PlatformId);
+        
     SELECT RecipientTypeID, RecipientTypeName, LicenseeTypeId, LicenseeTypeName, RecipientID, RecipientName
     FROM tmp_Result
     ORDER BY RecipientTypeID, LicenseeTypeName, RecipientName;
