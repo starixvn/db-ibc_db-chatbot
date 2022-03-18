@@ -490,21 +490,22 @@ NCB_SiteMessage_Import:BEGIN
 	    ct.NotificationTypeID
 	    ,ct.TemplateTitle
 	    ,REPLACE(
-	  	REPLACE(
-	  	  REPLACE(
-	  		REPLACE(
-	  		  REPLACE(
-	  			REPLACE(
-	  			  REPLACE(
-	  				REPLACE(ct.TemplateContent
-	  				  , '{EN Announcement}', CASE WHEN ccIsRemoveSABA = 1 THEN REPLACE(h.Content_en, 'SABA', '') ELSE h.Content_en END)
-	  				, '{CN Announcement}', CASE WHEN ccIsRemoveSABA = 1 THEN REPLACE(h.Content_cs, 'SABA', '') ELSE h.Content_cs END)
-	  			  , '{Sport EN CN}', IFNULL(CONCAT(h.SportNameEN, ' / ', h.SportNameCS), ''))
-	  			, '{Kick Off Label}', CASE h.SportNameEN WHEN 'Soccer' THEN 'Kick Off' WHEN 'Basketball' THEN 'Tip Off' ELSE 'Event Start Time' END)
-	  		  , '{KO Time}', IFNULL(h.KickOffTime, ''))
-	  		, '{League Name EN CN}', IFNULL(CONCAT(h.LeagueNameEN, ' [', h.LeagueNameCS, ']'), ''))
-	  	  , '{Team Name EN CN}', IFNULL(CONCAT('***', h.HomeNameEN, ' - vs - ' , h.AwayNameEN, ' [',h.HomeNameCS, ' - vs - ' , h.AwayNameCS, ']', '***'), ''))
-	  	, '@@', '') Content
+			REPLACE(
+				REPLACE(
+					REPLACE(
+						REPLACE(
+							REPLACE(
+								REPLACE(
+									REPLACE(
+										REPLACE(ct.TemplateContent
+										, '{EN Announcement}', h.Content_en)
+									, '{CN Announcement}', h.Content_cs)
+								, '{Sport EN CN}', IFNULL(CONCAT(h.SportNameEN, ' / ', h.SportNameCS), ''))
+							, '{Kick Off Label}', CASE h.SportNameEN WHEN 'Soccer' THEN 'Kick Off' WHEN 'Basketball' THEN 'Tip Off' ELSE 'Event Start Time' END)
+						, '{KO Time}', IFNULL(h.KickOffTime, ''))
+					, '{League Name EN CN}', IFNULL(CONCAT(h.LeagueNameEN, ' [', h.LeagueNameCS, ']'), ''))
+				, '{Team Name EN CN}', IFNULL(CONCAT('***', h.HomeNameEN, ' - vs - ' , h.AwayNameEN, ' [',h.HomeNameCS, ' - vs - ' , h.AwayNameCS, ']', '***'), ''))
+			, '@@', ''), 'SABA', CASE WHEN ccIsRemoveSABA = 1 THEN '' ELSE 'SABA' END) Content
 	    ,startTime, 0 SendImmediately, STARIXIT_CUSTID, CreatedDate, CREATING_NOTIFICATION_STATUS, CREATING_NOTIFICATION_STATUSID, ccChannelId
 	    FROM tmp_MsgHeader h
 	  	INNER JOIN tmp_MsgContentTypeTemplate ct ON ct.MsgContentsType = h.MsgContentsType

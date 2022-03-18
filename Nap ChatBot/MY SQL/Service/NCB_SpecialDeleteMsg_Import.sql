@@ -355,10 +355,12 @@ NCB_SpecialDeleteMsg_Import:BEGIN
     	ct.NotificationTypeID
     	,ct.TemplateTitle
     	,REPLACE(
-    		REPLACE(
-    			REPLACE(ct.TemplateContent, '{EN Announcement}', CASE WHEN ccIsRemoveSABA = 1 THEN REPLACE(h.Content_en, 'SABA', '') ELSE h.Content_en END)
-    			       ,'{CN Announcement}', CASE WHEN ccIsRemoveSABA = 1 THEN REPLACE(h.Content_cs, 'SABA', '') ELSE h.Content_cs END)
-    	    , '@@', '') Content
+			REPLACE(
+				REPLACE(
+					REPLACE(ct.TemplateContent, '{EN Announcement}', h.Content_en)
+    			       ,'{CN Announcement}', h.Content_cs)
+				, '@@', '')
+			, 'SABA', CASE WHEN ccIsRemoveSABA = 1 THEN '' ELSE 'SABA' END) Content
     	 ,startTime, 0, STARIXIT_CUSTID, CreatedDate, CREATING_NOTIFICATION_STATUS, CREATING_NOTIFICATION_STATUSID, ccChannelId
         FROM tmp_MsgHeader h
         INNER JOIN tmp_MsgContentTypeTemplate ct ON ct.MsgContentsType = h.MsgContentsType 
