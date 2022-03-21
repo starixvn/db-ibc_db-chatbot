@@ -29,6 +29,9 @@ BEGIN
     
     #Local variables
     DECLARE nowGMTMinus4 DATETIME;
+	DECLARE pChannelId TINYINT UNSIGNED;
+	
+	SELECT n.ChannelID INTO pChannelId FROM Notification n WHERE n.NotificationID = notificationID;
 	
 	DROP TEMPORARY TABLE IF EXISTS tmp_Platforms;
 	CREATE TEMPORARY TABLE tmp_Platforms (PlatformId TINYINT UNSIGNED);
@@ -101,7 +104,8 @@ BEGIN
 							SELECT nct.ChatGroupTypeID
 							FROM NotificationChatGroupType nct
 							WHERE nct.NotificationTypeID = notificationTypeID
-		);
+		)
+		AND con.ChannelId = pChannelId;
     
     #Delete InActive Licensee
     DELETE main
