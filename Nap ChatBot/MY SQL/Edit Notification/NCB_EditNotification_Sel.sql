@@ -33,11 +33,24 @@ BEGIN
     WHERE n.NotificationID = notificationID AND n.StatusID = 4;
     
     #2nd dataset: List of recipients
+	DROP TEMPORARY TABLE IF EXISTS tmp_Recipient;
+	CREATE TEMPORARY TABLE tmp_Recipient
+	(
+		RecipientID INT UNSIGNED,
+		RecipientName VARCHAR(200) CHARACTER SET 'utf8mb4' COLLATE 'utf8mb4_unicode_ci',
+		RecipientTypeID SMALLINT UNSIGNED,
+		LicenseeTypeId TINYINT UNSIGNED,
+		LicenseeTypeName VARCHAR(50) CHARACTER SET 'utf8mb4' COLLATE 'utf8mb4_unicode_ci',
+		PlatformId TINYINT UNSIGNED
+	);
+	
+	INSERT INTO tmp_Recipient (RecipientID, RecipientName, RecipientTypeID, LicenseeTypeId, LicenseeTypeName, PlatformId)
     SELECT DISTINCT nrl.RecipientID
 				, r.RecipientName
 				, r.RecipientTypeID
 				, IFNULL(id.InternalDepartmentID, lt.LicenseeTypeId) AS LicenseeTypeId
 				, IFNULL(id.InternalDepartmentName, lt.LicenseeTypeName) AS LicenseeTypeName
+				, l.PlatformId
     FROM NotificationRecipientList nrl
 	INNER JOIN Recipient r ON nrl.RecipientID = r.RecipientID
 	INNER JOIN RecipientType rt ON r.RecipientTypeID = rt.RecipientTypeID
@@ -46,6 +59,15 @@ BEGIN
 	LEFT JOIN InternalDepartment id ON r.RecipientTypeID = RECIPIENT_TYPE_INTERNAL_CSD
         				AND id.InternalDepartmentID = r.SourceID
 	WHERE nrl.NotificationID = notificationID;
+	
+	#2nd dataset: List of Recipients	
+	SELECT RecipientID, RecipientName, RecipientTypeID, LicenseeTypeId, LicenseeTypeName
+	FROM tmp_Recipient;
+	
+	#3nd dataset: List of Platform
+	SELECT PlatformId, PlatformName
+	FROM Platform p
+	WHERE EXISTS (SELECT 1 FROM tmp_Recipient r WHERE r.PlatformId = p.PlatformId);
 
 END;
 

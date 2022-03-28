@@ -4,12 +4,14 @@ DROP PROCEDURE IF EXISTS NCB_NewNotification_Recipient_Sel;
 DELIMITER //
 
 CREATE DEFINER = 'ChatBotSystem'@'%'  PROCEDURE NCB_NewNotification_Recipient_Sel (
-	IN notificationTypeID SMALLINT
-	,IN productID SMALLINT
-	,IN ChannelIdLst VARCHAR(100)
+	IN notificationTypeID 	SMALLINT
+	,IN Platforms 			TEXT
+	,IN productID 			SMALLINT
+	,IN ChannelIdLst 		VARCHAR(100)
+    ,IN RecipientIds 		TEXT
     /*
 		Creator: Dominic@20190401
-		Task:
+		Task: CHATBOT -> New Notification -> Recipients
 		DB: DBCB-ChatBot
         Param:
 				- ProductID: Applied to filter licensees who are offered a specific product, NULL if not specified
@@ -19,14 +21,15 @@ CREATE DEFINER = 'ChatBotSystem'@'%'  PROCEDURE NCB_NewNotification_Recipient_Se
 				- 20200211@Oliver: Add check notification chat group type has been changed [RedmineID: #128273]
 				- 20200214@Percy: Special Delete - Integrate Abnormal Bets [RedmineID: #127944]
 				- 20210513@Malcolm: Integrate Telegram - RedmineID: #151807
+				- 20220218@Malcolm: Add Platform for licensee [RedmineID: #167946]
         
     */
 )
 SQL SECURITY DEFINER
 BEGIN
 	DECLARE RECIPIENT_TYPE_LICENSEES 	SMALLINT DEFAULT 1;
-  DECLARE RECIPIENT_TYPE_INTERNAL_CSD SMALLINT DEFAULT 3;
-  DECLARE LICENSEE_STATUS_ACTIVE 		TINYINT UNSIGNED DEFAULT 3;
+    DECLARE RECIPIENT_TYPE_INTERNAL_CSD SMALLINT DEFAULT 3;
+    DECLARE LICENSEE_STATUS_ACTIVE 		TINYINT UNSIGNED DEFAULT 3;
     
     #Local variables
     DECLARE nowGMTMinus4 DATETIME;
@@ -41,11 +44,36 @@ BEGIN
 	EXECUTE stmt;
 	DEALLOCATE PREPARE stmt;
 	
+	#Get Platform
+	DROP TEMPORARY TABLE IF EXISTS tmp_Platforms;
+	CREATE TEMPORARY TABLE tmp_Platforms(PlatformId TINYINT UNSIGNED);
+	
+	SET @sqlCommand = REPLACE(Platforms, ',', '),(');
+	SET @sqlCommand = CONCAT('(', @sqlCommand, ')');
+	SET @sqlCommand = CONCAT('INSERT INTO tmp_Platforms VALUES', @sqlCommand);
+	PREPARE stmt FROM @sqlCommand;
+	EXECUTE stmt;
+	DEALLOCATE PREPARE stmt;
+    
+    #Get Recipients
+	DROP TEMPORARY TABLE IF EXISTS tmp_Recipients;
+	CREATE TEMPORARY TABLE tmp_Recipients(RecipientId INT UNSIGNED);
+	
+    IF IFNULL(RecipientIds, '') <> '' 
+	THEN
+		SET	@sqlCommand = REPLACE(RecipientIds, ',', '),(');
+		SET @sqlCommand = CONCAT('(', @sqlCommand, ')');
+		SET @sqlCommand = CONCAT('INSERT INTO tmp_Recipients VALUES', @sqlCommand);
+		PREPARE stmt FROM @sqlCommand;
+		EXECUTE stmt;
+		DEALLOCATE PREPARE stmt;
+    END IF;
+
 	DROP TEMPORARY TABLE IF EXISTS tmp_recipientLst;
 	CREATE TEMPORARY TABLE tmp_recipientLst
 	(
 		RecipientTypeID SMALLINT
-		,RecipientID INT
+		,RecipientID INT UNSIGNED
 		,RecipientName VARCHAR(200)
 		,SourceID INT
 	);
@@ -87,13 +115,14 @@ BEGIN
 		)
 		AND con.ChannelId IN (SELECT tcl.ChannelId FROM tmp_ChannelIdLst tcl);
     
-    #Delete InActive Licensee
+    #Delete InActive Licensee and filter platform
     DELETE main
 	FROM tmp_recipientLst main
 	INNER JOIN Licensee l
 			ON l.LicenseeId = main.SourceID
-				AND main.RecipientTypeID = RECIPIENT_TYPE_LICENSEES
-	WHERE  l.LicenseeStatusId <> LICENSEE_STATUS_ACTIVE;
+				AND main.RecipientTypeID = RECIPIENT_TYPE_LICENSEES	
+	WHERE  l.LicenseeStatusId <> LICENSEE_STATUS_ACTIVE 
+		OR NOT EXISTS (SELECT 1 FROM tmp_Platforms p WHERE p.PlatformId = l.PlatformId);
     
     #Delete exception cases
 	DELETE main
@@ -124,28 +153,45 @@ BEGIN
 							);
     END IF;
     
-    SELECT r.RecipientTypeID
-					, rt.RecipientTypeName
-          , IFNULL(id.InternalDepartmentID, lt.LicenseeTypeId) AS LicenseeTypeId
-          , IFNULL(id.InternalDepartmentName, lt.LicenseeTypeName) AS LicenseeTypeName
-					, r.RecipientID
-          , r.RecipientName
+	DROP TEMPORARY TABLE IF EXISTS tmp_Result;
+	CREATE TEMPORARY TABLE tmp_Result
+    (
+		RecipientTypeID 	SMALLINT
+		,RecipientTypeName 	VARCHAR(200)
+		,RecipientID 		INT UNSIGNED
+        ,RecipientName 		VARCHAR(200)
+		,LicenseeTypeId		TINYINT UNSIGNED
+		,LicenseeTypeName 	VARCHAR(50)
+	);
+    
+    INSERT INTO tmp_Result (RecipientTypeID, RecipientTypeName, LicenseeTypeId, LicenseeTypeName, RecipientID, RecipientName)
+    SELECT 
+		r.RecipientTypeID
+		,rt.RecipientTypeName
+		,IFNULL(id.InternalDepartmentID, lt.LicenseeTypeId) AS LicenseeTypeId
+		,IFNULL(id.InternalDepartmentName, lt.LicenseeTypeName) AS LicenseeTypeName
+		,r.RecipientID
+		,r.RecipientName
     FROM tmp_recipientLst r
     INNER JOIN RecipientType rt
-			ON rt.RecipientTypeID = r.RecipientTypeID
+		ON rt.RecipientTypeID = r.RecipientTypeID
     LEFT JOIN Licensee lic 
-			ON r.RecipientTypeID = RECIPIENT_TYPE_LICENSEES
-				AND lic.LicenseeId = r.SourceID
-	  LEFT JOIN LicenseeType lt
-			ON lt.LicenseeTypeId = lic.LicenseeTypeId
+		ON r.RecipientTypeID = RECIPIENT_TYPE_LICENSEES AND lic.LicenseeId = r.SourceID
+	LEFT JOIN LicenseeType lt
+		ON lt.LicenseeTypeId = lic.LicenseeTypeId
     LEFT JOIN InternalDepartment id
-      ON r.RecipientTypeID = RECIPIENT_TYPE_INTERNAL_CSD
-        AND id.InternalDepartmentID = r.SourceID
-    ORDER BY RecipientTypeID,  lt.LicenseeTypeName, RecipientName;
+		ON r.RecipientTypeID = RECIPIENT_TYPE_INTERNAL_CSD AND id.InternalDepartmentID = r.SourceID;
+        
+	SELECT RecipientTypeID, RecipientTypeName, LicenseeTypeId, LicenseeTypeName, RecipientID, RecipientName
+    FROM tmp_Result
+    ORDER BY RecipientTypeID, LicenseeTypeName, RecipientName;
     
-    #Drop Unused temporary tables
-     DROP TEMPORARY TABLE IF EXISTS tmp_recipientLst;
-    
+    IF IFNULL(RecipientIds, '') <> ''
+    THEN
+		SELECT r.RecipientID
+        FROM tmp_Recipients r 
+        WHERE EXISTS (SELECT 1 FROM tmp_Result t WHERE t.RecipientID = r.RecipientID);
+    END IF;
 END;
 
 //

@@ -4,6 +4,7 @@ DELIMITER //
 
 CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_EditNotification_Upd`(
 	IN notificationID INT
+	, IN Platforms TEXT
 	, IN recipientIDLst TEXT
 	, IN title VARCHAR(300) CHARACTER SET utf8mb4
 	, IN content MEDIUMTEXT CHARACTER SET utf8mb4
@@ -114,6 +115,19 @@ NCB_EditNotification_Upd:BEGIN
 	EXECUTE stmt;
 	DEALLOCATE PREPARE stmt;
     
+	#Insert comma seperated list Platforms to temporary tables
+    DROP TEMPORARY TABLE IF EXISTS tmp_Platform;
+	CREATE TEMPORARY TABLE tmp_Platform(PlatformId TINYINT UNSIGNED);
+    
+	SET @sqlCommand = REPLACE(Platforms, ',', '),(');
+	SET @sqlCommand = CONCAT('(', @sqlCommand, ')');
+	SET @sqlCommand= CONCAT('INSERT INTO tmp_Platform VALUES'
+														, @sqlCommand); 
+	
+    PREPARE stmt FROM  @sqlCommand;
+	EXECUTE stmt;
+	DEALLOCATE PREPARE stmt;
+	
 	DROP TEMPORARY TABLE IF EXISTS tmp_mappedRecipientIDLst;
 	CREATE TEMPORARY TABLE tmp_mappedRecipientIDLst(RecipientID INT);
 	
@@ -179,6 +193,39 @@ NCB_EditNotification_Upd:BEGIN
 			);
 
 		SET errMsg = CONCAT('Licensee is Inactive: ' , errMsg);
+        LEAVE NCB_EditNotification_Upd;
+    END IF;
+	
+	#Check Platform
+     IF EXISTS(
+						SELECT 1 
+						FROM tmp_recipientIDLst main
+                        INNER JOIN Recipient re 
+							ON re.RecipientID = main.RecipientID 
+								AND re.RecipientTypeID = RECIPIENT_TYPE_LICENSEES
+                        INNER JOIN Licensee l
+							ON l.LicenseeId = re.SourceID
+						WHERE  l.LicenseeStatusId = LICENSEE_STATUS_ACTIVE
+							AND NOT EXISTS (SELECT 1 FROM tmp_Platform p WHERE p.PlatformId = l.PlatformId)
+	) THEN
+		SET errCode=512;
+        
+        SELECT GROUP_CONCAT(re.RecipientName ORDER BY re.RecipientName  SEPARATOR ', ')  
+        INTO errMsg
+        FROM Recipient re
+        WHERE re.RecipientID IN (
+						SELECT main. RecipientID
+						FROM tmp_recipientIDLst main
+                        INNER JOIN Recipient re 
+							ON re.RecipientID = main.RecipientID 
+								AND re.RecipientTypeID = RECIPIENT_TYPE_LICENSEES
+                        INNER JOIN Licensee l
+							ON l.LicenseeId = re.SourceID
+						WHERE  l.LicenseeStatusId = LICENSEE_STATUS_ACTIVE
+							AND NOT EXISTS (SELECT 1 FROM tmp_Platform p WHERE p.PlatformId = l.PlatformId)
+			);
+
+		SET errMsg = CONCAT('Licensee does not belong to selected Platform: ' , errMsg);
         LEAVE NCB_EditNotification_Upd;
     END IF;
     
