@@ -6,7 +6,7 @@
 */
 
 UPDATE SystemSetting
-	SET Value = '1479379'
+	SET Value = '1480601'
 WHERE ID IN (3, 8, 13);
 
 UPDATE SystemSetting
