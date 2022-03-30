@@ -21,10 +21,10 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_SiteMessage_Import(
 							]
       - @MessageDetail
 							[  
-								{ "MessageID":1234, "SiteName":"IBO" }
-								, { "MessageID":1234, "SiteName":"XTD3" }
-								, { "MessageID":1235, "SiteName":"mansion88"}
-								, { "MessageID":1236, "SiteName":"haifa"}
+								{ "MessageID":1234, "SiteName":"IBO", "LeagueGroupID":"8" ,"IsChinaView":"0"}
+								, { "MessageID":1234, "SiteName":"XTD3", "LeagueGroupID":"10" ,"IsChinaView":"0"}
+								, { "MessageID":1235, "SiteName":"mansion88", "LeagueGroupID":"18","IsChinaView":"0"}
+								, { "MessageID":1236, "SiteName":"haifa", "LeagueGroupID":"28","IsChinaView":"0"}
 							]
     Revisions :
       - 20200305@Percy: Initiliaze SP [RedmineID: #126143]
@@ -32,6 +32,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_SiteMessage_Import(
       - 20200630@Percy: Remove sent recipients for rescan messages [RedmineID: #136492]
       - 20200715@Percy: Add Invalid status for invalid match [RedmineID: #135686]
 	  - 20210513@Malcolm: Integrate Telegram [RedmineID: #151807]
+	  - 20220223@Malcolm: Remove SABA text out of the league name for China View platform [RedmineID: #168798]
 
   */
 )
@@ -57,6 +58,7 @@ NCB_SiteMessage_Import:BEGIN
   DECLARE ccIsNew TINYINT;
   DECLARE ccIsInvalid TINYINT;
   DECLARE ccChannelId TINYINT UNSIGNED;
+  DECLARE ccIsRemoveSABA BIT;
 
   # Constants
   DECLARE ACTION_ID INT DEFAULT 20;
@@ -82,100 +84,145 @@ NCB_SiteMessage_Import:BEGIN
   SET errCode = 0, errMsg = '';
 
   DROP TEMPORARY TABLE IF EXISTS tmp_Notification;
-  CREATE TEMPORARY TABLE IF NOT EXISTS tmp_Notification(
+  CREATE TEMPORARY TABLE IF NOT EXISTS tmp_Notification
+  (
       NotificationID INT,
       UNIQUE INDEX Index_NotificationID(NotificationID)
-    );
+  );
     
 	/*Step 1: Parse JSON data for message*/
   DROP TEMPORARY TABLE IF EXISTS tmp_MsgHeader;
-  CREATE TEMPORARY TABLE IF NOT EXISTS tmp_MsgHeader(
-    Id INT NOT NULL AUTO_INCREMENT,
-    MessageID INT,
-    MsgContentsType INT,
-    MatchID INT,
-    IsTest TINYINT,
-    SportType INT,
-    KickOffTime TEXT,
-    LeagueNameEN TEXT,
-    LeagueNameCS TEXT,
-    SportNameEN TEXT,
-    SportNameCS TEXT,
-    HomeNameEN TEXT,
-    HomeNameCS TEXT,
-    AwayNameEN TEXT,
-    AwayNameCS TEXT,
-    Content_en TEXT,
-    Content_cs TEXT,
-    PostTime TEXT,
-    IsNew TINYINT,
-    IsInvalid TINYINT,
-    CheckMsg TEXT,
-    CheckMsgDetail TEXT,
-    PRIMARY KEY (Id),
-    UNIQUE INDEX Index_MessageID(MessageID)
-    );
-
-  SET iLoop = 0;
-  WHILE (JSON_EXTRACT(messageHeader, CONCAT('$[',iLoop, '].MessageID')) IS NOT NULL) DO
-		INSERT INTO tmp_MsgHeader(MessageID, MsgContentsType, MatchID, IsTest, SportType, KickOffTime, LeagueNameEN, LeagueNameCS, SportNameEN, SportNameCS, HomeNameEN, HomeNameCS, AwayNameEN, AwayNameCS, Content_en, Content_cs, PostTime, IsNew, IsInvalid, CheckMsg)
-      VALUES (
-        JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].MessageID'))),
-        JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].MsgContentsType'))),
-        JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].MatchID'))),
-        JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].IsTest')),
-        JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].SportType'))),
-        JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].KickOffTime'))),
-        JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].LeagueNameEN'))),
-        JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].LeagueNameCS'))),
-        JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].SportNameEN'))),
-        JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].SportNameCS'))),
-        JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].HomeNameEN'))),
-        JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].HomeNameCS'))),
-        JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].AwayNameEN'))),
-        JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].AwayNameCS'))),
-        JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].Content_en'))),
-        JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].Content_cs'))),
-        JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].PostTime'))),
-        JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].IsNew')),
-        0,
-        ''
-      );
-    
-    SET iLoop := iLoop + 1;
-    END WHILE;
+  CREATE TEMPORARY TABLE IF NOT EXISTS tmp_MsgHeader
+  (
+		Id 				INT NOT NULL AUTO_INCREMENT,
+		MessageID 		INT,
+		MsgContentsType INT,
+		MatchID 		INT,
+		IsTest 			TINYINT,
+		SportType 		INT,
+		KickOffTime 	TEXT,
+		LeagueNameEN 	TEXT,
+		LeagueNameCS 	TEXT,
+		SportNameEN 	TEXT,
+		SportNameCS 	TEXT,
+		HomeNameEN 		TEXT,
+		HomeNameCS 		TEXT,
+		AwayNameEN 		TEXT,
+		AwayNameCS 		TEXT,
+		Content_en 		TEXT,
+		Content_cs 		TEXT,
+		PostTime 		TEXT,
+		IsNew 			TINYINT,
+		IsInvalid 		TINYINT,
+		CheckMsg 		TEXT,
+		CheckMsgDetail  TEXT,
+		PRIMARY KEY     (Id),
+		UNIQUE INDEX    Index_MessageID(MessageID)
+  );
+  
+  INSERT INTO tmp_MsgHeader 
+  (
+	 MessageID
+	 ,MsgContentsType
+	 ,MatchID
+	 ,IsTest
+	 ,SportType
+	 ,KickOffTime
+	 ,LeagueNameEN
+	 ,LeagueNameCS
+	 ,SportNameEN
+	 ,SportNameCS
+	 ,HomeNameEN
+	 ,HomeNameCS
+	 ,AwayNameEN
+	 ,AwayNameCS
+	 ,Content_en
+	 ,Content_cs
+	 ,PostTime
+	 ,IsNew
+	 ,IsInvalid
+	 ,CheckMsg
+ )   
+ SELECT 
+	t.MessageID
+	,t.MsgContentsType
+	,t.MatchID
+	,t.IsTest
+	,t.SportType
+	,t.KickOffTime
+	,t.LeagueNameEN
+	,t.LeagueNameCS
+	,t.SportNameEN
+	,t.SportNameCS
+	,t.HomeNameEN
+	,t.HomeNameCS
+	,t.AwayNameEN
+	,t.AwayNameCS
+	,t.Content_en
+	,t.Content_cs
+	,t.PostTime
+	,t.IsNew
+	,0
+	,''
+  FROM 
+	JSON_TABLE
+    (
+		messageHeader,
+        "$[*]"
+        COLUMNS
+        (
+			MessageID 		INT 	PATH "$.MessageID",
+			MsgContentsType INT 	PATH "$.MsgContentsType",
+			MatchID 		INT 	PATH "$.MatchID",
+			IsTest 			TINYINT PATH "$.IsTest",
+			SportType 		INT 	PATH "$.SportType",
+			KickOffTime 	TEXT 	PATH "$.KickOffTime",
+			LeagueNameEN 	TEXT 	PATH "$.LeagueNameEN",
+			LeagueNameCS 	TEXT 	PATH "$.LeagueNameCS",
+			SportNameEN 	TEXT 	PATH "$.SportNameEN",
+			SportNameCS 	TEXT 	PATH "$.SportNameCS",
+			HomeNameEN 		TEXT 	PATH "$.HomeNameEN",
+			HomeNameCS 		TEXT 	PATH "$.HomeNameCS",
+			AwayNameEN 		TEXT 	PATH "$.AwayNameEN",
+			AwayNameCS 		TEXT 	PATH "$.AwayNameCS",
+			Content_en 		TEXT 	PATH "$.Content_en",
+			Content_cs 		TEXT 	PATH "$.Content_cs",
+			PostTime 		TEXT 	PATH "$.PostTime",
+			IsNew 			TINYINT PATH "$.IsNew"	
+        )
+   ) AS t;
 
   UPDATE tmp_MsgHeader
-    SET KickOffTime = NULL,
-        LeagueNameEN = NULL,
-        LeagueNameCS = NULL,
-        SportNameEN = NULL,
-        SportNameCS = NULL,
-        HomeNameEN = NULL,
-        HomeNameCS = NULL,
-        AwayNameEN = NULL,
-        AwayNameCS = NULL
-    WHERE SportType = 0;
+    SET KickOffTime = NULL, LeagueNameEN = NULL, LeagueNameCS = NULL, SportNameEN = NULL, SportNameCS = NULL, HomeNameEN = NULL, HomeNameCS = NULL, AwayNameEN = NULL, AwayNameCS = NULL
+  WHERE SportType = 0;
 
   DROP TEMPORARY TABLE IF EXISTS tmp_MsgDetail;
-  CREATE TEMPORARY TABLE IF NOT EXISTS tmp_MsgDetail(
-    MessageID INT, 
-    SiteName TEXT,
-    RecipientID INT,
-    LicenseeStatusID INT,
-    INDEX Index_MessageID(MessageID)
-    );
+  CREATE TEMPORARY TABLE IF NOT EXISTS tmp_MsgDetail
+  (
+	  MessageID 		INT, 
+	  SiteName 			TEXT,
+	  RecipientID 		INT,
+	  LicenseeStatusID 	INT,
+	  LeagueGroupID 	SMALLINT UNSIGNED,
+	  IsChinaView 		TINYINT,
+	  INDEX Index_MessageID(MessageID)
+   );
     
-  SET iLoop = 0;
-  WHILE (JSON_EXTRACT(messageDetail, CONCAT('$[',iLoop, '].MessageID')) IS NOT NULL) DO
-    INSERT INTO tmp_MsgDetail(MessageID, SiteName)
-      VALUES (
-			  JSON_UNQUOTE(JSON_EXTRACT(messageDetail, CONCAT('$[', iLoop, '].MessageID'))),
-        JSON_UNQUOTE(JSON_EXTRACT(messageDetail, CONCAT('$[', iLoop, '].SiteName')))
-		  );
-        
-    SET iLoop := iLoop + 1;
-   END WHILE;
+  INSERT INTO tmp_MsgDetail (MessageID, SiteName, LeagueGroupID, IsChinaView)
+  SELECT t.MessageID, t.SiteName, t.LeagueGroupID, t.IsChinaView
+  FROM 
+	JSON_TABLE
+    (
+		messageDetail,
+        "$[*]"
+        COLUMNS
+        (
+			MessageID 		INT 		 		PATH "$.MessageID", 
+			SiteName 		TEXT 	     		PATH "$.SiteName", 
+			LeagueGroupID 	SMALLINT UNSIGNED 	PATH "$.LeagueGroupID", 
+			IsChinaView     TINYINT 	     	PATH "$.IsChinaView"
+        )
+     ) AS t;
 
   /*Step 2: Parse JSON data for message template, notification type*/
   SELECT Value INTO templateNotifcationType
@@ -183,31 +230,36 @@ NCB_SiteMessage_Import:BEGIN
     WHERE ID = 14;
 
   DROP TEMPORARY TABLE IF EXISTS tmp_MsgContentTypeTemplate;
-  CREATE TEMPORARY TABLE IF NOT EXISTS tmp_MsgContentTypeTemplate(
-    MsgContentsType INT,
-    NotificationTypeID INT,
-    NotificationTemplateID INT,
-    TemplateTitle VARCHAR(300),
-    TemplateContent MEDIUMTEXT,
-    IsRequiredMatch TINYINT,
-    IsTest TINYINT,
-    StatusID TINYINT UNSIGNED,
-    Status VARCHAR(10)
+  CREATE TEMPORARY TABLE IF NOT EXISTS tmp_MsgContentTypeTemplate
+  (
+       MsgContentsType 			INT,
+       NotificationTypeID 		INT,
+       NotificationTemplateID 	INT,
+       TemplateTitle 			VARCHAR(300),
+       TemplateContent 			MEDIUMTEXT,
+       IsRequiredMatch 			TINYINT,
+       IsTest 					TINYINT,
+       StatusID 				TINYINT UNSIGNED,
+       Status 					VARCHAR(10)
   );
 
-  SET iLoop = 0;
-  WHILE (JSON_EXTRACT(templateNotifcationType, CONCAT('$[',iLoop, '].MsgContentsType')) IS NOT NULL) DO
-    INSERT INTO tmp_MsgContentTypeTemplate(MsgContentsType, NotificationTypeID, NotificationTemplateID, IsTest, IsRequiredMatch)
-      VALUES (
-		JSON_UNQUOTE(JSON_EXTRACT(templateNotifcationType, CONCAT('$[', iLoop, '].MsgContentsType'))),
-		JSON_UNQUOTE(JSON_EXTRACT(templateNotifcationType, CONCAT('$[', iLoop, '].NotificationTypeID'))),
-		JSON_UNQUOTE(JSON_EXTRACT(templateNotifcationType, CONCAT('$[', iLoop, '].NotificationTemplateID'))),
-		JSON_UNQUOTE(JSON_EXTRACT(templateNotifcationType, CONCAT('$[', iLoop, '].IsTest'))),
-		0
-		);
 
-    SET iLoop := iLoop + 1;
-    END WHILE;
+  INSERT INTO tmp_MsgContentTypeTemplate (MsgContentsType, NotificationTypeID, NotificationTemplateID, IsTest, IsRequiredMatch)
+  SELECT t.MsgContentsType, t.NotificationTypeID, t.NotificationTemplateID, t.IsTest, 0
+  FROM 
+  	JSON_TABLE
+    (
+  		templateNotifcationType,
+        "$[*]"
+        COLUMNS
+        (
+  			MsgContentsType 		INT 	 PATH "$.MsgContentsType", 
+  			NotificationTypeID 		INT 	 PATH "$.NotificationTypeID", 
+  			NotificationTemplateID 	INT      PATH "$.NotificationTemplateID", 
+  			IsTest     				TINYINT  PATH "$.IsTest"
+        )
+    ) AS t;
+	
 
   # Update Default status: if IsTest=1 then 'Draft', else 'Planned'
   UPDATE tmp_MsgContentTypeTemplate
@@ -360,11 +412,20 @@ NCB_SiteMessage_Import:BEGIN
     Status VARCHAR(10),
     LicenseeStatusID INT,
 	ChannelId TINYINT UNSIGNED,
+	IsRemoveSABA BIT,
     INDEX Index_MessageID(MessageID)
     );
 
-  INSERT INTO tmp_NotificationRecipientList(MessageID, SiteName, RecipientID, ConversationGroupID, ChatGroupTypeID, StatusID, Status, LicenseeStatusID, ChannelId)
-    SELECT h.MessageID, d.SiteName, d.RecipientID, gr.ConversationGroupID, ngt.ChatGroupTypeID, tpl.StatusID, tpl.Status, d.LicenseeStatusID, g.ChannelId
+  INSERT INTO tmp_NotificationRecipientList(MessageID, SiteName, RecipientID, ConversationGroupID, ChatGroupTypeID, StatusID, Status, LicenseeStatusID, ChannelId, IsRemoveSABA)
+    SELECT h.MessageID
+		   ,d.SiteName
+		   ,d.RecipientID
+		   ,gr.ConversationGroupID
+		   ,ngt.ChatGroupTypeID
+		   ,tpl.StatusID
+		   ,tpl.Status
+		   ,d.LicenseeStatusID
+		   ,g.ChannelId, CASE WHEN d.LeagueGroupID IN (42, 74, 108) AND d.IsChinaView = 1 THEN 1 ELSE 0 END AS IsRemoveSABA
       FROM tmp_MsgHeader h
         INNER JOIN tmp_MsgDetail d ON d.MessageID = h.MessageID
         INNER JOIN tmp_MsgContentTypeTemplate tpl ON h.MsgContentsType = tpl.MsgContentsType
@@ -392,10 +453,10 @@ NCB_SiteMessage_Import:BEGIN
     SET h.CheckMsgDetail = NULL;
 	
   DROP TEMPORARY TABLE IF EXISTS tmpMessageChannel;
-  CREATE TEMPORARY TABLE tmpMessageChannel (MessageID INT, ChannelID TINYINT, INDEX Index_PK (MessageID, ChannelID));
+  CREATE TEMPORARY TABLE tmpMessageChannel (MessageID INT, ChannelID TINYINT, IsRemoveSABA BIT, INDEX Index_PK (MessageID, ChannelID));
 
-  INSERT INTO tmpMessageChannel (MessageID, ChannelId)
-  SELECT DISTINCT MessageId, ChannelId
+  INSERT INTO tmpMessageChannel (MessageID, ChannelId, IsRemoveSABA)
+  SELECT DISTINCT MessageId, ChannelId, IsRemoveSABA
   FROM tmp_NotificationRecipientList r
   WHERE r.LicenseeStatusID = ACTIVE_LICENSEE_STATUS;
 
@@ -417,11 +478,11 @@ NCB_SiteMessage_Import:BEGIN
 		WHERE tmc.MessageID = ccMessageID
 			AND NOT EXISTS (
 				SELECT 1 FROM tmp_NotificationRecipientList t 
-				WHERE t.MessageId = ccMessageID AND t.ChannelId = tmc.ChannelID);
+				WHERE t.MessageId = ccMessageID AND t.ChannelId = tmc.ChannelID AND t.IsRemoveSABA = tmc.IsRemoveSABA);
 		END IF;
 	
 	WHILE EXISTS(SELECT 1 FROM tmpMessageChannel m WHERE m.MessageId = ccMessageID) DO
-	  SELECT ChannelId INTO ccChannelId FROM tmpMessageChannel m WHERE m.MessageId = ccMessageID LIMIT 1; 
+	  SELECT ChannelId, IsRemoveSABA INTO ccChannelId, ccIsRemoveSABA FROM tmpMessageChannel m WHERE m.MessageId = ccMessageID LIMIT 1; 
 	  
 	  # Insert Notification
 	  INSERT INTO Notification(NotificationTypeID, Title, Content, ConfigSendTime, SendImmediately, CreatorID, CreatedDate, Status, StatusID, ChannelId)
@@ -429,21 +490,27 @@ NCB_SiteMessage_Import:BEGIN
 	    ct.NotificationTypeID
 	    ,ct.TemplateTitle
 	    ,REPLACE(
-	  	REPLACE(
-	  	  REPLACE(
-	  		REPLACE(
-	  		  REPLACE(
-	  			REPLACE(
-	  			  REPLACE(
-	  				REPLACE(ct.TemplateContent
-	  				  , '{EN Announcement}', h.Content_en)
-	  				, '{CN Announcement}', h.Content_cs)
-	  			  , '{Sport EN CN}', IFNULL(CONCAT(h.SportNameEN, ' / ', h.SportNameCS), ''))
-	  			, '{Kick Off Label}', CASE h.SportNameEN WHEN 'Soccer' THEN 'Kick Off' WHEN 'Basketball' THEN 'Tip Off' ELSE 'Event Start Time' END)
-	  		  , '{KO Time}', IFNULL(h.KickOffTime, ''))
-	  		, '{League Name EN CN}', IFNULL(CONCAT(h.LeagueNameEN, ' [', h.LeagueNameCS, ']'), ''))
-	  	  , '{Team Name EN CN}', IFNULL(CONCAT('***', h.HomeNameEN, ' - vs - ' , h.AwayNameEN, ' [',h.HomeNameCS, ' - vs - ' , h.AwayNameCS, ']', '***'), ''))
-	  	, '@@', '') Content
+			REPLACE(
+				REPLACE(
+					REPLACE(
+						REPLACE(
+							REPLACE(
+								REPLACE(
+									REPLACE(
+										REPLACE(
+											REPLACE(
+												REPLACE(ct.TemplateContent
+												, '{EN Announcement}', h.Content_en)
+											, '{CN Announcement}', h.Content_cs)
+										, '{Sport EN CN}', IFNULL(CONCAT(h.SportNameEN, ' / ', h.SportNameCS), ''))
+									, '{Kick Off Label}', CASE h.SportNameEN WHEN 'Soccer' THEN 'Kick Off' WHEN 'Basketball' THEN 'Tip Off' ELSE 'Event Start Time' END)
+								, '{KO Time}', IFNULL(h.KickOffTime, ''))
+							, '{League Name EN CN}', IFNULL(CONCAT(h.LeagueNameEN, ' [', h.LeagueNameCS, ']'), ''))
+						, '{Team Name EN CN}', IFNULL(CONCAT('***', h.HomeNameEN, ' - vs - ' , h.AwayNameEN, ' [',h.HomeNameCS, ' - vs - ' , h.AwayNameCS, ']', '***'), ''))
+					, '@@', '')
+				, 'SABA ', CASE WHEN ccIsRemoveSABA = 1 THEN '' ELSE 'SABA ' END)
+			, 'SABA', CASE WHEN ccIsRemoveSABA = 1 THEN '' ELSE 'SABA' END)
+		, '沙巴', CASE WHEN ccIsRemoveSABA = 1 THEN '' ELSE '沙巴' END) Content
 	    ,startTime, 0 SendImmediately, STARIXIT_CUSTID, CreatedDate, CREATING_NOTIFICATION_STATUS, CREATING_NOTIFICATION_STATUSID, ccChannelId
 	    FROM tmp_MsgHeader h
 	  	INNER JOIN tmp_MsgContentTypeTemplate ct ON ct.MsgContentsType = h.MsgContentsType
@@ -467,7 +534,8 @@ NCB_SiteMessage_Import:BEGIN
 	  WHERE d.MessageID = ccMessageID
 	    AND d.LicenseeStatusID = ACTIVE_LICENSEE_STATUS
 	    AND d.RecipientID IS NOT NULL
-	    AND d.ChannelId = ccChannelId;
+	    AND d.ChannelId = ccChannelId
+		AND d.IsRemoveSABA = ccIsRemoveSABA;
 	  
 	  #Update Status for Notification
 	  IF ccIsInvalid = 1 OR ccIsTest = 1 THEN
@@ -488,7 +556,7 @@ NCB_SiteMessage_Import:BEGIN
 	  			n.StatusID = t.StatusID
 	    WHERE n.NotificationID = ccNotificationID;
 	  END IF;		
-	  DELETE FROM tmpMessageChannel m WHERE m.MessageId = ccMessageID AND m.ChannelId = ccChannelId;
+	  DELETE FROM tmpMessageChannel m WHERE m.MessageId = ccMessageID AND m.ChannelId = ccChannelId AND m.IsRemoveSABA = ccIsRemoveSABA;
 	 END WHILE;
 	SET iLoop := iLoop + 1;	
   END WHILE;

@@ -17,6 +17,7 @@ AS
 		- 20201029@Percy: Add LastPostTime for rescan message [RedmineID: #144274]
 		- 20210618@Percy: Migrate DBMSG to new server [RedmineID: #157217]
 		- 20211012@Malcolm: Rescan messageid <= @MessageId [RedmineID: #162825]
+		- 20220223@Malcolm: Remove SABA text out of the league name for China View platform [RedmineID: #168798]
 */
 
 BEGIN
@@ -36,15 +37,19 @@ BEGIN
 	FROM @xml.nodes('//root/r') AS RECORDS(r)
 	WHERE LEN(ISNULL(r.value('.', 'NVARCHAR(15)'), '')) > 0
 
-	DECLARE @DepositSuper TABLE (CustId INT, site VARCHAR(50))
-	INSERT INTO @DepositSuper (CustId, site)
-	SELECT CustId, site FROM DBACC.bodb02.dbo.Dep_CustSuper WITH (NOLOCK) WHERE site IN ('spondemo' ,'Athena000') OR Currency NOT IN (20, 27, 28)
+	DECLARE @DepositSuper TABLE (CustId INT, site VARCHAR(50), IsChinaView BIT)
+	INSERT INTO @DepositSuper (CustId, site, IsChinaView)
+	SELECT CustId, site, ISNULL(IsChinaView, 0)
+	FROM OPENQUERY(DBACC, 'SELECT d.CustId, d.site, ISNULL(s.IsChinaView, 0) AS IsChinaView 
+						   FROM bodb02.dbo.Dep_CustSuper d WITH (NOLOCK) 
+		                       LEFT JOIN bodb02.dbo.Site s WITH(NOLOCK) ON s.site = d.site 
+						   WHERE d.site IN (''spondemo'' ,''Athena000'') OR d.Currency NOT IN (20, 27, 28)')
 
-	DECLARE @Msg TABLE (MessageId INT, MsgContentsType TINYINT, Content_en NVARCHAR(4000), Content_cs NVARCHAR(4000), PostTime DATETIME, IsNew TINYINT)
+	DECLARE @Msg TABLE (MessageId INT, MsgContentsType TINYINT, Content_en NVARCHAR(4000), Content_cs NVARCHAR(4000), PostTime DATETIME, IsNew TINYINT, LeagueGroupID SMALLINT)
 	
 	-- New messages from @MessageID
-	INSERT INTO @Msg (MessageId, MsgContentsType, Content_en, Content_cs, PostTime, IsNew)
-	SELECT TOP (@BatchSize) m.MessageId, m.MsgContentsType, m.Content_en, m.Content_cs, m.PostTime, 1
+	INSERT INTO @Msg (MessageId, IsNew)
+	SELECT TOP (@BatchSize) m.MessageId, 1
 	FROM dbo.Msg m WITH (NOLOCK)
 		INNER JOIN dbo.MsgTarget mt WITH (NOLOCK) ON m.MessageId = mt.MessageId
 		INNER JOIN @DepositSuper ds ON mt.TargetId = ds.CustId
@@ -55,13 +60,13 @@ BEGIN
 		AND mt.isDeleted = 0
 		AND m.Content_en LIKE '%@@%'
 		AND mt.BetTransId IS NOT NULL
-	GROUP BY m.MessageId, m.MsgContentsType, m.Content_en, m.Content_cs, m.PostTime
+	GROUP BY m.MessageId
 	ORDER BY m.MessageId
 	OPTION (RECOMPILE)
 
 	-- Rescan messages from @LastPostTime
-	INSERT INTO @Msg (MessageId, MsgContentsType, Content_en, Content_cs, PostTime, IsNew)
-	SELECT m.MessageId, m.MsgContentsType, m.Content_en, m.Content_cs, m.PostTime, 0
+	INSERT INTO @Msg (MessageId, IsNew)
+	SELECT m.MessageId, 0
 	FROM dbo.Msg m WITH (NOLOCK)
 		INNER JOIN dbo.MsgTarget mt WITH (NOLOCK) ON m.MessageId = mt.MessageId
 		INNER JOIN @DepositSuper ds ON mt.TargetId = ds.CustId
@@ -77,7 +82,7 @@ BEGIN
 						WHERE mc.MessageId = mt.MessageId AND mc.TargetId = mt.TargetId
 							AND mc.JobIdentify = 1 AND mc.Environment = @Environment
 		)
-	GROUP BY m.MessageId, m.MsgContentsType, m.Content_en, m.Content_cs, m.PostTime
+	GROUP BY m.MessageId
 	ORDER BY m.MessageId
 
 	-- Remove duplicate message if exists (for case update max message ID)
@@ -87,6 +92,13 @@ BEGIN
 		FROM @Msg
 	) m
 	WHERE m.RN > 1
+
+	UPDATE m
+		SET m.MsgContentsType = k.MsgContentsType, m.PostTime = k.PostTime, m.Content_en = k.Content_en, m.Content_cs = k.Content_cs, m.LeagueGroupID = k.LeagueGroupID
+	FROM @Msg m
+	CROSS APPLY (
+		SELECT MsgContentsType, PostTime, Content_en, Content_cs, ISNULL(LeagueGroupID,0) AS LeagueGroupID FROM dbo.Msg g WITH(NOLOCK) WHERE g.MessageId = m.MessageId
+	) AS k
 	
 	--1st dataset: message header
 	SELECT MessageId, MsgContentsType, Content_en, Content_cs, PostTime, IsNew
@@ -94,7 +106,7 @@ BEGIN
 	ORDER BY MessageId
 
 	--2nd dataset: message detail
-	SELECT mt.MessageId, mt.TargetId, ds.site
+	SELECT mt.MessageId, mt.TargetId, ds.site, m.LeagueGroupID, ds.IsChinaView AS IsChinaView
 	FROM dbo.MsgTarget mt WITH (NOLOCK)
 		INNER JOIN @Msg m ON mt.MessageId = m.MessageId
 		INNER JOIN @DepositSuper ds ON mt.TargetId = ds.CustId
@@ -108,7 +120,7 @@ BEGIN
 				AND mc.JobIdentify = 1
 				AND mc.Environment = @Environment
 		)
-	GROUP BY mt.MessageId, mt.TargetId, ds.site
+	GROUP BY mt.MessageId, mt.TargetId, ds.site, m.LeagueGroupID, ds.IsChinaView
 	ORDER BY mt.MessageId, ds.site
 END
 GO
