@@ -10,6 +10,7 @@ AS
 
 	Revisions:
 		- 20210607@Malcolm: Initialize SP [RedmineID: #135686]
+		- 20220324@Malcolm: replace function f_SplitString with function STRING_SPLIT [RedmineID: #168783]
 
 	@MessageIDLst:
 			<root>
@@ -33,8 +34,8 @@ BEGIN
 	FROM @MessageIDLst.nodes('root/r') AS t(c)
 	CROSS APPLY
 	(
-		SELECT f.val AS Username
-		FROM f_SplitString(t.c.value('@UsernameLst', 'NVARCHAR(MAX)'),',') f
+		SELECT f.value AS Username
+		FROM STRING_SPLIT(t.c.value('@UsernameLst', 'NVARCHAR(MAX)'),',') f
 	) AS u(Username)
 	OPTION (OPTIMIZE FOR (@MessageIDLst = NULL))
 
