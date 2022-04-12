@@ -20,6 +20,8 @@ BEGIN
 
 	SELECT @MaxLogId = MAX(LogID) FROM dbo.Dep_CustCategoryHistory WITH(NOLOCK)
 
+	WAITFOR DELAY '00:00:00.200'
+
 	CREATE TABLE #CategoryConfig (CustomerClass SMALLINT PRIMARY KEY)
 
 	INSERT INTO #CategoryConfig (CustomerClass)
@@ -34,11 +36,17 @@ BEGIN
 	FROM dbo.Dep_CustCategoryHistory d WITH(NOLOCK)
 	WHERE EXISTS (SELECT 1 FROM #CategoryConfig c WHERE c.CustomerClass = d.CustomerClass)
 		AND NOT EXISTS (SELECT 1 FROM #CategoryConfig c WHERE c.CustomerClass = d.OldCustomerClass)
-		AND d.LogID > @LastLogId
+		AND d.LogID > @LastLogId 
+		AND d.LogID <= @MaxLogId
 
-	SELECT t.LogID, t.custid, c.username, ISNULL(d.site, '') AS [SiteName], t.CategoryID, t.CustomerClass, t.CreatedDate, ca.CategoryName, ca.CategoryNameCS
+	SELECT t.LogID, t.custid, c.username, ISNULL(d.site, '') AS [SiteName], t.CategoryID, t.CustomerClass, t.CreatedDate, CASE WHEN c.currency = 20 THEN 1 ELSE 0 END AS IsTest
 	FROM @Tmp t
-		LEFT JOIN dbo.CategoryConfig ca WITH(NOLOCK) ON t.CategoryID = ca.CategoryID
 		LEFT JOIN dbo.Customer c WITH(NOLOCK) ON t.custid = c.custid
 		LEFT JOIN dbo.Dep_CustSuper d WITH(NOLOCK) ON d.custid = c.srecommend
+
+	SELECT c.CategoryID, c.CategoryName, c.CategoryNameCS
+	FROM dbo.CategoryConfig c WITH(NOLOCK)
+	WHERE EXISTS (SELECT 1 FROM @Tmp t WHERE t.CategoryID = c.CategoryID)
+
+	DROP TABLE #CategoryConfig
 END
