@@ -10,7 +10,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_ProblemAccounts_Import(
 
   /*
     Creator   : 20220404@Malcolm
-    Task      : NAP ChatBot - Import data from Site Message
+    Task      : NAP ChatBot - Import data from Problem accounts
 	DB: DBCB-ChatBot
     Params    :
       - @Message : [{"LogID":1, "Custid":1, "Username":"Supertest1", "SiteName":"12BET","CategoryID":"2", "CustomerClass":"2", "CreatedDate":"2022-04-04 00:00:00"}]
@@ -30,10 +30,9 @@ NCB_ProblemAccounts_Import:BEGIN
 	DECLARE logContent MEDIUMTEXT CHARACTER SET utf8mb4;
 	DECLARE templateNotifcationType JSON;
 	DECLARE ccConversationGroupID TEXT;
-	DECLARE maxMessageID INT;
-	DECLARE lastPostTime DATETIME;
 	DECLARE createdDate DATETIME(3);
 	DECLARE ccNotificationID INT UNSIGNED;
+    DECLARE ccLastLogID BIGINT;
 	
 	# Constants
 	DECLARE ACTION_ID INT DEFAULT 30;
@@ -88,7 +87,6 @@ NCB_ProblemAccounts_Import:BEGIN
 			(
 				LogID 			BIGINT 				PATH "$.LogID"
 				,CustId 		INT 				PATH "$.CustId"
-				,MatchID 		INT 				PATH "$.MatchID"
 				,Username 		VARCHAR(30) 		PATH "$.Username"
 				,SiteName 		VARCHAR(20) 		PATH "$.SiteName"
 				,CategoryID 	SMALLINT UNSIGNED 	PATH "$.CategoryID"
@@ -128,6 +126,8 @@ NCB_ProblemAccounts_Import:BEGIN
 	SELECT Value INTO templateNotifcationType 
 	FROM SystemSetting
 	WHERE ID = 21;
+    
+    SELECT MAX(LogID) INTO ccLastLogID FROM tmp_Message;
 
 	DROP TEMPORARY TABLE IF EXISTS tmp_MsgContentTypeTemplate;
 	CREATE TEMPORARY TABLE IF NOT EXISTS tmp_MsgContentTypeTemplate
@@ -429,35 +429,23 @@ NCB_ProblemAccounts_Import:BEGIN
 	
 		#Insert recipient list
 		INSERT INTO NotificationRecipientList(NotificationID, ConversationGroupID, ChatGroupTypeID, RecipientID, Status, StatusID)
-		SELECT ccNotificationID, d.ConversationGroupID, d.ChatGroupTypeID, d.RecipientID, d.Status, d.StatusID
+		SELECT DISTINCT ccNotificationID, d.ConversationGroupID, d.ChatGroupTypeID, d.RecipientID, d.Status, d.StatusID
 		FROM tmp_NotificationRecipientList d
 		WHERE d.ID = iLOOP;
-	  
-		#Update Status for NotificatioN	
+	
 		SET iLoop := iLoop + 1;	
 	END WHILE;
 
 	/*Step 9: Update Setting*/
-	SELECT MAX(MessageID) INTO maxMessageID FROM tmp_MsgHeader WHERE IsNew = 1;
   
-	IF maxMessageID IS NOT NULL 
-	THEN
-		UPDATE SystemSetting
-			SET Value = (SELECT MAX(MessageID) FROM tmp_MsgHeader)
-			WHERE ID = 13;
-	END IF;
-        
-	SELECT MAX(CAST(PostTime AS DATETIME)) INTO lastPostTime FROM tmp_MsgHeader WHERE IsNew = 1;
-    
-	IF lastPostTime IS NOT NULL THEN
-		UPDATE SystemSetting
-		SET Value = lastPostTime
-		WHERE ID = 16;
-	END IF;
+	UPDATE SystemSetting
+	SET Value = ccLastLogID
+	WHERE ID = 20;
+ 
         
 	UPDATE SystemSetting 
 	SET Value = VALUE_DONE
-	WHERE ID = 11 AND Value = VALUE_RUNNING;
+	WHERE ID = 18 AND Value = VALUE_RUNNING;
 
 	/*Step 10: Return imported messages*/
 	SELECT Value INTO ccConversationGroupID FROM SystemSetting WHERE ID = 15;
@@ -475,7 +463,7 @@ NCB_ProblemAccounts_Import:BEGIN
 		DEALLOCATE PREPARE Stmt;
 	END IF;
 	
-	SELECT 
+    SELECT 
 		g.ConversationID AS ChatGroupConversationID
 		,g.ServiceUrl
 		,g.ChannelID
@@ -487,9 +475,8 @@ NCB_ProblemAccounts_Import:BEGIN
 		INNER JOIN ConversationBot b ON b.ConversationBotID = gb.ConversationBotID
         INNER JOIN ConversationChannel cc ON cc.ChannelId = g.ChannelId
 	WHERE g.ConversationGroupID IN (SELECT ConversationGroupID FROM tmp_Carbon);
-  
 	SELECT 
-		,n.NotificationID
+		n.NotificationID
 		,n.Title
 		,n.Content
 		,n.ChannelID
@@ -503,7 +490,7 @@ NCB_ProblemAccounts_Import:BEGIN
 	SET duration = TIMESTAMPDIFF(MICROSECOND, startTime, finishTime) / 1000; 	#miliseconds
 		
 	#Get Log Content, JSON format
-	SET logContent = JSON_OBJECT('SiteMessage - MessageHeader', messageHeader, ' - MessageDetail', messageDetail);
+	SET logContent = JSON_OBJECT('Message', Message, ' - CategoryInfo', CategoryInfo);
 						
 	#Write User Log
 	IF EXISTS (SELECT 1 FROM tmp_MsgHeader) THEN
