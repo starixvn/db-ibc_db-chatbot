@@ -1,27 +1,27 @@
 /*<info serverAlias="DBCB-ChatBot" databaseType="2" executers="ncb.admin" isFunction="0" isNested="0"></info>*/
-DROP PROCEDURE IF EXISTS NCB_ProblemAccounts_Import;
+DROP PROCEDURE IF EXISTS NCB_ProblemAccount_Import;
 DELIMITER //
 
-CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_ProblemAccounts_Import(
-  IN Message JSON,
-  IN CategoryInfo JSON,
-  OUT errCode INT,
-  OUT errMsg VARCHAR(200)
+CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_ProblemAccount_Import(
+  IN Message 		JSON,
+  IN CategoryInfo 	JSON,
+  OUT errCode 		INT,
+  OUT errMsg 		VARCHAR(200)
 
   /*
     Creator   : 20220404@Malcolm
     Task      : NAP ChatBot - Import data from Problem accounts
 	DB: DBCB-ChatBot
     Params    :
-      - @Message : [{"LogID":1, "CustId":1, "Username":"Supertest1", "SiteName":"12BET","CategoryID":"2", "CustomerClass":"2", "CreatedDate":"2022-04-04 00:00:00"}, "IsTest":"0"]
-      - @CategoryInfo : [{"CategoryID":"1", "CategoryName":"Group Betting", "CategoryNameCS":"群组投注"}]
+      - @Message : [{"LogId":1, "CustId":1, "Username":"Supertest1", "SiteName":"12BET","CategoryId":"2", "CustomerClass":"2", "CreatedDate":"2022-04-04 00:00:00", "IsTest":"0"}]
+      - @CategoryInfo : [{"CategoryId":"1", "CategoryNameEN":"Group Betting", "CategoryNameCS":"群组投注"}]
     Revisions :
       - 20220404@Malcolm: Initiliaze SP [RedmineID: #170182]
 
   */
 )
 SQL SECURITY DEFINER
-NCB_ProblemAccounts_Import:BEGIN
+NCB_ProblemAccount_Import:BEGIN
 	# Variables
 	DECLARE iLoop INT;
 	DECLARE startTime DATETIME(3);
@@ -32,8 +32,8 @@ NCB_ProblemAccounts_Import:BEGIN
 	DECLARE pConversationGroupID TEXT;
 	DECLARE pCreatedDate DATETIME(3);
 	DECLARE pNotificationID INT UNSIGNED;
-    DECLARE pLastLogID BIGINT;
-	DECLARE pMsgContentsType INT DEFAULT 1001;
+    DECLARE pLastLogId BIGINT;
+	DECLARE pMsgContentsType INT DEFAULT -1;
 	
 	# Constants
 	DECLARE ACTION_ID INT DEFAULT 30;
@@ -48,7 +48,7 @@ NCB_ProblemAccounts_Import:BEGIN
 	
 	DECLARE PLANNED_NOTIFICATION_STATUSID	TINYINT UNSIGNED DEFAULT 0;
 	DECLARE PLANNED_NOTIFICATION_STATUS VARCHAR(10) DEFAULT 'Planned';
-	DECLARE NumberOfCustomer  INT DEFAULT 50;
+	DECLARE pNumberOfCustomer  INT DEFAULT 50;
 	
 	SET startTime = UTC_TIMESTAMP();
 	SET errCode = 0, errMsg = '';
@@ -64,20 +64,20 @@ NCB_ProblemAccounts_Import:BEGIN
 	DROP TEMPORARY TABLE IF EXISTS tmp_Message;
 	CREATE TEMPORARY TABLE IF NOT EXISTS tmp_Message
 	(
-		LogID				BIGINT,
+		LogId				BIGINT,
 		CustId          	INT,
-		Username			VARCHAR(30),
+		Username			VARCHAR(50),
 		SiteName 	   	 	VARCHAR(20),
-		CategoryID			SMALLINT UNSIGNED,
-		CustomerClass 		SMALLINT UNSIGNED,
+		CategoryId			SMALLINT,
+		CustomerClass 		SMALLINT,
 		CreatedDate			DATETIME,
 		IsTest 				TINYINT,
 		RecipientID			INT UNSIGNED,
 		LicenseeStatusID 	TINYINT UNSIGNED
 	);
 	
-	INSERT INTO tmp_Message (LogID, CustId, Username, SiteName, CategoryID, CustomerClass, CreatedDate, IsTest)   
-	SELECT t.LogID, t.CustId, t.Username, t.SiteName, t.CategoryID, t.CustomerClass, t.CreatedDate, t.IsTest
+	INSERT INTO tmp_Message (LogId, CustId, Username, SiteName, CategoryId, CustomerClass, CreatedDate, IsTest)   
+	SELECT t.LogId, t.CustId, t.Username, t.SiteName, t.CategoryId, t.CustomerClass, t.CreatedDate, t.IsTest
 	FROM 
 		JSON_TABLE
 		(
@@ -85,12 +85,12 @@ NCB_ProblemAccounts_Import:BEGIN
 			"$[*]"
 			COLUMNS
 			(
-				LogID 			BIGINT 				PATH "$.LogID"
+				LogId 			BIGINT 				PATH "$.LogId"
 				,CustId 		INT 				PATH "$.CustId"
-				,Username 		VARCHAR(30) 		PATH "$.Username"
+				,Username 		VARCHAR(50) 		PATH "$.Username"
 				,SiteName 		VARCHAR(20) 		PATH "$.SiteName"
-				,CategoryID 	SMALLINT UNSIGNED 	PATH "$.CategoryID"
-				,CustomerClass 	SMALLINT UNSIGNED 	PATH "$.CustomerClass"
+				,CategoryId 	SMALLINT 			PATH "$.CategoryId"
+				,CustomerClass 	SMALLINT  			PATH "$.CustomerClass"
 				,CreatedDate 	DATETIME 			PATH "$.CreatedDate"
 				,IsTest			TINYINT 			PATH "$.IsTest"
 			)
@@ -99,14 +99,14 @@ NCB_ProblemAccounts_Import:BEGIN
 	DROP TEMPORARY TABLE IF EXISTS tmp_CategoryInfo;
 	CREATE TEMPORARY TABLE IF NOT EXISTS tmp_CategoryInfo
 	(
-		CategoryID 		SMALLINT UNSIGNED
-		,CategoryName 	VARCHAR(100)
-		,CategoryNameCS VARCHAR(100)
-		,UNIQUE INDEX Index_CategoryInfo(CategoryID)
+		CategoryId 		SMALLINT UNSIGNED
+		,CategoryNameEN VARCHAR(100)
+		,CategoryNameCS VARCHAR(100) CHARACTER SET utf8mb4
+		,UNIQUE INDEX Index_CategoryInfo(CategoryId)
 	);
 	
-	INSERT INTO tmp_CategoryInfo (CategoryID, CategoryName, CategoryNameCS)   
-	SELECT t.CategoryID, t.CategoryName, t.CategoryNameCS
+	INSERT INTO tmp_CategoryInfo (CategoryId, CategoryNameEN, CategoryNameCS)   
+	SELECT t.CategoryId, t.CategoryNameEN, t.CategoryNameCS
 	FROM 
 		JSON_TABLE
 		(
@@ -114,9 +114,9 @@ NCB_ProblemAccounts_Import:BEGIN
 			"$[*]"
 			COLUMNS
 			(
-				CategoryID 		SMALLINT 			PATH "$.CategoryID"
-				,CategoryName 	VARCHAR(100) 		PATH "$.CategoryName"
-				,CategoryNameCS VARCHAR(100) 		PATH "$.CategoryNameCS"
+				CategoryId 		SMALLINT 		PATH "$.CategoryId"
+				,CategoryNameEN VARCHAR(100) 	PATH "$.CategoryNameEN"
+				,CategoryNameCS VARCHAR(100)	PATH "$.CategoryNameCS"
 			)
 		) AS t;
 	
@@ -125,7 +125,7 @@ NCB_ProblemAccounts_Import:BEGIN
 	FROM SystemSetting
 	WHERE ID = 21;
     
-    SELECT MAX(LogID) INTO pLastLogID FROM tmp_Message;
+    SELECT MAX(LogId) INTO pLastLogId FROM tmp_Message;
 
 	DROP TEMPORARY TABLE IF EXISTS tmp_MsgContentTypeTemplate;
 	CREATE TEMPORARY TABLE IF NOT EXISTS tmp_MsgContentTypeTemplate
@@ -172,7 +172,7 @@ NCB_ProblemAccounts_Import:BEGIN
 
 		SET errMsg = CONCAT('Notification template is not existing (IDs): ', errMsg);
 
-    LEAVE NCB_ProblemAccounts_Import;
+    LEAVE NCB_ProblemAccount_Import;
     END IF;
 
 	# Check if there are any templates which do not have required params
@@ -196,7 +196,7 @@ NCB_ProblemAccounts_Import:BEGIN
 
 		SET errMsg = CONCAT('Notification template is not existing (IDs): ', errMsg);
 
-    LEAVE NCB_ProblemAccounts_Import;
+    LEAVE NCB_ProblemAccount_Import;
 	END IF;
 
 	/*Step 4: Update flag to running*/
@@ -206,34 +206,49 @@ NCB_ProblemAccounts_Import:BEGIN
 
 	IF ROW_COUNT() = 0 
 	THEN
-		LEAVE NCB_ProblemAccounts_Import;
+		LEAVE NCB_ProblemAccount_Import;
 	END IF;
   
-	/*Step 6: Check if there are any sites which can not be mapped with any recipients*/
+	IF EXISTS (
+		SELECT 1 FROM tmp_Message t 
+		WHERE EXISTS (
+			SELECT 1 FROM NotificationReference r 
+			WHERE r.ReferenceId = t.LogId AND r.DataSource  = 'DBCUST.CustDB.dbo.Dep_CustCategoryHistory'
+		))
+	THEN 
+		DELETE t 
+		FROM tmp_Message t
+		WHERE EXISTS (
+			SELECT 1 FROM NotificationReference r 
+			WHERE r.ReferenceId = t.LogId AND r.DataSource  = 'DBCUST.CustDB.dbo.Dep_CustCategoryHistory'
+		);
+	END IF;
+	
+	/*Step 5: get recipient*/
 	UPDATE tmp_Message t
         INNER JOIN Licensee l ON l.RegisteredLicenseeName = t.SiteName
         INNER JOIN Recipient r ON r.SourceID = l.LicenseeId AND r.RecipientTypeID = RECIPIENT_TYPE_LICENSEE 
 	SET t.RecipientID = r.RecipientID,
 		t.LicenseeStatusID = l.LicenseeStatusID;
 
-	/*Step 7: Check if Internal CSD recipients do not have any suitable chat groups*/
+	/*Step 6: Check if recipients do not have any suitable chat groups*/
 	# Prepare data for Notification List
 	DROP TEMPORARY TABLE IF EXISTS tmp_NotificationRecipientList;
 	CREATE TEMPORARY TABLE IF NOT EXISTS tmp_NotificationRecipientList
 	(
 		LogId 					BIGINT
         ,CustId        			INT
-        ,Username           	VARCHAR(30)
-        ,CategoryID         	SMALLINT UNSIGNED
-        ,CustomerClass			SMALLINT UNSIGNED
+        ,Username           	VARCHAR(50)
+        ,CategoryId         	SMALLINT 
+        ,CustomerClass			SMALLINT 
         ,CreatedDate        	DATETIME
 		,RecipientID 			INT
 		,ConversationGroupID 	INT
 		,ChatGroupTypeID 		SMALLINT
 		,StatusID 				TINYINT UNSIGNED
-		,Status 				VARCHAR(10)
+		,Status 				VARCHAR(20)
 		,ChannelId 				TINYINT UNSIGNED
-		,INDEX Index_LogId  (LogId)
+		,INDEX Index_LogId  	(LogId)
     );
 
 	INSERT INTO tmp_NotificationRecipientList
@@ -241,7 +256,7 @@ NCB_ProblemAccounts_Import:BEGIN
 		LogId
         ,CustId
         ,Username
-        ,CategoryID
+        ,CategoryId
         ,CustomerClass
         ,CreatedDate
 		,RecipientID 
@@ -255,7 +270,7 @@ NCB_ProblemAccounts_Import:BEGIN
 		h.LogId
         ,h.CustId
         ,h.Username
-        ,h.CategoryID
+        ,h.CategoryId
         ,h.CustomerClass
         ,h.CreatedDate
 		,h.RecipientID
@@ -278,15 +293,15 @@ NCB_ProblemAccounts_Import:BEGIN
 		ID 						INT
 		,LogId 					BIGINT
 		,CustId        			INT
-		,Username           	VARCHAR(30)
-		,CategoryID         	SMALLINT UNSIGNED
-		,CustomerClass			SMALLINT UNSIGNED
+		,Username           	VARCHAR(50)
+		,CategoryId         	SMALLINT 
+		,CustomerClass			SMALLINT 
 		,CreatedDate        	DATETIME
 		,RecipientID 			INT
 		,ConversationGroupID 	INT
 		,ChatGroupTypeID 		SMALLINT
 		,StatusID 				TINYINT UNSIGNED
-		,Status 				VARCHAR(10)
+		,Status 				VARCHAR(20)
 		,ChannelId 				TINYINT UNSIGNED
 		,INDEX Index_LogId  	(ID)
     );
@@ -297,7 +312,7 @@ NCB_ProblemAccounts_Import:BEGIN
 		,LogId 					
 		,CustId        			
 		,Username           		
-		,CategoryID         	
+		,CategoryId         	
 		,CustomerClass			
 		,CreatedDate        			
 		,RecipientID 			
@@ -313,7 +328,7 @@ NCB_ProblemAccounts_Import:BEGIN
 			LogId
 			,CustId
 			,Username
-			,CategoryID
+			,CategoryId
 			,CustomerClass
 			,CreatedDate
 			,RecipientID 
@@ -322,7 +337,7 @@ NCB_ProblemAccounts_Import:BEGIN
 			,StatusID
 			,Status
 			,ChannelId
-			,FLOOR((DENSE_RANK() OVER(PARTITION BY CustomerClass, CategoryID, ConversationGroupID, StatusID, ChannelId ORDER BY CustId ASC, LogId ASC))/NumberOfCustomer) AS NoOfBatch
+			,FLOOR((DENSE_RANK() OVER(PARTITION BY CustomerClass, CategoryId, ConversationGroupID, StatusID ORDER BY CustId ASC, LogId ASC))/pNumberOfCustomer) AS NoOfBatch
 		FROM tmp_NotificationRecipientList
 	),CTE_Group AS
 	(
@@ -330,7 +345,7 @@ NCB_ProblemAccounts_Import:BEGIN
 			LogId
 			,CustId
 			,Username
-			,CategoryID
+			,CategoryId
 			,CustomerClass
 			,CreatedDate
 			,RecipientID 
@@ -339,7 +354,7 @@ NCB_ProblemAccounts_Import:BEGIN
 			,StatusID
 			,Status
 			,ChannelId
-			,DENSE_RANK() OVER(ORDER BY CustomerClass, CategoryID, ConversationGroupID, StatusID, ChannelId, NoOfBatch) AS ID
+			,DENSE_RANK() OVER(ORDER BY CustomerClass, CategoryId, ConversationGroupID, StatusID, NoOfBatch) AS ID
 		FROM CTE_Batch
 	)
 	SELECT 
@@ -347,7 +362,7 @@ NCB_ProblemAccounts_Import:BEGIN
 			,LogId
 			,CustId
 			,Username
-			,CategoryID
+			,CategoryId
 			,CustomerClass
 			,CreatedDate
 			,RecipientID 
@@ -359,21 +374,32 @@ NCB_ProblemAccounts_Import:BEGIN
 	FROM CTE_Group;
 
 	DROP TEMPORARY TABLE IF EXISTS tmp_Notification;
-	CREATE TEMPORARY TABLE tmp_Notification (ID INT, ChannelId INT, UsernameList VARCHAR(2000), MarkedDate VARCHAR(200), CustomerClass INT, Reason VARCHAR(2000), StatusID TINYINT UNSIGNED, Status VARCHAR(10));
+	CREATE TEMPORARY TABLE tmp_Notification 
+	(
+		ID 					INT
+		,ChannelId 			TINYINT UNSIGNED
+		,UsernameList 		VARCHAR(4000)
+		,MarkedDate 		VARCHAR(200)
+		,CustomerClass 		SMALLINT
+		,Reason 			VARCHAR(2000) 
+		,StatusID 			TINYINT UNSIGNED
+		,Status 			VARCHAR(20)
+		,INDEX Index_LogId  (ID)
+	);
   
 	INSERT INTO tmp_Notification (ID, ChannelId, UsernameList, MarkedDate, CustomerClass, Reason, StatusID, Status)
 	WITH CTE AS
 	(
 		SELECT 
 			ID
-			,MAX(ChannelId) AS ChannelId
-			,GROUP_CONCAT(DISTINCT Username ORDER BY Username ASC) AS UsernameList
-			,MIN(CreatedDate) AS MinMarkedDate
-			,MAX(CreatedDate) AS MaxMarkedDate
+			,MAX(ChannelId) 	AS ChannelId
+			,MIN(CreatedDate) 	AS MinMarkedDate
+			,MAX(CreatedDate) 	AS MaxMarkedDate
 			,MIN(CustomerClass) AS CustomerClass
-			,MIN(CategoryID) AS CategoryID
-			,MIN(StatusID) AS StatusID
-			,MIN(Status) AS Status
+			,MIN(CategoryId) 	AS CategoryId
+			,MIN(StatusID) 		AS StatusID
+			,MIN(Status) 		AS Status
+			,GROUP_CONCAT(DISTINCT Username ORDER BY Username ASC SEPARATOR ', ') AS UsernameList
 		  FROM tmp_Result
 		  GROUP BY ID
 	)
@@ -381,15 +407,15 @@ NCB_ProblemAccounts_Import:BEGIN
 		ID
 		,ChannelId
 		,UsernameList
-		,CASE WHEN MinMarkedDate = MaxMarkedDate THEN CONVERT(MinMarkedDate, CHAR(20)) ELSE CONCAT(CONVERT(MinMarkedDate, CHAR(20)), ' - ', CONVERT(MaxMarkedDate, CHAR(20))) END AS MarkedDate
+		,CASE WHEN MinMarkedDate = MaxMarkedDate THEN CONVERT(DATE_FORMAT(MinMarkedDate,'%m/%d/%Y %h:%i:%s'), CHAR(20)) ELSE CONCAT(CONVERT(DATE_FORMAT(MinMarkedDate,'%m/%d/%Y %h:%i:%s'), CHAR(20)), ' - ', CONVERT(DATE_FORMAT(MaxMarkedDate,'%m/%d/%Y %h:%i:%s'), CHAR(20))) END AS MarkedDate
 		,CustomerClass
-		,CONCAT(c.CategoryName ,'[', c.CategoryNameCS,']') AS Reason
+		,CONCAT(c.CategoryNameEN ,' [', c.CategoryNameCS,']') AS Reason
 		,StatusID
 		,Status
 	FROM CTE e
-		INNER JOIN tmp_CategoryInfo c ON e.CategoryID = c.CategoryID;
+		INNER JOIN tmp_CategoryInfo c ON e.CategoryId = c.CategoryId;
   
-	/*Step 8: Insert Notification and NotificationSystemMsg*/
+	/*Step 7: Insert Notification and NotificationReference*/
 	SET pCreatedDate = UTC_TIMESTAMP();
 	SET iLoop = 1;
 	WHILE (EXISTS (SELECT 1 FROM tmp_Notification WHERE Id = iLoop)) DO
@@ -420,22 +446,26 @@ NCB_ProblemAccounts_Import:BEGIN
 		SELECT DISTINCT pNotificationID, d.ConversationGroupID, d.ChatGroupTypeID, d.RecipientID, d.Status, d.StatusID
 		FROM tmp_Result d
 		WHERE d.ID = iLOOP;
+		
+		INSERT INTO NotificationReference (NotificationID, ReferenceId, DataSource)
+		SELECT DISTINCT pNotificationID, LogId, 'DBCUST.CustDB.dbo.Dep_CustCategoryHistory'
+		FROM tmp_Result r  
+		WHERE r.ID = iLOOP;
 	
 		SET iLoop := iLoop + 1;	
 	END WHILE;
 
-	/*Step 9: Update Setting*/
+	/*Step 8: Update Setting*/
 	UPDATE SystemSetting
-	SET Value = pLastLogID
+	SET Value = pLastLogId
 	WHERE ID = 20;
- 
         
 	UPDATE SystemSetting 
 	SET Value = VALUE_DONE
 	WHERE ID = 18 AND Value = VALUE_RUNNING;
 
-	/*Step 10: Return imported messages*/
-	SELECT Value INTO pConversationGroupID FROM SystemSetting WHERE ID = 15;
+	/*Step 9: Return imported messages*/
+	SELECT Value INTO pConversationGroupID FROM SystemSetting WHERE ID = 22;
 	
 	DROP TEMPORARY TABLE IF EXISTS tmp_Carbon;
 	CREATE TEMPORARY TABLE tmp_Carbon(ConversationGroupID INT UNSIGNED);
@@ -481,7 +511,7 @@ NCB_ProblemAccounts_Import:BEGIN
 	SET logContent = JSON_OBJECT('Message', Message, ' - CategoryInfo', CategoryInfo);
 						
 	#Write User Log
-	IF EXISTS (SELECT 1 FROM tmp_MsgHeader) THEN
+	IF EXISTS (SELECT 1 FROM tmp_Notification) THEN
 	  CALL NCB_UserLog_RunSP_Ins
 	  (
 			ACTION_ID #actionID

@@ -8,11 +8,12 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_JobInfo_Sel`(
 		DB: DBCB-ChatBot
         Revisions:
 			- 20211010@Malcolm: Get information of Job [RedmineID: #162825]
+			- 20220414@Malcolm: Add Job [RedmineID: #170182]
     */
 )
 SQL SECURITY DEFINER
 BEGIN
-	DECLARE ListMsgContentsType JSON DEFAULT "[4,9,14]";
+	DECLARE ListMsgContentsType JSON DEFAULT "[4,9,14,21]";
     DECLARE MsgContentsTypeList JSON;
     DECLARE iLoop INT DEFAULT 0;
     DECLARE Job_Id INT DEFAULT 0;
@@ -43,7 +44,7 @@ BEGIN
 		SET iLoop := iLoop + 1;
 	END WHILE;
 	
-    SELECT JobIdentify, Value AS MessageId FROM SystemSetting WHERE ID IN (3, 8, 13) ORDER BY JobIdentify;
+    SELECT JobIdentify, Value AS ReferenceId FROM SystemSetting WHERE ID IN (3, 8, 13, 20) ORDER BY JobIdentify;
 	SELECT JobIdentify, MsgContentsType FROM tmp_MsgContentsType;
 END;
 //

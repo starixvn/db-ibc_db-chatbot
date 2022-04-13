@@ -11,10 +11,11 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_JobInfo_Upd`(
 		DB: DBCB-ChatBot
         Revisions:
 			- 20211010@Malcolm: Get information of Job [RedmineID: #162825]
+			- 20220414@Malcolm: Add Job [RedmineID: #170182]
 		Param:
 				- @JobInfo
 							[  
-								{ "JobIdentify":1, "MessageId":"12" }
+								{ "JobIdentify":1, "ReferenceId":"12" }
 							]
     */
 )
@@ -24,13 +25,13 @@ BEGIN
     CREATE TEMPORARY TABLE IF NOT EXISTS tmp_JobInfo
     (
 		JobIdentify TINYINT, 
-        MessageId   INT UNSIGNED
+        ReferenceId BIGINT UNSIGNED
     );
     
     SET errCode = 0, errMsg = '';
     
-    INSERT INTO tmp_JobInfo (JobIdentify, MessageId)
-    SELECT t.JobIdentify, t.MessageId
+    INSERT INTO tmp_JobInfo (JobIdentify, ReferenceId)
+    SELECT t.JobIdentify, t.ReferenceId
     FROM 
 		JSON_TABLE
         (
@@ -39,14 +40,14 @@ BEGIN
             COLUMNS
             (
 				JobIdentify TINYINT PATH "$.JobIdentify", 
-				MessageId INT UNSIGNED PATH "$.MessageId"
+				ReferenceId BIGINT UNSIGNED PATH "$.ReferenceId"
             )
         ) AS t;
         
     UPDATE SystemSetting AS s
 	INNER JOIN tmp_JobInfo AS j ON j.JobIdentify = s.JobIdentify
-		SET s.Value = j.MessageId
-    WHERE s.ID IN (3, 8, 13);
+		SET s.Value = j.ReferenceId
+    WHERE s.ID IN (3, 8, 13, 20);
 
     UPDATE SystemSetting AS s
 	INNER JOIN tmp_JobInfo AS j ON j.JobIdentify = s.JobIdentify

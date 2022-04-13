@@ -12,6 +12,7 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_SettingConfiguration_JobInfo_S
         Revisions:
             - 20200417@Merlin: Get job info - RedmineID: #132039
 			- 20210513@Malcolm: Integrate Telegram [RedmineID: #151807]
+			- 20220412@Malcolm: Get LogId [RedmineID: #170182]
     */
 )
 SQL SECURITY DEFINER
@@ -34,7 +35,7 @@ BEGIN
     SELECT ss.Value INTO maxMessageId
     FROM SystemSetting ss
     WHERE ss.JobIdentify = jobId
-        AND ss.Description LIKE '%Previous MaxMessageID%';
+        AND (ss.Description LIKE '%Previous MaxMessageID%' OR ss.Description LIKE '%LastLogId%'); 
 
     SELECT ss.Value INTO testingGroup
     FROM SystemSetting ss

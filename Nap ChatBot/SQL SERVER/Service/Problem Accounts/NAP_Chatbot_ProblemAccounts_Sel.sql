@@ -7,7 +7,7 @@ AS
 /*
 	Created: 20220404@Malcolm
 	DB: DBCUST-CustDB
-	Task: ChatBot - Problem Account - Get Problem Accounts (Only member Level)
+	Task: ChatBot - Problem Account - Get Problem Accounts 
 
 	Revisions:
 		- 20220404@Malcolm: Initialize SP [RedmineId: #170182]
@@ -38,13 +38,14 @@ BEGIN
 		AND NOT EXISTS (SELECT 1 FROM #CategoryConfig c WHERE c.CustomerClass = d.OldCustomerClass)
 		AND d.LogID > @LastLogId 
 		AND d.LogID <= @MaxLogId
+	ORDER BY d.LogID ASC
 
-	SELECT t.LogID, t.custid, c.username, ISNULL(d.site, '') AS [SiteName], t.CategoryID, t.CustomerClass, t.CreatedDate, CASE WHEN c.currency = 20 THEN 1 ELSE 0 END AS IsTest
+	SELECT t.LogID, t.custid, ISNULL(c.username2, '') AS username, ISNULL(d.site, '') AS [SiteName], t.CategoryID, t.CustomerClass, t.CreatedDate, CASE WHEN c.currency = 20 THEN 1 ELSE 0 END AS IsTest
 	FROM @Tmp t
 		LEFT JOIN dbo.Customer c WITH(NOLOCK) ON t.custid = c.custid
 		LEFT JOIN dbo.Dep_CustSuper d WITH(NOLOCK) ON d.custid = c.srecommend
 
-	SELECT c.CategoryID, c.CategoryName, c.CategoryNameCS
+	SELECT c.CategoryID
 	FROM dbo.CategoryConfig c WITH(NOLOCK)
 	WHERE EXISTS (SELECT 1 FROM @Tmp t WHERE t.CategoryID = c.CategoryID)
 
