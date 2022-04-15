@@ -1,10 +1,11 @@
 /*<info serverAlias="DBBOT-bodb_ChatBot" executers="bodbAdminNet" viewers="" selecters=""></info>*/
 
 ALTER PROCEDURE [dbo].[NAP_Chatbot_CustBotAccountListSel] 	
-	@MessengerName VARCHAR(100) = '',
+	@ChatID  		BIGINT = NULL,
 	@Username 		VARCHAR(50) = '',
 	@IsSubAccOnly 	BIT = 0,
 	@site 			VARCHAR(MAX) = '',
+	@IsSpecialSite	BIT = 0,
 	@LinkStatus 	TINYINT = 0,
 	@Level 			TINYINT = 0,
 	@Currency 		VARCHAR(MAX) = '',
@@ -33,23 +34,29 @@ BEGIN
 	
 	DECLARE @tblSite TABLE (site VARCHAR(50))
 	DECLARE @tblCurrency TABLE (currency INT)
-	DECLARE @RowCount INT, @RowStart INT, @RowEnd INT
+	DECLARE @RowStart INT, @RowEnd INT
 	SELECT  @PageIndex = @PageIndex - 1, @RowStart = @PageSize * @PageIndex + 1, @RowEnd = @RowStart + @PageSize - 1 
 
-	CREATE TABLE #Result (custid INT, SubAccID INT, username VARCHAR(50), SubAccount VARCHAR(50), BotID INT, MessengerName VARCHAR(100),
-				roleid TINYINT, LinkStatus VARCHAR(50),Language VARCHAR(10), currency INT, Status VARCHAR(20), rn INT PRIMARY KEY(custid,SubAccID))
+	CREATE TABLE #Result (custid INT, SubAccID INT, username VARCHAR(50), SubAccount VARCHAR(50), ChatID INT, BotID INT, roleid TINYINT, 
+				LinkStatus VARCHAR(50),Language VARCHAR(10), currency INT, Status VARCHAR(20), rn INT PRIMARY KEY(custid,SubAccID))
 	
 	INSERT INTO @tblSite(site)
-	SELECT val 
-	FROM bodb02.dbo.strSplit(@site,',')
+	SELECT value 
+	FROM STRING_SPLIT(@site,',')
+	
+	DELETE t
+	FROM @tblSite t
+	WHERE @IsSpecialSite = 0
+		AND EXISTS (SELECT 1 FROM bodb02.dbo.Site s
+					WHERE s.site = t.site
+						AND SpecialGroup = 1)
 	
 	INSERT INTO @tblCurrency(currency)
-	SELECT val 
-	FROM bodb02.dbo.strSplit(@currency,',')
-	
-	
-	INSERT INTO #Result(custid,SubAccID,username,SubAccount,BotID,MessengerName,roleid,LinkStatus,Language,currency,Status,rn)
-	SELECT ca.custid, ca.SubAccID, c.username, cs.username as SubAccount,cm.BotID,cm.MessengerName,c.roleid,
+	SELECT value 
+	FROM STRING_SPLIT(@currency,',')
+		
+	INSERT INTO #Result(custid,SubAccID,username,SubAccount,ChatID,BotID,roleid,LinkStatus,Language,currency,Status,rn)
+	SELECT ca.custid, ca.SubAccID, c.username, cs.username as SubAccount,cm.ChatID,cm.BotID,c.roleid,
 		CASE WHEN cm.Status = 1 AND cm.IsVerifyOTP = 1 THEN 'Linked'
 			WHEN cm.Status = 1 AND cm.IsVerifyOTP = 0 THEN 'Verifying' END as LinkStatus,
 		ca.Language,
@@ -67,8 +74,7 @@ BEGIN
 		LEFT JOIN bodb02.dbo.CustProductStatus cps WITH(NOLOCK) ON c.custid = cps.custid
 	WHERE 1 = CASE WHEN @username <> '' AND (c.username LIKE '%'+@username+'%' OR cs.username LIKE '%'+@username+'%') THEN 1 
 					WHEN @username = '' THEN 1 ELSE 0 END
-		AND 1 = CASE WHEN @MessengerName <> '' AND cm.MessengerName LIKE '%'+@MessengerName+ '%' THEN 1
-					WHEN @MessengerName = '' THEN 1 ELSE 0 END
+		AND cm.Chatid = ISNULL(@ChatID,cm.ChatID)				
 		AND 1 = CASE WHEN @LinkStatus = 0 AND cm.Status = 1 THEN 1	
 					WHEN @LinkStatus = 1 AND cm.Status = 1 AND cm.IsVerifyOTP = 1 THEN 1
 					WHEN @LinkStatus = 2 AND cm.Status = 1 AND cm.IsVerifyOTP = 0 THEN 1
@@ -91,7 +97,7 @@ BEGIN
 					
 		SELECT @TotalRows = @@ROWCOUNT 
 
-		SELECT b.BotID, b.Name as BotName, MessengerName, custid, SubAccID, username, SubAccount, 
+		SELECT b.BotID, b.Name as BotName, custid, SubAccID, username, SubAccount, ChatID,
 				roleid, LinkStatus,Language, e.currency, rs.Status
 		FROM #Result rs
 			INNER JOIN Bot b WITH(NOLOCK) ON rs.BotID = b.BotID

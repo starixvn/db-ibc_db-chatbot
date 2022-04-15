@@ -26,8 +26,7 @@ BEGIN
 			@startRun DATETIME, 
 			@duration INT
 	
-	DECLARE @Old_Language VARCHAR(10),
-			@MessengerName VARCHAR(100),
+	DECLARE @Old_Language VARCHAR(10),			
 			@ChatID INT,
 			@old_Status BIT,
 			@old_IsVerifyOTP BIT,
@@ -50,8 +49,7 @@ BEGIN
 	END
 	
 	SELECT @Old_Status = Status,
-		@Old_IsVerifyOTP = IsVerifyOTP,
-		@MessengerName = MessengerName,
+		@Old_IsVerifyOTP = IsVerifyOTP,		
 		@ChatID = ChatID
 	FROM CustBotMessenger WITH(NOLOCK)
 	WHERE UserID = @UserID
@@ -60,7 +58,7 @@ BEGIN
 	SELECT @BotName = Name, 
 		@IsTest = IsTest
 	FROM Bot WITH(NOLOCK) WHERE BotID = @BotID
-
+		
 	UPDATE CustBotAccount WITH(ROWLOCK)
 	SET Language = @Language
 	WHERE userid = @userid
@@ -88,8 +86,7 @@ BEGIN
 	DECLARE @LogDataNew VARCHAR(MAX),
 			@LogDataOld VARCHAR(MAX)
 	
-	SELECT  @LogDataOld = '<R'
-						+ ' MessengerName="' + COALESCE(@MessengerName, SPACE(1)) + '"'
+	SELECT  @LogDataOld = '<R'						
 						+ ' BotName="' + COALESCE(@BotName, SPACE(1)) + '"'
 						+ ' ChatID="' + COALESCE(CAST(@ChatID as VARCHAR(10)), SPACE(1)) + '"'
 						+ ' Status="' + COALESCE(CAST(@Old_Status as VARCHAR(10)), SPACE(1)) + '"'
@@ -98,8 +95,7 @@ BEGIN
 						+ ' IP="' + COALESCE(@IP, SPACE(1)) + '"'
 						+ ' />'
 						
-	SELECT  @LogDataNew = '<R'
-						+ ' MessengerName="' + COALESCE(@MessengerName, SPACE(1)) + '"'
+	SELECT  @LogDataNew = '<R'						
 						+ ' BotName="' + COALESCE(@BotName, SPACE(1)) + '"'
 						+ ' ChatID="' + COALESCE(CAST(@ChatID as VARCHAR(10)), SPACE(1)) + '"'						
 						+ ' Status="' + COALESCE(CAST(@Status as VARCHAR(10)), SPACE(1)) + '"'

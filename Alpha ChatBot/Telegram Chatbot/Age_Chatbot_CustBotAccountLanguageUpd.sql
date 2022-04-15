@@ -1,11 +1,10 @@
 /*<info serverAlias="DBBOT-bodb_ChatBot" executers="bodbDownlineNet" viewers="" selecters=""></info>*/
 ALTER PROCEDURE [dbo].[Age_Chatbot_CustBotAccountLanguageUpd] 		
-	@CustID INT,
-	@SubAccID INT = 0,	
-	@Language VARCHAR(10) = '',	
-	@IP	VARCHAR(30)= '',
-	@ErrCode INT = 0 OUTPUT,
-	@ErrMsg  VARCHAR(1000) = '' OUTPUT
+	@UserID 	INT,
+	@Language 	VARCHAR(10) = '',	
+	@IP			VARCHAR(30)= '',
+	@ErrCode 	INT = 0 OUTPUT,
+	@ErrMsg  	VARCHAR(1000) = '' OUTPUT
 AS
 /*
 	Created: 20220323@Johnson
@@ -19,21 +18,23 @@ BEGIN
 	SET NOCOUNT ON;
 	
 	DECLARE @startRun DATETIME, 
-			@duration INT			
+			@duration INT,
+			@CustID INT,
+			@SubAccID INT = 0				
 	
 	SELECT @startRun = GETDATE()
 		
 	DECLARE @Old_Language VARCHAR(10) 
 	
-	SELECT @Old_Language = Language 
+	SELECT @Old_Language = Language,
+		@Custid = CustID,
+		@SubAccID = SubAccID
 	FROM CustBotAccount WITH(NOLOCK)	
-	WHERE custid = @CustID
-		AND SubAccID = ISNULL(@SubAccID,0)
+	WHERE userid = @userid
 		
 	UPDATE CustBotAccount WITH(ROWLOCK)
 	SET Language = @Language
-	WHERE custid = @CustID
-		AND SubAccID = ISNULL(@SubAccID,0)
+	WHERE userid = @userid
 		
 	SELECT @Duration = DATEDIFF (MILLISECOND, @startRun, GETDATE())
 	

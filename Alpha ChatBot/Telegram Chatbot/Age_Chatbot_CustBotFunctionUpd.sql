@@ -1,7 +1,6 @@
 /*<info serverAlias="DBBOT-bodb_ChatBot" executers="bodbAdminNet,bodbDownlineNet" viewers="" selecters=""></info>*/
 ALTER PROCEDURE [dbo].[Age_Chatbot_CustBotFunctionUpd] 
-	@CustID INT,
-	@SubAccID INT = 0,	
+	@UserID INT,	
 	@Setting VARCHAR(MAX)= '',
 	@Creator INT,
 	@IP	VARCHAR(30)= '',
@@ -27,7 +26,8 @@ AS
 BEGIN
 	SET NOCOUNT ON;
 	
-	DECLARE @userid INT,
+	DECLARE @custid INT,
+			@SubAccID INT = 0,	
 			@startRun DATETIME, 
 			@duration INT,
 			@xml XML
@@ -42,12 +42,12 @@ BEGIN
 		t.c.value('@stt[1]','bit')
 	FROM @xml.nodes('Root/r') t(c)
 	
-	SELECT @userid = userid
+	SELECT @custid = custid,
+		@SubAccID = SubAccID
 	FROM CustBotAccount WITH(NOLOCK)
-	WHERE custid = @custid
-		AND SubAccID = @SubAccID
+	WHERE userid = @userid
 	
-	IF @UserID IS NULL
+	IF @custid IS NULL
 	BEGIN
 		SELECT @ErrCode = 101,
 			@ErrMsg = 'Invalid account'
@@ -62,6 +62,9 @@ BEGIN
 	
 	DELETE @tblSetting 
 	WHERE status = Old_Status
+	
+	IF NOT EXISTS (SELECT 1 FROM @tblSetting)
+		RETURN
 	
 	UPDATE c
 	SET c.status = t.status

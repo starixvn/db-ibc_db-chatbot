@@ -18,7 +18,7 @@ AS
 BEGIN
 	SET NOCOUNT ON
 	
-	SELECT ca.custid, ca.SubAccID, cm.MessengerName, c.username, cs.username as SubAccount,
+	SELECT ca.custid, ca.SubAccID, c.username, cs.username as SubAccount, cm.ChatID,
 		b.Name as BotName, ca.Language, cm.Status, cm.IsVerifyOTP
 	FROM CustBotAccount ca WITH(NOLOCK) 
 		INNER JOIN CustBotMessenger cm WITH(NOLOCK) ON ca.userid = cm.userid

@@ -22,7 +22,8 @@ BEGIN
 	
 	DECLARE @userid INT,
 			@startRun DATETIME, 
-			@duration INT
+			@duration INT,
+			@ChatID INT
 	DECLARE @BotName VARCHAR(200),
 			@IsTest BIT
 	
@@ -39,6 +40,22 @@ BEGIN
 			@ErrMsg = 'Invalid account'
 		RETURN;	
 	END
+	
+	SELECT @ChatID = ChatID
+	FROM CustBotMessenger WITH(NOLOCK)
+	WHERE userid = @userid
+		AND BotID = @BotID
+		
+	IF @Status = 1 AND @IsVerifyOTP = 1
+		AND EXISTS (SELECT 1 FROM CustBotMessenger WITH(NOLOCK)
+					WHERE ChatID = @ChatID
+						AND Status = 1
+						AND IsVerifyOTP = 1)
+	BEGIN
+		SELECT @ErrCode = 102,
+			@ErrMsg = 'Your Telegram ID''s already linked to this chatbot using other Account. If this isn''t your Account, please contact us for support.'
+		RETURN;	
+	END	
 	
 	SELECT @BotName = Name, 
 		@IsTest = IsTest
@@ -72,7 +89,8 @@ BEGIN
 							ELSE 95066 END --Unlink Telegram ID
 						
 	SELECT  @LogDataNew = '<R'
-						+ ' BotName="' + COALESCE(@BotName, SPACE(1)) + '"'
+						+ ' ChatID="' + COALESCE(CAST(@ChatID as VARCHAR(10)), SPACE(1)) + '"'
+						+ ' BotName="' + COALESCE(@BotName, SPACE(1)) + '"'						
 						+ ' Status="' + COALESCE(CAST(@Status as VARCHAR(10)), SPACE(1)) + '"'
 						+ ' IsVerifyOTP="' + COALESCE(CAST(@IsVerifyOTP as VARCHAR(10)), SPACE(1)) + '"'
 						+ ' SubAccName="' + COALESCE(dbo.f_GetSubUsername(@SubAccID), SPACE(1)) + '"'					

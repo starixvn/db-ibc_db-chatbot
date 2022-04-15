@@ -18,16 +18,23 @@ AS
 BEGIN
 	SET NOCOUNT ON;
 	
-	DECLARE @userid INT 
+	DECLARE @userid INT,
+		@Language VARCHAR(10)
 	
-	SELECT @userid = userid
+	SELECT @userid = userid,
+		@Language = Language
 	FROM CustBotAccount WITH(NOLOCK)
 	WHERE custid = @custid
 		AND SubAccID = @SubAccID
 	
-	SELECT b.BotID, b.Name as BotName, MessengerName, c.ChatID, c.Status, IsVerifyOTP
+	SELECT userid, b.BotID, b.Name as BotName, c.ChatID, c.Status, IsVerifyOTP,@Language as Language
 	FROM CustBotMessenger c WITH(NOLOCK) 
 		INNER JOIN Bot b WITH(NOLOCK) ON c.BotID = b.BotID
 	WHERE userid = @userid
 		AND b.IsTest = @IsTest
+		
+	SELECT f.FunctionID, f.FunctionName, f.Type, cf.Status
+	FROM CustBotFunction cf WITH(NOLOCK) 
+		INNER JOIN BotFunction f WITH(NOLOCK) ON cf.FunctionID = f.FunctionID
+	WHERE cf.userid = @userid
 END	

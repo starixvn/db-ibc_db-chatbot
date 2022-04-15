@@ -4,8 +4,7 @@ ALTER PROCEDURE [dbo].[Age_Chatbot_CustBotAccountIns]
 	@SubAccID INT = 0,
 	@ChatID INT,
 	@BotID INT,
-	@Language VARCHAR(10) = '',
-	@MessengerName VARCHAR(100),	
+	@Language VARCHAR(10) = '',		
 	@IP	VARCHAR(30)= '',
 	@ErrCode INT = 0 OUTPUT,
 	@ErrMsg  VARCHAR(1000) = '' OUTPUT
@@ -83,7 +82,18 @@ BEGIN
 			@ErrMsg = 'This account already had a linked Telegram Account, please unlink that Telegram Account first then try again.'
 		RETURN;	
 	END	
-		
+	
+	IF EXISTS (SELECT 1 FROM CustBotMessenger WITH(NOLOCK) 
+				WHERE ChatID = @ChatID
+					AND Status = 1
+					AND IsVerifyOTP = 1
+			)
+	BEGIN
+		SELECT @ErrCode = 104,
+			@ErrMsg = 'Your Telegram ID''s already linked to this chatbot using other Account. If this isn''t your Account, please contact us for support.'
+		RETURN;	
+	END
+	
 	MERGE CustBotFunction as Target
 	USING (SELECT @userid as userid, FunctionID FROM BotFunction WITH(NOLOCK) 
 			WHERE Status <= @IsTest
@@ -95,23 +105,21 @@ BEGIN
 	WHEN NOT MATCHED THEN INSERT(UserID,FunctionID,Status) VALUES(Source.UserID,Source.FunctionID,1);
 		
 	MERGE CustBotMessenger as Target
-	USING (SELECT @userid as userid,@BotID as BotID,@ChatID as ChatID,@MessengerName as MessengerName) as Source
+	USING (SELECT @userid as userid,@BotID as BotID,@ChatID as ChatID) as Source
 	ON Target.userid = Source.userid AND Target.BotID = Source.BotID
 	WHEN Matched THEN 
-		UPDATE SET Target.ChatID = Source.ChatID, 
-			Target.MessengerName = Source.MessengerName,
+		UPDATE SET Target.ChatID = Source.ChatID, 			
 			Target.Status = 1,
 			Target.IsVerifyOTP = 0
 	WHEN NOT MATCHED THEN
-		INSERT ([UserId],[BotId],[ChatId],[MessengerName],[Status],[IsVerifyOTP]) VALUES(@userid,@BotID,@ChatID,@MessengerName,1,0);
+		INSERT ([UserId],[BotId],[ChatId],[Status],[IsVerifyOTP]) VALUES(@userid,@BotID,@ChatID,1,0);
 
 	SELECT @Duration = DATEDIFF (MILLISECOND, @startRun, GETDATE())
 	
 	-- Write log
 	DECLARE @LogDataNew VARCHAR(MAX)
 	
-	SELECT  @LogDataNew = '<R'
-						+ ' MessengerName="' + COALESCE(@MessengerName, SPACE(1)) + '"'
+	SELECT  @LogDataNew = '<R'						
 						+ ' BotName="' + COALESCE(@BotName, SPACE(1)) + '"'
 						+ ' ChatID="' + COALESCE(CAST(@ChatID as VARCHAR(10)), SPACE(1)) + '"'						
 						+ ' Language="' + COALESCE(@Language, SPACE(1)) + '"'

@@ -1,6 +1,7 @@
 /*<info serverAlias="DBBOT-bodb_ChatBot" executers="bodbDownlineNet" viewers="" selecters=""></info>*/
 
 ALTER PROCEDURE [dbo].[Age_Chatbot_BotSelAll] 	
+	@IsTest BIT = 0
 AS
 /*
 	Created: 20220323@Johnson
@@ -15,4 +16,6 @@ BEGIN
 
 	SELECT *
 	FROM Bot WITH(NOLOCK)
+	WHERE IsTest = @IsTest
+		AND Status = 1--enabled
 END
