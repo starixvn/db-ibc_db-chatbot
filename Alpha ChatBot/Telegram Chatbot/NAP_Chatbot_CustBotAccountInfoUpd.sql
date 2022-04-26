@@ -1,7 +1,6 @@
 /*<info serverAlias="DBBOT-bodb_ChatBot" executers="bodbAdminNet" viewers="" selecters=""></info>*/
 ALTER PROCEDURE [dbo].[NAP_Chatbot_CustBotAccountInfoUpd] 
-	@CustID INT,
-	@SubAccID INT = 0,	
+	@userid INT,
 	@BotID INT,
 	@Status BIT = 1,
 	@IsVerifyOTP BIT = 1,	
@@ -22,7 +21,8 @@ AS
 BEGIN
 	SET NOCOUNT ON;
 	
-	DECLARE @userid INT,
+	DECLARE @CustID INT,
+			@SubAccID INT = 0,	
 			@startRun DATETIME, 
 			@duration INT
 	
@@ -35,11 +35,11 @@ BEGIN
 	
 	SELECT @startRun = GETDATE()	
 	
-	SELECT @userid = userid,
+	SELECT @custid = CustID,
+		@subAccID = SubAccID,
 		@Old_Language = Language
 	FROM CustBotAccount WITH(NOLOCK)
-	WHERE custid = @CustID
-		AND subAccID = @SubAccID
+	WHERE userid = @userid
 	
 	IF @UserID IS NULL
 	BEGIN
@@ -63,22 +63,25 @@ BEGIN
 	SET Language = @Language
 	WHERE userid = @userid
 	
-	UPDATE CustBotMessenger WITH(ROWLOCK)
-	SET Status = @Status,
-		IsVerifyOTP = @IsVerifyOTP
-	WHERE UserID = @UserID
-		AND BotID = @BotID
-		
-	MERGE CustBotFunction as Target
-	USING (SELECT @userid as userid, FunctionID FROM BotFunction WITH(NOLOCK) 
-			WHERE Status <= @IsTest
-			AND type = 2 --Notification settings
-		) as Source
-	ON Target.userid = Source.userid AND Target.FunctionID = Source.FunctionID
-	WHEN Matched AND @Status = 0 THEN DELETE
-	WHEN Matched AND @Status = 1 THEN
-		UPDATE SET Status = 1
-	WHEN NOT MATCHED AND @status = 1 THEN INSERT(UserID,FunctionID,Status) VALUES(Source.UserID,Source.FunctionID,1);
+	IF @Status <> @old_Status AND @IsVerifyOTP <> @Old_IsVerifyOTP
+	BEGIN
+		UPDATE CustBotMessenger WITH(ROWLOCK)
+		SET Status = @Status,
+			IsVerifyOTP = @IsVerifyOTP
+		WHERE UserID = @UserID
+			AND BotID = @BotID
+			
+		MERGE CustBotFunction as Target
+		USING (SELECT @userid as userid, FunctionID FROM BotFunction WITH(NOLOCK) 
+				WHERE Status <= @IsTest
+				AND type = 2 --Notification settings
+			) as Source
+		ON Target.userid = Source.userid AND Target.FunctionID = Source.FunctionID
+		WHEN Matched AND @Status = 0 THEN DELETE
+		WHEN Matched AND @Status = 1 THEN
+			UPDATE SET Status = 1
+		WHEN NOT MATCHED AND @status = 1 THEN INSERT(UserID,FunctionID,Status) VALUES(Source.UserID,Source.FunctionID,1);
+	END
 	
 	SELECT @Duration = DATEDIFF (MILLISECOND, @startRun, GETDATE())
 	

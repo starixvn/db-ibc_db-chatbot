@@ -6,6 +6,7 @@ ALTER PROCEDURE [dbo].[Age_Chatbot_CustBotAccountIns]
 	@BotID INT,
 	@Language VARCHAR(10) = '',		
 	@IP	VARCHAR(30)= '',
+	@userid INT = 0 OUTPUT,
 	@ErrCode INT = 0 OUTPUT,
 	@ErrMsg  VARCHAR(1000) = '' OUTPUT
 AS
@@ -20,8 +21,7 @@ AS
 BEGIN
 	SET NOCOUNT ON;
 	
-	DECLARE @roleid TINYINT,
-			@userid INT,
+	DECLARE @roleid TINYINT,			
 			@startRun DATETIME, 
 			@duration INT			
 	
@@ -60,7 +60,7 @@ BEGIN
 	FROM CustBotAccount WITH(NOLOCK) 
 	WHERE custid = @custid AND SubAccID = @SubAccID
 		
-	IF @userid IS NULL
+	IF ISNULL(@userid,0) = 0
 	BEGIN
 		INSERT INTO [dbo].[CustBotAccount]
 				   ([CustId]
@@ -101,8 +101,8 @@ BEGIN
 		) as Source
 	ON Target.userid = Source.userid AND Target.FunctionID = Source.FunctionID
 	WHEN Matched THEN 
-		UPDATE SET Status = 1
-	WHEN NOT MATCHED THEN INSERT(UserID,FunctionID,Status) VALUES(Source.UserID,Source.FunctionID,1);
+		UPDATE SET Status = 0
+	WHEN NOT MATCHED THEN INSERT(UserID,FunctionID,Status) VALUES(Source.UserID,Source.FunctionID,0);
 		
 	MERGE CustBotMessenger as Target
 	USING (SELECT @userid as userid,@BotID as BotID,@ChatID as ChatID) as Source

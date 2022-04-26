@@ -2,7 +2,7 @@
 ALTER PROCEDURE [dbo].[Age_Chatbot_CustBotMessageIns] 	
 	@Sender INT,
 	@Receiver INT,	
-	@ChatID INT,
+	@ChatID BIGINT,
 	@BotID INT,
 	@FunctionID SMALLINT,
 	@Message NVARCHAR(4000),

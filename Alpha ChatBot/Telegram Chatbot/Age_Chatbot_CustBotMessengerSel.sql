@@ -2,7 +2,9 @@
 ALTER PROCEDURE [dbo].[Age_Chatbot_CustBotMessengerSel] 	
 	@CustID INT,
 	@SubAccID INT = 0,
-	@IsTest BIT = 0
+	@IsTest BIT = 0,
+	@Status BIT = 1,
+	@IsVerifyOTP BIT = 1
 AS
 /*
 	Created: 20220323@Johnson
@@ -32,9 +34,13 @@ BEGIN
 		INNER JOIN Bot b WITH(NOLOCK) ON c.BotID = b.BotID
 	WHERE userid = @userid
 		AND b.IsTest = @IsTest
+		AND c.Status = @Status
+		AND c.IsVerifyOTP = @IsVerifyOTP
 		
 	SELECT f.FunctionID, f.FunctionName, f.Type, cf.Status
 	FROM CustBotFunction cf WITH(NOLOCK) 
 		INNER JOIN BotFunction f WITH(NOLOCK) ON cf.FunctionID = f.FunctionID
 	WHERE cf.userid = @userid
+		AND f.Status <= @IsTest		
+	ORDER BY f.[Order] 
 END	

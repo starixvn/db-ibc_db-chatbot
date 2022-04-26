@@ -15,7 +15,7 @@ AS
 BEGIN
 	SET NOCOUNT ON;
 
-	SELECT ca.UserID, ca.custid, ca.SubAccID
+	SELECT ca.UserID, ca.custid, ca.SubAccID, ca.CustomerLevel, ca.Language
 	FROM CustBotMessenger cm WITH(NOLOCK)
 		INNER JOIN CustBotAccount ca WITH(NOLOCK) ON cm.userid = ca.userid
 	WHERE BotID = @BotID
