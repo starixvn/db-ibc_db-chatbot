@@ -43,7 +43,7 @@ BEGIN
 	SELECT @FromLogId AS FromLogId, CASE WHEN ISNULL(@MaxLogId, 0) = 0 THEN @FromLogId ELSE @MaxLogId END AS ToLogId
 
 	SELECT t.LogID,  DATEADD(HOUR, 12, t.CreatedDate) AS CreatedDate
-		, '<p>Problem Player: ' + ISNULL(c.Username2, '') 
+		, '<p>Problem Player: ' + ISNULL(c.Username, '') 
 		+ '<br>' + 'Old Customer Class: ' + CASE WHEN t.OldCustomerClass IS NULL THEN 'NULL' ELSE CONVERT(VARCHAR(20), t.OldCustomerClass) END
 		+ '<br>' + 'New Customer Class: ' + CASE WHEN t.CustomerClass IS NULL THEN 'NULL' ELSE CONVERT(VARCHAR(20), t.CustomerClass) END
 		+ '<br>' + 'Reason:' + ISNULL(cg.CategoryName, '')  + '</p>'AS Content_en

@@ -40,7 +40,7 @@ BEGIN
 		AND d.LogID <= @MaxLogId
 	ORDER BY d.LogID ASC
 
-	SELECT t.LogID, t.custid, ISNULL(c.username2, '') AS username, ISNULL(d.site, '') AS [SiteName], t.CategoryID, t.CustomerClass, t.CreatedDate, CASE WHEN c.currency = 20 THEN 1 ELSE 0 END AS IsTest
+	SELECT t.LogID, t.custid, c.username, ISNULL(d.site, '') AS [SiteName], t.CategoryID, t.CustomerClass, t.CreatedDate, CASE WHEN c.currency = 20 THEN 1 ELSE 0 END AS IsTest
 	FROM @Tmp t
 		LEFT JOIN dbo.Customer c WITH(NOLOCK) ON t.custid = c.custid
 		LEFT JOIN dbo.Dep_CustSuper d WITH(NOLOCK) ON d.custid = c.srecommend

@@ -337,7 +337,7 @@ NCB_ProblemAccount_Import:BEGIN
 			,StatusID
 			,Status
 			,ChannelId
-			,FLOOR((DENSE_RANK() OVER(PARTITION BY CustomerClass, CategoryId, ConversationGroupID, StatusID ORDER BY CustId ASC, LogId ASC))/pNumberOfCustomer) AS NoOfBatch
+			,FLOOR((DENSE_RANK() OVER(PARTITION BY CustomerClass, CategoryId, ConversationGroupID, StatusID ORDER BY Username ASC, LogId ASC) - 1)/pNumberOfCustomer) AS NoOfBatch
 		FROM tmp_NotificationRecipientList
 	),CTE_Group AS
 	(

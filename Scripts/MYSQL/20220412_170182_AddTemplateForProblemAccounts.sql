@@ -39,7 +39,7 @@ VALUES (@NotificationTemplateID + 1, 'Problem Player Announcement Template', @No
 **[问题玩家通知]**   
 
 Problem Player [问题玩家]: {Problem Player}
-Marked Date [被标记日期](GMT -4) : {Marked Date}
+Marked Date [被标记日期]: {Marked Date} (GMT-4)
 Customer Class [玩家分级]: {Problem Player Class}
 Reason [原因]: {Reason} 
 
