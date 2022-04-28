@@ -182,7 +182,7 @@ NCB_ProblemAccount_Import:BEGIN
 		WHERE TemplateContent NOT LIKE '%{Problem Player}%'
 			OR TemplateContent NOT LIKE '%{Marked Date}%'
 			OR TemplateContent NOT LIKE '%{Problem Player Class}%'
-			OR TemplateContent NOT LIKE '%{Reason}%') 
+			OR TemplateContent NOT LIKE '%{Reason EN CN}%') 
 	THEN
 		SET errCode = 1802;
 
@@ -192,7 +192,7 @@ NCB_ProblemAccount_Import:BEGIN
 		WHERE TemplateContent NOT LIKE '%{Problem Player}%'
 			OR TemplateContent NOT LIKE '%{Marked Date}%'
 			OR TemplateContent NOT LIKE '%{Problem Player Class}%'
-			OR TemplateContent NOT LIKE '%{Reason}%';
+			OR TemplateContent NOT LIKE '%{Reason EN CN}%';
 
 		SET errMsg = CONCAT('Notification template is not existing (IDs): ', errMsg);
 
@@ -430,7 +430,7 @@ NCB_ProblemAccount_Import:BEGIN
 						REPLACE(ct.TemplateContent, '{Problem Player}', h.UsernameList)
 						, '{Marked Date}', h.MarkedDate)
 					, '{Problem Player Class}', h.CustomerClass)
-				, '{Reason}',h.Reason) AS Content
+				, '{Reason EN CN}',h.Reason) AS Content
 			,startTime, 0 SendImmediately, STARIXIT_CUSTID, pCreatedDate, h.Status, h.StatusID, h.ChannelID
 	    FROM tmp_Notification h
 	  	INNER JOIN tmp_MsgContentTypeTemplate ct ON ct.MsgContentsType = pMsgContentsType
