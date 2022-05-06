@@ -126,6 +126,9 @@ NCB_ProblemAccount_Import:BEGIN
 	WHERE ID = 21;
     
     SELECT MAX(LogId) INTO pLastLogId FROM tmp_Message;
+	
+	/*Delete testing members of real licensee*/	
+	DELETE t FROM tmp_Message t WHERE t.IsTest = 1 AND SiteName NOT IN ('spondemo', 'Athena000');
 
 	DROP TEMPORARY TABLE IF EXISTS tmp_MsgContentTypeTemplate;
 	CREATE TEMPORARY TABLE IF NOT EXISTS tmp_MsgContentTypeTemplate
@@ -276,8 +279,8 @@ NCB_ProblemAccount_Import:BEGIN
 		,h.RecipientID
 		,gr.ConversationGroupID
 		,ngt.ChatGroupTypeID
-		,CASE WHEN tpl.IsTest = 1 OR h.IsTest = 1 THEN DRAFT_NOTIFICATION_STATUSID ELSE PLANNED_NOTIFICATION_STATUSID END AS StatusID
-		,CASE WHEN tpl.IsTest = 1 OR h.IsTest = 1 THEN DRAFT_NOTIFICATION_STATUS   ELSE PLANNED_NOTIFICATION_STATUS   END AS Status
+		,CASE WHEN tpl.IsTest = 1 THEN DRAFT_NOTIFICATION_STATUSID ELSE PLANNED_NOTIFICATION_STATUSID END AS StatusID
+		,CASE WHEN tpl.IsTest = 1 THEN DRAFT_NOTIFICATION_STATUS   ELSE PLANNED_NOTIFICATION_STATUS   END AS Status
 		,g.ChannelID
 	FROM tmp_Message h
         INNER JOIN tmp_MsgContentTypeTemplate tpl ON tpl.MsgContentsType = pMsgContentsType
