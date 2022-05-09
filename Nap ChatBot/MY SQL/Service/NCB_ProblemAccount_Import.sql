@@ -3,10 +3,11 @@ DROP PROCEDURE IF EXISTS NCB_ProblemAccount_Import;
 DELIMITER //
 
 CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_ProblemAccount_Import(
-  IN Message 		JSON,
-  IN CategoryInfo 	JSON,
-  OUT errCode 		INT,
-  OUT errMsg 		VARCHAR(200)
+  IN Message 			JSON,
+  IN CategoryInfo 		JSON,
+  IN CustomerClassInfo 	JSON,
+  OUT errCode 			INT,
+  OUT errMsg 			VARCHAR(200)
 
   /*
     Creator   : 20220404@Malcolm
@@ -15,6 +16,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_ProblemAccount_Import(
     Params    :
       - @Message : [{"LogId":1, "CustId":1, "Username":"Supertest1", "SiteName":"12BET","CategoryId":"2", "CustomerClass":"2", "CreatedDate":"2022-04-04 00:00:00", "IsTest":"0"}]
       - @CategoryInfo : [{"CategoryId":"1", "CategoryNameEN":"Group Betting", "CategoryNameCS":"群组投注"}]
+	  - @CustomerClassInfo : [{"CustomerClass":"1", "CustomerClassNameEN":"Group Betting", "CustomerClassNameCS":"群组投注"}]
     Revisions :
       - 20220404@Malcolm: Initiliaze SP [RedmineID: #170182]
 
@@ -117,6 +119,30 @@ NCB_ProblemAccount_Import:BEGIN
 				CategoryId 		SMALLINT 		PATH "$.CategoryId"
 				,CategoryNameEN VARCHAR(100) 	PATH "$.CategoryNameEN"
 				,CategoryNameCS VARCHAR(100)	PATH "$.CategoryNameCS"
+			)
+		) AS t;
+		
+	DROP TEMPORARY TABLE IF EXISTS tmp_CustomerClassInfo;
+	CREATE TEMPORARY TABLE IF NOT EXISTS tmp_CustomerClassInfo
+	(
+		CustomerClass 		SMALLINT UNSIGNED
+		,CustomerClassNameEN VARCHAR(100)
+		,CustomerClassNameCS VARCHAR(100) CHARACTER SET utf8mb4
+		,UNIQUE INDEX Index_CustomerClass(CustomerClass)
+	);
+	
+	INSERT INTO tmp_CustomerClassInfo (CustomerClass, CustomerClassNameEN, CustomerClassNameCS)   
+	SELECT t.CustomerClass, t.CustomerClassNameEN, t.CustomerClassNameCS
+	FROM 
+		JSON_TABLE
+		(
+			CustomerClassInfo,
+			"$[*]"
+			COLUMNS
+			(
+				CustomerClass 		SMALLINT 		PATH "$.CustomerClass"
+				,CustomerClassNameEN VARCHAR(100) 	PATH "$.CustomerClassNameEN"
+				,CustomerClassNameCS VARCHAR(100)	PATH "$.CustomerClassNameCS"
 			)
 		) AS t;
 	
@@ -383,7 +409,7 @@ NCB_ProblemAccount_Import:BEGIN
 		,ChannelId 			TINYINT UNSIGNED
 		,UsernameList 		VARCHAR(4000)
 		,MarkedDate 		VARCHAR(200)
-		,CustomerClass 		SMALLINT
+		,CustomerClass 		VARCHAR(2000)
 		,Reason 			VARCHAR(2000) 
 		,StatusID 			TINYINT UNSIGNED
 		,Status 			VARCHAR(20)
@@ -411,12 +437,13 @@ NCB_ProblemAccount_Import:BEGIN
 		,ChannelId
 		,UsernameList
 		,CASE WHEN MinMarkedDate = MaxMarkedDate THEN CONVERT(DATE_FORMAT(MinMarkedDate,'%m/%d/%Y %h:%i:%s'), CHAR(20)) ELSE CONCAT(CONVERT(DATE_FORMAT(MinMarkedDate,'%m/%d/%Y %h:%i:%s'), CHAR(20)), ' - ', CONVERT(DATE_FORMAT(MaxMarkedDate,'%m/%d/%Y %h:%i:%s'), CHAR(20))) END AS MarkedDate
-		,CustomerClass
+		,CONCAT(e.CustomerClass, ' ', i.CustomerClassNameEN, ' [', i.CustomerClassNameCS, ']') AS CustomerClass
 		,CONCAT(c.CategoryNameEN ,' [', c.CategoryNameCS,']') AS Reason
 		,StatusID
 		,Status
 	FROM CTE e
-		INNER JOIN tmp_CategoryInfo c ON e.CategoryId = c.CategoryId;
+		INNER JOIN tmp_CategoryInfo c ON e.CategoryId = c.CategoryId
+		INNER JOIN tmp_CustomerClassInfo i ON i.CustomerClass = e.CustomerClass;
   
 	/*Step 7: Insert Notification and NotificationReference*/
 	SET pCreatedDate = UTC_TIMESTAMP();

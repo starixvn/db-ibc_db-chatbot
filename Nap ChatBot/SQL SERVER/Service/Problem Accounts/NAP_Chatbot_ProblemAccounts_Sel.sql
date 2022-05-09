@@ -49,5 +49,7 @@ BEGIN
 	FROM dbo.CategoryConfig c WITH(NOLOCK)
 	WHERE EXISTS (SELECT 1 FROM @Tmp t WHERE t.CategoryID = c.CategoryID)
 
+	SELECT DISTINCT CustomerClass FROM @Tmp t
+
 	DROP TABLE #CategoryConfig
 END
