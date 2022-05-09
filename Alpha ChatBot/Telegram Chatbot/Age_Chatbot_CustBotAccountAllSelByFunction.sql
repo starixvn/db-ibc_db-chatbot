@@ -1,7 +1,8 @@
 /*<info serverAlias="DBBOT-bodb_ChatBot" executers="bodbDownlineNet" viewers="" selecters=""></info>*/
 ALTER PROCEDURE [dbo].[Age_Chatbot_CustBotAccountAllSelByFunction] 	
 	@BotID INT,
-	@FunctionID INT
+	@FunctionID INT,
+	@CustIdList VARCHAR(MAX)
 AS
 /*
 	Created: 20220428@Johnson
