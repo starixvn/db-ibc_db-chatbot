@@ -50,7 +50,7 @@ NCB_NotificationTemplate_Del:BEGIN
     CREATE TEMPORARY TABLE IF NOT EXISTS tmpParseJsonTable(NotificationTypeID INT, NotificationTemplateID INT);
     
 	SET pID = 1;
-	WHILE (EXISTS(SELECT 1 FROM tmpParseJsonTable WHERE ID = pID)) DO 
+	WHILE (EXISTS(SELECT 1 FROM tmpNotificationTypeTable WHERE ID = pID)) DO 
 		SELECT JsonSetting INTO jsonValue FROM tmpNotificationTypeTable WHERE ID = pID;
 		INSERT INTO tmpParseJsonTable (NotificationTypeID, NotificationTemplateID)
 		SELECT t.NotificationTypeID, t.NotificationTemplateID

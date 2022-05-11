@@ -8,7 +8,7 @@ INSERT INTO SystemSetting (ID, Description, Value, JobIdentify, JobDescription)
 VALUES 
 	(18, 'Problem Player - Job Sync Status (Running/Done)', 'Done', 4, 'Problem Player')
 	,(19, 'Problem Player - Batch Size', 1000, 4, 'Problem Player')
-    ,(20, 'Problem Player - LastLogId', 1, 4, 'Problem Player')
+    ,(20, 'Problem Player - LastLogId', 1397904, 4, 'Problem Player')
     ,(21, 'Problem Player - Notification Template ID / MsgContentsType / NotificationType', '', 4, 'Problem Player')
     ,(22, 'Problem Player - Chat group ID which receives carbon copies of all imported messages', '427,496', 4, 'Problem Player');
 	

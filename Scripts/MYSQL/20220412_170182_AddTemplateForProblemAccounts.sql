@@ -40,7 +40,7 @@ VALUES (@NotificationTemplateID + 1, 'Problem Player Announcement Template', @No
 
 Problem Player [问题玩家]: {Problem Player}
 Marked Date [被标记日期]: {Marked Date} (GMT-4)
-Customer Class [玩家分级]: {Problem Player Class}
+Customer Class [玩家分级]: {Class Number} {Class Name EN CN}
 Reason [原因]: {Reason EN CN} 
 
 Thank you for your kind attention ~', 8, UTC_TIMESTAMP, NULL, NULL);
@@ -53,7 +53,7 @@ SELECT NotificationTemplateID INTO @NotificationTemplateID FROM NotificationTemp
 
 UPDATE SystemSetting
 	SET Value = CONCAT('[{"IsTest": 0, "MsgContentsType": -1, "NotificationTypeID": ', @NotificationTypeID
-    ,', "NotificationTemplateID": ', @NotificationTemplateID, ', "TemplateRequiredParams": "{Problem Player},{Marked Date},{Problem Player Class},{Reason EN CN}"}]')
+    ,', "NotificationTemplateID": ', @NotificationTemplateID, ', "TemplateRequiredParams": "{Problem Player},{Marked Date},{Class Number},{Class Name EN CN},{Reason EN CN}"}]')
 WHERE ID = 21;
 
 SELECT ChatGroupTypeID INTO @ChatGroupTypeID  FROM ChatGroupType WHERE ChatGroupTypeName = 'Normal Group';

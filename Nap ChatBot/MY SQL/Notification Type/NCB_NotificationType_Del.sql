@@ -40,12 +40,17 @@ BEGIN
 	
 	DROP TEMPORARY TABLE IF EXISTS tmpNotificationTypeTable;
 	CREATE TEMPORARY TABLE IF NOT EXISTS tmpNotificationTypeTable (ID INT NOT NULL AUTO_INCREMENT, JsonSetting JSON, PRIMARY KEY(ID));
+	
+	INSERT INTO tmpNotificationTypeTable (JsonSetting)
+	SELECT Value
+	FROM SystemSetting
+	WHERE Description LIKE '%Notification Template ID / MsgContentsType / NotificationType%';
     
     DROP TEMPORARY TABLE IF EXISTS tmpParseJsonTable;
     CREATE TEMPORARY TABLE IF NOT EXISTS tmpParseJsonTable(NotificationTypeID INT);
     
 	SET pID = 1;
-	WHILE (EXISTS(SELECT 1 FROM tmpParseJsonTable WHERE ID = pID)) DO 
+	WHILE (EXISTS(SELECT 1 FROM tmpNotificationTypeTable WHERE ID = pID)) DO 
 		SELECT JsonSetting INTO jsonValue FROM tmpNotificationTypeTable WHERE ID = pID;
 		INSERT INTO tmpParseJsonTable (NotificationTypeID)
 		SELECT t.NotificationTypeID
@@ -56,7 +61,7 @@ BEGIN
 				"$[*]"
 				COLUMNS 
 				(
-					NotificationTypeID 		SMALLINT UNSIGNED 	PATH "$.NotificationTypeID"
+					NotificationTypeID  SMALLINT UNSIGNED PATH "$.NotificationTypeID"
 					
 				)
 				

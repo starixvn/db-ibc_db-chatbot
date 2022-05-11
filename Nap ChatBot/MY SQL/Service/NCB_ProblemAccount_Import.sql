@@ -210,7 +210,8 @@ NCB_ProblemAccount_Import:BEGIN
 		FROM tmp_MsgContentTypeTemplate 
 		WHERE TemplateContent NOT LIKE '%{Problem Player}%'
 			OR TemplateContent NOT LIKE '%{Marked Date}%'
-			OR TemplateContent NOT LIKE '%{Problem Player Class}%'
+			OR TemplateContent NOT LIKE '%{Class Number}%'
+			OR TemplateContent NOT LIKE '%{Class Name EN CN}%'
 			OR TemplateContent NOT LIKE '%{Reason EN CN}%') 
 	THEN
 		SET errCode = 1802;
@@ -220,7 +221,8 @@ NCB_ProblemAccount_Import:BEGIN
 		FROM tmp_MsgContentTypeTemplate
 		WHERE TemplateContent NOT LIKE '%{Problem Player}%'
 			OR TemplateContent NOT LIKE '%{Marked Date}%'
-			OR TemplateContent NOT LIKE '%{Problem Player Class}%'
+			OR TemplateContent NOT LIKE '%{Class Number}%'
+			OR TemplateContent NOT LIKE '%{Class Name EN CN}%'
 			OR TemplateContent NOT LIKE '%{Reason EN CN}%';
 
 		SET errMsg = CONCAT('Notification template is not existing (IDs): ', errMsg);
@@ -409,14 +411,15 @@ NCB_ProblemAccount_Import:BEGIN
 		,ChannelId 			TINYINT UNSIGNED
 		,UsernameList 		VARCHAR(4000)
 		,MarkedDate 		VARCHAR(200)
-		,CustomerClass 		VARCHAR(2000)
+		,CustomerClass		SMALLINT
+		,CustomerClassName 	VARCHAR(2000)
 		,Reason 			VARCHAR(2000) 
 		,StatusID 			TINYINT UNSIGNED
 		,Status 			VARCHAR(20)
 		,INDEX Index_LogId  (ID)
 	);
   
-	INSERT INTO tmp_Notification (ID, ChannelId, UsernameList, MarkedDate, CustomerClass, Reason, StatusID, Status)
+	INSERT INTO tmp_Notification (ID, ChannelId, UsernameList, MarkedDate, CustomerClass, CustomerClassName, Reason, StatusID, Status)
 	WITH CTE AS
 	(
 		SELECT 
@@ -436,8 +439,9 @@ NCB_ProblemAccount_Import:BEGIN
 		ID
 		,ChannelId
 		,UsernameList
-		,CASE WHEN MinMarkedDate = MaxMarkedDate THEN CONVERT(DATE_FORMAT(MinMarkedDate,'%m/%d/%Y %h:%i:%s'), CHAR(20)) ELSE CONCAT(CONVERT(DATE_FORMAT(MinMarkedDate,'%m/%d/%Y %h:%i:%s'), CHAR(20)), ' - ', CONVERT(DATE_FORMAT(MaxMarkedDate,'%m/%d/%Y %h:%i:%s'), CHAR(20))) END AS MarkedDate
-		,CONCAT(e.CustomerClass, ' ', i.CustomerClassNameEN, ' [', i.CustomerClassNameCS, ']') AS CustomerClass
+		,CASE WHEN MinMarkedDate = MaxMarkedDate THEN CONVERT(DATE_FORMAT(MinMarkedDate,'%m/%d/%Y %H:%i:%s'), CHAR(20)) ELSE CONCAT(CONVERT(DATE_FORMAT(MinMarkedDate,'%m/%d/%Y %H:%i:%s'), CHAR(20)), ' - ', CONVERT(DATE_FORMAT(MaxMarkedDate,'%m/%d/%Y %H:%i:%s'), CHAR(20))) END AS MarkedDate
+		,e.CustomerClass
+		,CONCAT(i.CustomerClassNameEN, ' [', i.CustomerClassNameCS, ']') AS CustomerClassName
 		,CONCAT(c.CategoryNameEN ,' [', c.CategoryNameCS,']') AS Reason
 		,StatusID
 		,Status
@@ -457,9 +461,11 @@ NCB_ProblemAccount_Import:BEGIN
 			,REPLACE(
 				REPLACE(
 					REPLACE(
-						REPLACE(ct.TemplateContent, '{Problem Player}', h.UsernameList)
-						, '{Marked Date}', h.MarkedDate)
-					, '{Problem Player Class}', h.CustomerClass)
+						REPLACE(
+							REPLACE(ct.TemplateContent, '{Problem Player}', h.UsernameList)
+							, 	'{Marked Date}', h.MarkedDate)
+						, '{Class Number}', h.CustomerClass)
+					, '{Class Name EN CN}', h.CustomerClassName)
 				, '{Reason EN CN}',h.Reason) AS Content
 			,startTime, 0 SendImmediately, STARIXIT_CUSTID, pCreatedDate, h.Status, h.StatusID, h.ChannelID
 	    FROM tmp_Notification h
@@ -538,7 +544,7 @@ NCB_ProblemAccount_Import:BEGIN
 	SET duration = TIMESTAMPDIFF(MICROSECOND, startTime, finishTime) / 1000; 	#miliseconds
 		
 	#Get Log Content, JSON format
-	SET logContent = JSON_OBJECT('Message', Message, ' - CategoryInfo', CategoryInfo);
+	SET logContent = JSON_OBJECT('Message', Message, ' - CategoryInfo', CategoryInfo, ' -CustomerClassInfo', CustomerClassInfo);
 						
 	#Write User Log
 	IF EXISTS (SELECT 1 FROM tmp_Notification) THEN
