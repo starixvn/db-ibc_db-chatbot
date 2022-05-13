@@ -1,9 +1,8 @@
 /*<info serverAlias="DBMSG-bodb_Message" executers="bodbDownlineNet" viewers="" selecters=""></info>*/
-
 CREATE PROCEDURE [dbo].[Age_Chatbot_PersonalMessage_Sel]
-	@PostTime	DATETIME,
-	@BatchSize	INT,
-	@IsTest		BIT
+	@MsgTargetId	INT,
+	@BatchSize		INT,
+	@IsTest			BIT
 AS
 /*
 	Created: 20220510@Malcolm
@@ -19,25 +18,16 @@ AS
 BEGIN
 	SET NOCOUNT ON
 
-	CREATE TABLE #Msg 
-	(
-		MessageId	INT 
-		,MsgType	TINYINT
-		,Content_en NVARCHAR(4000) NULL
-		,Content_ch NVARCHAR(4000) NULL
-		,Content_cs NVARCHAR(4000) NULL
-		,Content_th NVARCHAR(4000) NULL
-		,Content_vn NVARCHAR(4000) NULL
-		,Posttime	DATETIME
-	)
+	DECLARE @MaxMsgTargetId INT
 
-	INSERT INTO #Msg (MessageId,MsgType,Content_en,Content_ch,Content_cs,Content_th,Content_vn, Posttime)
-	SELECT MessageId,MsgType,Content_en,Content_ch,Content_cs,Content_th,Content_vn, Posttime
-	FROM dbo.Msg WITH (NOLOCK) 
-	WHERE PostTime > @PostTime AND MsgType = 1 AND isDeleted=0 AND IsTest =@IsTest
-	ORDER BY PostTime ASC
+	SELECT @MaxMsgTargetId = MAX(MsgTargetId) FROM dbo.MsgTarget WITH(NOLOCK)
+	
+	WAITFOR DELAY '00:00:00.200'
 
-	SELECT m.MessageId,m.MsgType,m.content_en,m.Content_ch,Content_cs,m.Content_th,Content_vn,mt.TargetId, mt.BetTransId, m.Posttime
-	FROM #Msg m
-		INNER JOIN dbo.MsgTarget mt WITH(NOLOCK) ON m.MessageId = mt.MessageId AND mt.isDeleted = 0
+	SELECT TOP(@BatchSize)	mt.MsgTargetId, m.MessageId, m.MsgType, m.content_en, m.Content_ch, Content_cs, m.Content_th, Content_vn, mt.TargetId, mt.BetTransId
+	FROM dbo.MsgTarget mt WITH(NOLOCK)
+		INNER JOIN dbo.Msg m WITH(NOLOCK) ON m.MessageId = mt.MessageId
+	WHERE m.MsgType = 1 AND m.isDeleted = 0 AND m.IsTest = @IsTest AND mt.isDeleted = 0 AND mt.MsgTargetId > @MsgTargetId AND mt.MsgTargetId <= @MaxMsgTargetId
+	ORDER BY mt.MsgTargetId ASC
+
 END
