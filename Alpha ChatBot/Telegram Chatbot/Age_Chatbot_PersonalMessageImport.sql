@@ -2,7 +2,6 @@
 ALTER PROCEDURE [dbo].[Age_Chatbot_PersonalMessageImport] 
 	@XmlData			XML
 	,@Environment		VARCHAR(50)
-	,@MaxMsgTargetId	INT
 	,@ErrCode			INT = 0 OUTPUT
 	,@ErrMsg			VARCHAR(1000) = '' OUTPUT
 AS
@@ -73,9 +72,8 @@ BEGIN
 			FROM #ImportData
 			WHERE ID = @ID
 
-			UPDATE BotSystemSetting WITH(ROWLOCK)
-				SET Value = @MaxMsgTargetId
-			WHERE ServiceName = 'PersonalMessage' AND SettingName = 'MaxMsgTargetId' + @Environment 
+			SET @ID += 1
+
 		END
 	END TRY
 	BEGIN CATCH
