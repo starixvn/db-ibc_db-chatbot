@@ -1,11 +1,7 @@
 /*<info serverAlias="DBCust-CustDB" executers="bodbDownlineNet" viewers="" isFunction="0"></info>*/
 ALTER PROCEDURE [dbo].[Age_Chatbot_CustWinLossReachLimitSel] 
-	@batchSize 		INT,
-	@Enviroment 	VARCHAR(20) = '',
-	@LastLogID 		BIGINT,
-	@IncludeRealCurrencyUAT BIT = 0,
-	@IncludeUUSCurrencyPRO BIT = 0
-	
+	@batchSize 		INT,	
+	@LastLogID 		BIGINT
 AS
 /*
 	Created: 20220510@Johnson
@@ -21,10 +17,19 @@ AS
 BEGIN
 	SET NOCOUNT ON;	
 	
-	SELECT TOP (@batchSize) *
-	FROM CustWinLossReachLimit wl WITH(NOLOCK) 
+	SELECT TOP (@batchSize) wl.custid, bettype, wl.Winlost, 
+		CASE WHEN Winlost > 0 THEN MaxWinLimit ELSE MaxLossLimit END as WinLossLimit,
+		CASE WHEN Winlost > 0 THEN WinPercent ELSE LossPercent END as WinLossPercent,
+	, ci.srecommend, ci.mrecommend, ci.recommend
+	INTO #Result
+	FROM CustWinLossReachLimit_History wl WITH(NOLOCK) 		
 		INNER JOIN custinfo ci WITH(NOLOCK) ON wl.custid = ci.custid
-	WHERE LogID >= @LastLogID
-		--AND 1 = CASE WHEN @Enviroment = 'UAT' AND 
+	WHERE LogID >= @LastLogID		
+	ORDER BY LogID ASC
 	
+	SELECT rs.*, p.ProductName
+	FROM #Result rs
+		INNER JOIN DBTXN.bodb02.dbo.SportBettypeMatrix s WITH(NOLOCK) ON rs.bettype = s.bettype
+		INNER JOIN DBTXN.bodb02.dbo.products p WITH(NOLOCK) ON s.productid = p.productid
+		
 END	

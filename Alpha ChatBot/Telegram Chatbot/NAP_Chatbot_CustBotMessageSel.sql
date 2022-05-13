@@ -28,7 +28,7 @@ BEGIN
 	SET NOCOUNT ON
 		
 	DECLARE @custid INT,
-		@SubAccID INT,
+		@SubAccID INT = 0,
 		@UserID INT 
 	
 	CREATE TABLE #Result(rn INT PRIMARY KEY, SentBy VARCHAR(50), Message NVARCHAR(MAX),CreatedDate DATETIME, Status TINYINT)
