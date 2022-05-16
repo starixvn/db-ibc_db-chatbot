@@ -20,7 +20,7 @@ AS
 BEGIN
 	SET NOCOUNT ON;
 	
-	DECLARE @BotId INT, @IncludeRealCurrencyUAT BIT = 0, @ExcludeUUSCurrencyPRO BIT = 0
+	DECLARE @BotId INT, @IncludeRealCurrencyUAT BIT = 0, @IncludeUUSCurrencyPRO BIT = 1
 
 	SELECT @FunctionID = FunctionID FROM BotFunction WITH(NOLOCK) WHERE FunctionKey = @FunctionKey AND Type = 2
 
@@ -28,7 +28,7 @@ BEGIN
 
 	SELECT 
 		@IncludeRealCurrencyUAT = CASE WHEN SettingName = 'IncludeRealCurrencyUAT' THEN Value ELSE  @IncludeRealCurrencyUAT END
-		,@ExcludeUUSCurrencyPRO = CASE WHEN SettingName = 'ExcludeUUSCurrencyPRO' THEN Value ELSE  @ExcludeUUSCurrencyPRO END
+		,@IncludeUUSCurrencyPRO = CASE WHEN SettingName = 'IncludeUUSCurrencyPRO' THEN Value ELSE  @IncludeUUSCurrencyPRO END
 	FROM dbo.BotSystemSetting WITH(NOLOCK) 
 		WHERE ServiceName = @ServiceName AND SettingName IN ('IncludeRealCurrencyUAT', 'IncludeUUSCurrencyPRO')
 	
@@ -49,7 +49,7 @@ BEGIN
 	DELETE t
 	FROM #CustId t
 	WHERE (@Environment = 'UAT' AND @IncludeRealCurrencyUAT = 0 AND t.IsRealUser = 0)
-		OR (@Environment <> 'UAT' AND @ExcludeUUSCurrencyPRO = 1 AND t.IsRealUser = 1)
+		OR (@Environment <> 'UAT' AND @IncludeUUSCurrencyPRO = 0 AND t.IsRealUser = 1)
 
 	SELECT ca.CustID, ca.SubAccID, ca.Language, ca.CustomerLevel, cm.ChatID, ca.UserId, c.IsRealUser
 	FROM CustBotAccount ca WITH(NOLOCK)

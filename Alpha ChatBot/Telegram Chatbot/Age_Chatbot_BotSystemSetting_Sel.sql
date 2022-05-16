@@ -24,7 +24,7 @@ BEGIN
 	INSERT INTO @TmpSetting (SettingName, Value)
 	SELECT SettingName, Value
 	FROM dbo.BotSystemSetting WITH(NOLOCK)
-	WHERE ServiceName = @ServiceName
+	WHERE ServiceName = @ServiceName AND ((@Environment = 'UAT' AND SettingName NOT LIKE '%PRO') OR (@Environment <> 'UAT' AND SettingName NOT LIKE '%UAT'))
 
 	IF @Environment = 'UAT'
 	BEGIN

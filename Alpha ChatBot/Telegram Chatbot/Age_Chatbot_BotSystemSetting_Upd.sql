@@ -1,7 +1,8 @@
-/*<info serverAlias="DBBOT-bodb_ChatBot" executers="bodbDownlineNet" isFunction="0" isNested="0"></info>*/
+/*<info serverAlias="DBBOT-bodb_ChatBot" executers="bodbDownlineNet" isFunction="0" isNested="1"></info>*/
 ALTER PROCEDURE [dbo].[Age_Chatbot_BotSystemSetting_Upd]
 	@ServiceName	VARCHAR(100)
 	,@Setting		XML
+	,@SyncSettingPro BIT = 0
 	,@Environment	VARCHAR(50) = ''
 AS
 
@@ -38,6 +39,14 @@ BEGIN
 	BEGIN
 		UPDATE @TmpSetting
 			SET SettingName = SettingName + 'UAT'
+	END
+
+	IF @Environment <> 'UAT' AND @SyncSettingPro = 1
+	BEGIN
+		INSERT INTO @TmpSetting (SettingName, Value)
+		SELECT SettingName + 'UAT', Value
+		FROM @TmpSetting
+		WHERE SettingName <> 'JobStatus'
 	END
 
 	UPDATE b WITH(ROWLOCK)
