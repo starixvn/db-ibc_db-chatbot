@@ -33,13 +33,10 @@ BEGIN
 			FROM @TmpSetting t 
 			WHERE t.SettingName LIKE '%UAT'
 		)
-		UPDATE t
-			SET t.Value = e.Value
+		DELETE t
 		FROM @TmpSetting t
 			INNER JOIN CTE e ON e.SettingName = t.SettingName	
 	END
-
-	DELETE @TmpSetting WHERE SettingName LIKE '%UAT'
 
 	SELECT SettingName, Value
 	FROM @TmpSetting

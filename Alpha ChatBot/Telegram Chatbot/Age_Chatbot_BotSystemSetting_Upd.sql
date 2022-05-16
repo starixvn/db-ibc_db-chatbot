@@ -35,12 +35,6 @@ BEGIN
 		,t.c.value('@Value', 'VARCHAR(1000)') AS Value
 	FROM @Setting.nodes('root/r') t(c)
 
-	IF @Environment = 'UAT' 
-	BEGIN
-		UPDATE @TmpSetting
-			SET SettingName = SettingName + 'UAT'
-	END
-
 	IF @Environment <> 'UAT' AND @SyncSettingPro = 1
 	BEGIN
 		INSERT INTO @TmpSetting (SettingName, Value)

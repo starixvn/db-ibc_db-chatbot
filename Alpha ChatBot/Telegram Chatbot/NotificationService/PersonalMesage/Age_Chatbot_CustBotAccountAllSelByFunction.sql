@@ -26,8 +26,8 @@ BEGIN
 	SELECT @BotId = BotId FROM dbo.Bot WITH(NOLOCK) WHERE [System] = @System AND [Status] = @BotStatus AND IsTest = @IsBotTest
 
 	SELECT 
-		@IncludeRealCurrencyUAT = CASE WHEN SettingName = 'IncludeRealCurrencyUAT' THEN Value ELSE  @IncludeRealCurrencyUAT END
-		,@IncludeUUSCurrencyPRO = CASE WHEN SettingName = 'IncludeUUSCurrencyPRO' THEN Value ELSE  @IncludeUUSCurrencyPRO END
+		@IncludeRealCurrencyUAT = CASE WHEN SettingName = 'IncludeRealCurrencyUAT' THEN Value ELSE @IncludeRealCurrencyUAT END
+		,@IncludeUUSCurrencyPRO = CASE WHEN SettingName = 'IncludeUUSCurrencyPRO' THEN Value ELSE @IncludeUUSCurrencyPRO END
 	FROM dbo.BotSystemSetting WITH(NOLOCK) 
 		WHERE ServiceName = @FunctionKey AND SettingName IN ('IncludeRealCurrencyUAT', 'IncludeUUSCurrencyPRO')
 	
