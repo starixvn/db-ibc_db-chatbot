@@ -1,7 +1,7 @@
 /*<info serverAlias="DBBOT-bodb_ChatBot" executers="bodbAdminNet,bodbDownlineNet" viewers="" selecters=""></info>*/
 ALTER PROCEDURE [dbo].[Age_Chatbot_PersonalMessageImport] 
 	@XmlData			XML
-	,@Environment		VARCHAR(50)
+	,@Environment		VARCHAR(50) = ''
 	,@MaxMsgTargetId	INT
 	,@ErrCode			INT = 0 OUTPUT
 	,@ErrMsg			VARCHAR(1000) = '' OUTPUT
@@ -95,6 +95,6 @@ BEGIN
 	EXEC dbo.Age_Chatbot_BotSystemSetting_Upd 
 			@ServiceName = 'PersonalMessage'
 			,@Setting = @SettingXML
-			,@SyncSettingPro = 1
+			,@SyncSettingPro = @SyncSettingPRO
 			,@Environment = @Environment
 END	
