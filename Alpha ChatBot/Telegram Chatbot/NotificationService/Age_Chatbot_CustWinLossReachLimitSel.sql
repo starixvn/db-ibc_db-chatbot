@@ -11,8 +11,7 @@ AS
 	Revisions:
 		- 20220513@Johnson: initial sp [redmine: #167819]
 		
-	-Parameter's Explanation:	
-		- @Enviroment = UAT/PRO
+	-Parameter's Explanation:			
 */
 BEGIN
 	SET NOCOUNT ON;	
