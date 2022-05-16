@@ -7,7 +7,6 @@ ALTER PROCEDURE [dbo].[Age_Chatbot_CustBotAccountAllSelByFunction]
 	,@FunctionKey	VARCHAR(100) = ''
 	,@FunctionId	INT OUTPUT
 	,@Environment   VARCHAR(20) = ''
-	,@ServiceName	VARCHAR(100) 
 AS
 /*
 	Created: 20220428@Johnson
@@ -30,7 +29,7 @@ BEGIN
 		@IncludeRealCurrencyUAT = CASE WHEN SettingName = 'IncludeRealCurrencyUAT' THEN Value ELSE  @IncludeRealCurrencyUAT END
 		,@IncludeUUSCurrencyPRO = CASE WHEN SettingName = 'IncludeUUSCurrencyPRO' THEN Value ELSE  @IncludeUUSCurrencyPRO END
 	FROM dbo.BotSystemSetting WITH(NOLOCK) 
-		WHERE ServiceName = @ServiceName AND SettingName IN ('IncludeRealCurrencyUAT', 'IncludeUUSCurrencyPRO')
+		WHERE ServiceName = @FunctionKey AND SettingName IN ('IncludeRealCurrencyUAT', 'IncludeUUSCurrencyPRO')
 	
 	CREATE TABLE #CustId (CustId INT, IsRealUser BIT)
 
