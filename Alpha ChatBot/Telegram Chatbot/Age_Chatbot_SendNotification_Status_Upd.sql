@@ -28,7 +28,7 @@ BEGIN
 	CREATE TABLE #tmpNotificationGroup (NotificationId INT, Status VARCHAR(20), ErrMsg NVARCHAR(MAX), Retry TINYINT)
 	CREATE TABLE #tmpNotification (NotificationId INT, Status VARCHAR(20), Retry TINYINT)
 
-	INSERT INTO #tmpNotificationGroup (NotificationId, Status, ErrMsg)
+	INSERT INTO #tmpNotificationGroup (NotificationId, Status, ErrMsg, Retry)
 	SELECT
 		t.c.value('@NotificationId', 'INT') AS NotificationId
 		,t.c.value('@Status', 'VARCHAR(20)') AS Status

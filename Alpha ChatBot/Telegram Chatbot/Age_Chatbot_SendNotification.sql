@@ -37,7 +37,7 @@ BEGIN
 	SELECT TOP(@SendBatchSize) NotificationID, Message, cbn.UserId
 	FROM dbo.CustBotNotification cbn WITH(NOLOCK)
 		LEFT JOIN dbo.CustBotAccount cba WITH(NOLOCK) ON cba.UserId = cbn.UserID
-		LEFT JOIN dbo.bodb02.dbo.Customer c WITH(NOLOCK) ON c.custid =  cba.CustId
+		LEFT JOIN bodb02.dbo.Customer c WITH(NOLOCK) ON c.custid =  cba.CustId
 	WHERE FunctionID = @FunctionID AND NotificationID > @SendLastNotificationId AND Status = 'Intial'
 		AND ((c.currency = 20 AND @Environment = 'UAT') OR ((@SendIncudeUUSCurrencyPRO = 1 OR c.currency <> 20 )AND @Environment <> 'UAT'))
 
