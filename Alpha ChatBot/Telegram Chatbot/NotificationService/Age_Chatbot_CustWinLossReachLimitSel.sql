@@ -19,7 +19,7 @@ BEGIN
 	SELECT TOP (@batchSize) wl.custid, bettype, wl.Winlost, 
 		CASE WHEN Winlost > 0 THEN MaxWinLimit ELSE MaxLossLimit END as WinLossLimit,
 		CASE WHEN Winlost > 0 THEN WinPercent ELSE LossPercent END as WinLossPercent,
-	, ci.srecommend, ci.mrecommend, ci.recommend
+		ci.srecommend, ci.mrecommend, ci.recommend
 	INTO #Result
 	FROM CustWinLossReachLimit_History wl WITH(NOLOCK) 		
 		INNER JOIN custinfo ci WITH(NOLOCK) ON wl.custid = ci.custid
