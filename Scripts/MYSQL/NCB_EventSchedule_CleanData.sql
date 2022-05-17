@@ -5,13 +5,14 @@ DELIMITER //
 CREATE DEFINER=`ChatBotSystem` EVENT NCB_EventSchedule_CleanData
 /*
 		Creator: Malcolm@20220504
-		Task: keep log for 1 month
+		Task: keep log for 1 month (Run at )
 		DB: DBCB-ChatBot
         Param:
         Revisions:
 				- 20220504@Malcolm: Create [RedmineID: 170182]
     */
 ON SCHEDULE EVERY 1 DAY 
+    STARTS (TIMESTAMP(CURRENT_DATE) + INTERVAL 1 DAY)
 DO
 BEGIN
 	CALL NCB_DeleteLog();
