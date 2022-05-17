@@ -26,9 +26,8 @@ BEGIN
 	WHERE LogID >= @LastLogID		
 	ORDER BY LogID ASC
 	
-	SELECT rs.*, p.ProductName
+	SELECT rs.*, s.ProductID
 	FROM #Result rs
 		INNER JOIN DBTXN.bodb02.dbo.SportBettypeMatrix s WITH(NOLOCK) ON rs.bettype = s.bettype
-		INNER JOIN DBTXN.bodb02.dbo.products p WITH(NOLOCK) ON s.productid = p.productid
 		
 END	
