@@ -10,6 +10,6 @@ UPDATE SystemSetting
 WHERE ID = 22; -- Carbon group
 
 UPDATE SystemSetting
-	SET Value ='1406149'
+	SET Value ='1408096'
 WHERE ID = 20; -- Last LogID
 
