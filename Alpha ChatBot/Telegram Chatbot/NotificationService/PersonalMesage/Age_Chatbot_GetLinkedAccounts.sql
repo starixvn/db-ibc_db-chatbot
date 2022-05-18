@@ -14,7 +14,7 @@ AS
 	DB: DBBOT/bodb_ChatBot
 	
 	Revisions:
-		- 20220428@Malcolm: initial sp [redmine: #167819]
+		- 20220428@Malcolm: Initial SP [redmine: #167819]
 */
 BEGIN
 	SET NOCOUNT ON;

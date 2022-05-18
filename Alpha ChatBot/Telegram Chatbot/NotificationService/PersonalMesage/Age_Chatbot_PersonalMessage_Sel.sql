@@ -11,7 +11,7 @@ AS
 	DB: DBMSG/bodb_Message
 	
 	Revisions:
-		- 20220510@20220510: initial sp [redmine: #167819]
+		- 20220510@Malcolm: Initial SP [redmine: #167819]
 	
 	Parameter's Explanation:
 	
@@ -26,18 +26,17 @@ BEGIN
 	WAITFOR DELAY '00:00:00.200'
 
 	CREATE TABLE #Result 
-	(	
-		MsgTargetId INT, 
-		MessageId   INT, 
-		MsgType		TINYINT, 
-		content_en	NVARCHAR(4000), 
-		Content_th  NVARCHAR(4000),
-		Content_ch	NVARCHAR(4000), 
-		Content_cs	NVARCHAR(4000), 
-		Content_vn	NVARCHAR(4000), 
-		TargetId	INT,
-		BetTransId	VARCHAR(MAX)
-	)
+	(
+		MsgTargetId 	INT
+		,MessageId 		INT
+		,MsgType 		TINYINT
+		,content_en 	NVARCHAR(4000)
+		,Content_th 	NVARCHAR(4000)
+		,Content_ch 	NVARCHAR(4000)
+		,Content_cs 	NVARCHAR(4000)
+		,Content_vn 	NVARCHAR(4000)
+		,TargetId 		INT
+		,BetTransId 	VARCHAR(MAX))
 
 	INSERT INTO #Result (MsgTargetId, MessageID, MsgType, content_en, Content_ch, Content_cs, Content_th, Content_vn, TargetId, BetTransId)
 	SELECT TOP(@BatchSize)	mt.MsgTargetId, m.MessageId, m.MsgType, m.content_en, m.Content_ch, Content_cs, m.Content_th, Content_vn, mt.TargetId, mt.BetTransId

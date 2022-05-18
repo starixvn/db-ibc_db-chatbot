@@ -12,7 +12,7 @@ AS
 	DB: DBBOT/bodb_ChatBot
 	
 	Revisions:
-		- 20220512@Malcolm: initial sp [redmine: #167819]
+		- 20220512@Malcolm: Initial SP [redmine: #167819]
 	
 	Paramter's Explanations:
 		 @XmlData = '<root>
