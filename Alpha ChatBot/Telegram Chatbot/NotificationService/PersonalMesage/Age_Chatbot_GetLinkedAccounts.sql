@@ -5,7 +5,6 @@ ALTER PROCEDURE [dbo].[Age_Chatbot_GetLinkedAccounts]
 	,@IsBotTest		BIT
 	,@CustIdList	VARCHAR(MAX)
 	,@FunctionKey	VARCHAR(100) = ''
-	,@FunctionId	INT OUTPUT
 	,@Environment   VARCHAR(20) = ''
 AS
 /*
@@ -19,7 +18,7 @@ AS
 BEGIN
 	SET NOCOUNT ON;
 	
-	DECLARE @BotId INT, @IncludeRealCurrencyUAT BIT = 0, @IncludeUUSCurrencyPRO BIT = 1
+	DECLARE @BotId INT, @IncludeRealCurrencyUAT BIT = 0, @IncludeUUSCurrencyPRO BIT = 1, @FunctionID INT
 
 	SELECT @FunctionID = FunctionID FROM BotFunction WITH(NOLOCK) WHERE FunctionKey = @FunctionKey AND Type = 2
 
@@ -50,7 +49,7 @@ BEGIN
 	WHERE (@Environment = 'UAT' AND @IncludeRealCurrencyUAT = 0 AND t.IsRealUser = 0)
 		OR (@Environment <> 'UAT' AND @IncludeUUSCurrencyPRO = 0 AND t.IsRealUser = 1)
 
-	SELECT ca.CustID, ca.SubAccID, ca.Language, ca.CustomerLevel, cm.ChatID, ca.UserId, c.IsRealUser
+	SELECT ca.CustID, ca.SubAccID, ca.Language, ca.CustomerLevel, ca.UserId, c.IsRealUser
 	FROM CustBotAccount ca WITH(NOLOCK)
 		INNER JOIN CustBotMessenger cm WITH(NOLOCK) ON ca.UserID = cm.UserID 
 		INNER JOIN CustBotFunction cf WITH(NOLOCK) ON ca.UserID = cf.UserID

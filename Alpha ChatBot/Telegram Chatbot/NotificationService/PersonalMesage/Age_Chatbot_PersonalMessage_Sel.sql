@@ -1,5 +1,5 @@
 /*<info serverAlias="DBMSG-bodb_Message" executers="bodbDownlineNet" viewers="" selecters=""></info>*/
-CREATE PROCEDURE [dbo].[Age_Chatbot_PersonalMessage_Sel]
+ALTER PROCEDURE [dbo].[Age_Chatbot_PersonalMessage_Sel]
 	@MsgTargetId	INT,
 	@BatchSize		INT,
 	@IsTest			BIT,
@@ -45,9 +45,15 @@ BEGIN
 	WHERE m.MsgType = 1 AND m.isDeleted = 0 AND m.IsTest = @IsTest AND mt.isDeleted = 0 AND mt.MsgTargetId > @MsgTargetId AND mt.MsgTargetId <= @__MsgTargetId
 	ORDER BY mt.MsgTargetId ASC
 
-	SELECT @MaxMsgTargetId = MAX(MsgTargetId) FROM #Result
+	IF @@ROWCOUNT < @BatchSize
+		SET @MaxMsgTargetId = @__MsgTargetId
+	ELSE
+		SELECT @MaxMsgTargetId = MAX(MsgTargetId) FROM #Result	
 	
 	SELECT MsgTargetId, MessageID, MsgType, content_en, Content_ch, Content_cs, Content_th, Content_vn, TargetId, BetTransId
 	FROM #Result
+	ORDER BY MsgTargetId ASC
+
+	DROP TABLE #Result
 
 END
