@@ -27,7 +27,8 @@ BEGIN
 
 	SELECT @SyncSettingPRO = Value FROM dbo.BotSystemSetting WITH(NOLOCK) WHERE ServiceName = 'PersonalMessage' AND SettingName = 'SyncSettingPRO'
 
-	CREATE TABLE #ImportData (ID INT IDENTITY(1, 1), UserID INT, MsgTargetId INT, MessageId INT, FunctionID SMALLINT, Message NVARCHAR(MAX), Status VARCHAR(20), Description NVARCHAR(1000))
+	CREATE TABLE #ImportData (ID INT IDENTITY(1, 1), NotificationId INT, UserID INT, MsgTargetId INT, MessageId INT, FunctionID SMALLINT, Message NVARCHAR(MAX), Status VARCHAR(20), Description NVARCHAR(1000))
+	CREATE TABLE #TmpNotification (NotificationId INT, ID INT)
 
 	INSERT INTO #ImportData (UserID, MsgTargetId, MessageId, FunctionID, Message, Status, Description)
 	SELECT 
@@ -41,42 +42,28 @@ BEGIN
 	FROM @XmlData.nodes ('root/r') t(c)
 	OPTION (OPTIMIZE FOR (@XmlData = NULL))
 
-	WHILE 1 = 1
-	BEGIN 
-		IF NOT EXISTS(SELECT 1 FROM #ImportData WHERE ID = @ID)
-			BREAK
+	INSERT INTO dbo.CustBotNotification (UserID, FunctionID, Message, Status, Description, CreatedDate, MessageID)
+	OUTPUT inserted.NotificationID INTO #TmpNotification (NotificationId)
+	SELECT UserID, FunctionID, Message, Status, Description, GETDATE(), MessageID
+	FROM #ImportData
+	ORDER BY ID ASC
 
-		INSERT INTO dbo.CustBotNotification 
-		(
-			UserID
-			,FunctionID
-			,Message
-			,Status
-			,Description
-			,CreatedDate
-			,MessageID
-		)
-		SELECT 
-			UserID
-			,FunctionID
-			,Message
-			,Status
-			,Description
-			,GETDATE()
-			,MessageID
-		FROM #ImportData
-		WHERE ID = @ID
-		
-		SET @NotificationId = SCOPE_IDENTITY()
+	UPDATE n
+		SET n.Id = n.rn
+	FROM (
+		SELECT n.ID, n.NotificationId, ROW_NUMBER() OVER(ORDER BY NotificationId ASC) AS rn
+		FROM #TmpNotification n
+	) n
 
-		INSERT INTO dbo.NotificationReference (NotificationID, ReferenceID, Environment, DataSource)
-		SELECT @NotificationId, MsgTargetId, @Environment, 'DBMSG.bodb_message.dbo.MsgTarget' AS DataSource
-		FROM #ImportData
-		WHERE ID = @ID
+	UPDATE i
+		SET i.NotificationId = tn.NotificationId
+	FROM #ImportData i
+		INNER JOIN #TmpNotification tn ON tn.Id = i.Id
 
-		SET @ID += 1
-
-	END
+	INSERT INTO dbo.NotificationReference (NotificationId, ReferenceId)
+	SELECT NotificationId, MsgTargetId
+	FROM #ImportData
+	ORDER BY Id DESC
 
 	SELECT @SettingXML =
 	(
