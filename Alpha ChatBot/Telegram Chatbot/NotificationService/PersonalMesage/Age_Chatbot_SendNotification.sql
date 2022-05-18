@@ -16,7 +16,7 @@ AS
 BEGIN
 	SET NOCOUNT ON
 
-	DECLARE @FunctionID TINYINT, @SendLastNotificationId INT, @SendBatchSize INT, @SendIncudeUUSCurrencyPRO BIT, @SendFlagService BIT
+	DECLARE @FunctionID TINYINT, @SendLastNotificationId INT, @SendBatchSize INT, @SendIncudeUUSCurrencyPRO BIT
 
 	DECLARE @Function TABLE (SendLastNotificationId INT,  FunctionId INT, FunctionKey VARCHAR(50), Priority TINYINT)
 
@@ -35,15 +35,11 @@ BEGIN
 
 	SELECT 
 		@SendBatchSize = CASE WHEN SettingName = 'SendBatchSize' THEN Value ELSE @SendBatchSize END
-		,@SendIncudeUUSCurrencyPRO	= CASE WHEN SettingName = 'SendIncudeUUSCurrencyPRO' THEN Value ELSE @SendIncudeUUSCurrencyPRO END
-		,@SendFlagService = CASE WHEN SettingName = 'SendFlagService' + @Environment THEN Value ELSE @SendFlagService END
+		,@SendIncudeUUSCurrencyPRO = CASE WHEN SettingName = 'SendIncudeUUSCurrencyPRO' THEN Value ELSE @SendIncudeUUSCurrencyPRO END
 	FROM dbo.BotSystemSetting WITH(NOLOCK) 
-	WHERE ServiceName = 'SendNotification' AND SettingName IN ('SendBatchSize', 'SendIncudeUUSCurrencyPRO', 'SendFlagService' + @Environment)
+	WHERE ServiceName = 'SendNotification' AND SettingName IN ('SendBatchSize', 'SendIncudeUUSCurrencyPRO')
 
 	DECLARE @SendNotification TABLE (NotificationID int, FunctionKey VARCHAR(50),[Message] NVARCHAR(MAX), ChatID BIGINT, UserId INT, CustId INT, SubAccId INT, BotId INT, Status BIT, IsVerifyOTP BIT, ErrCode INT)
-
-	IF @SendFlagService = 1
-		GOTO Result;
 
 	INSERT INTO @SendNotification (NotificationID, FunctionKey, Message, UserId, CustId, SubAccId)
 	SELECT TOP(@SendBatchSize) NotificationID, f.FunctionKey, Message, cbn.UserId, cba.CustId, cba.SubAccId
@@ -65,7 +61,6 @@ BEGIN
 	FROM @SendNotification s
 		INNER JOIN dbo.CustBotMessenger cbm WITH(NOLOCK) ON cbm.UserId = s.UserId 
 
-	Result:
 		SELECT 
 		s.NotificationID
 		,s.UserId

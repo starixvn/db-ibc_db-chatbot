@@ -32,6 +32,10 @@ AS
 BEGIN
 	SET NOCOUNT ON
 
+	DECLARE @SyncSettingPRO BIT
+
+	SELECT @SyncSettingPRO = Value FROM dbo.BotSystemSetting WITH(NOLOCK) WHERE ServiceName = 'PersonalMessage' AND SettingName = 'SyncSettingPRO'
+
 	CREATE TABLE #tmpNotificationGroup (NotificationId INT, Status VARCHAR(20), ErrMsg NVARCHAR(MAX), Retry TINYINT)
 	CREATE TABLE #tmpNotification (NotificationId INT, Status VARCHAR(20), Retry TINYINT)
 
@@ -62,9 +66,18 @@ BEGIN
 
 	UPDATE s WITH(ROWLOCK)
 		SET s.Value = t.LastnotificationId
-	FROM BotSystemSetting s
+	FROM dbo.BotSystemSetting s
 		INNER JOIN @TmpLastNotification t ON t.FunctionKey = s.ServiceName
     WHERE s.SettingName = 'SendLastNotificationId' + @Environment
+
+	IF @SyncSettingPRO = 1 AND @Environment <> 'UAT'
+	BEGIN
+		UPDATE s WITH(ROWLOCK)
+			SET s.Value = t.LastnotificationId
+		FROM dbo.BotSystemSetting s
+			INNER JOIN @TmpLastNotification t ON t.FunctionKey = s.ServiceName
+		WHERE s.SettingName = 'SendLastNotificationIdUAT'
+	END
 
 END
 GO
