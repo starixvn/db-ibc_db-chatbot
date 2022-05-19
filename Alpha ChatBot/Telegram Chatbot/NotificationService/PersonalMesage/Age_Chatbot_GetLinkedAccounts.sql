@@ -18,7 +18,7 @@ AS
 BEGIN
 	SET NOCOUNT ON;
 	
-	DECLARE @BotId INT, @IncludeRealCurrencyUAT BIT = 0, @IncludeUUSCurrencyPRO BIT = 1, @FunctionID INT
+	DECLARE @BotId INT, @IncludeRealCurrencyUAT BIT = 0, @IncludeUUSCurrencyPRO BIT = 1, @FunctionID SMALLINT
 
 	SELECT @FunctionID = FunctionID FROM BotFunction WITH(NOLOCK) WHERE FunctionKey = @FunctionKey AND Type = 2
 
@@ -57,6 +57,8 @@ BEGIN
 	WHERE cm.BotID = @BotID
 		AND FunctionID = @FunctionID
 		AND cf.Status = 1 --enabled
+		AND cm.IsVerifyOTP = 1 
+		AND cm.Status = 1
 
 	DROP TABLE #CustId
 END	

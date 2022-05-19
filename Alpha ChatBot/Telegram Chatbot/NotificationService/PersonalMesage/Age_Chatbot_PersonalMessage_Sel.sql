@@ -29,7 +29,6 @@ BEGIN
 	(
 		MsgTargetId 	INT
 		,MessageId 		INT
-		,MsgType 		TINYINT
 		,content_en 	NVARCHAR(4000)
 		,Content_th 	NVARCHAR(4000)
 		,Content_ch 	NVARCHAR(4000)
@@ -38,8 +37,8 @@ BEGIN
 		,TargetId 		INT
 		,BetTransId 	VARCHAR(MAX))
 
-	INSERT INTO #Result (MsgTargetId, MessageID, MsgType, content_en, Content_ch, Content_cs, Content_th, Content_vn, TargetId, BetTransId)
-	SELECT TOP(@BatchSize)	mt.MsgTargetId, m.MessageId, m.MsgType, m.content_en, m.Content_ch, Content_cs, m.Content_th, Content_vn, mt.TargetId, mt.BetTransId
+	INSERT INTO #Result (MsgTargetId, MessageID, content_en, Content_ch, Content_cs, Content_th, Content_vn, TargetId, BetTransId)
+	SELECT TOP(@BatchSize)	mt.MsgTargetId, m.MessageId, m.content_en, m.Content_ch, Content_cs, m.Content_th, Content_vn, mt.TargetId, mt.BetTransId
 	FROM dbo.MsgTarget mt WITH(NOLOCK)
 		INNER JOIN dbo.Msg m WITH(NOLOCK) ON m.MessageId = mt.MessageId
 	WHERE m.MsgType = 1 AND m.isDeleted = 0 AND m.IsTest = @IsTest AND mt.isDeleted = 0 AND mt.MsgTargetId > @MsgTargetId AND mt.MsgTargetId <= @__MsgTargetId
@@ -50,7 +49,7 @@ BEGIN
 	ELSE
 		SELECT @MaxMsgTargetId = MAX(MsgTargetId) FROM #Result	
 	
-	SELECT MsgTargetId, MessageID, MsgType, content_en, Content_ch, Content_cs, Content_th, Content_vn, TargetId, BetTransId
+	SELECT MsgTargetId, MessageID, content_en, Content_ch, Content_cs, Content_th, Content_vn, TargetId, BetTransId
 	FROM #Result
 	ORDER BY MsgTargetId ASC
 

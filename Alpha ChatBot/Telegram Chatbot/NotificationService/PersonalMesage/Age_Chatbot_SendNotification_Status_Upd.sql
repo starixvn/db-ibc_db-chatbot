@@ -20,12 +20,12 @@ AS
 			<root>
 				<r NotificationId="1" Status="Planned" ErrMsg="" Retry="1"/>
 				<r NotificationId="2" Status="Sending" ErrMsg="" Retry="2"/>
-				<r NotificationId="3" Status="Error" ErrMsg="Letstalk ID has been changed" Retry="0"/>
+				<r NotificationId="3" Status="Error" ErrMsg="unlink" Retry="0"/>
 			</root>
 		. @XmlLastNotification
 			<root>
 				<r LastnotificationId="1" FunctionKey="PersonalMessage"/>
-				<r LastnotificationId="2" FunctionKey="ProblemAccounts"/>
+				<r LastnotificationId="2" FunctionKey="PersonalMessage"/>
 			</root>
 */
 
@@ -36,47 +36,50 @@ BEGIN
 
 	SELECT @SyncSettingPRO = Value FROM dbo.BotSystemSetting WITH(NOLOCK) WHERE ServiceName = 'PersonalMessage' AND SettingName = 'SyncSettingPRO'
 
-	CREATE TABLE #tmpNotificationGroup (NotificationId INT, Status VARCHAR(20), ErrMsg NVARCHAR(MAX), Retry TINYINT)
-	CREATE TABLE #tmpNotification (NotificationId INT, Status VARCHAR(20), Retry TINYINT)
+	CREATE TABLE #tmpNotificationGroup (NotificationId BIGINT, Status VARCHAR(20), ErrMsg NVARCHAR(MAX), Retry TINYINT)
+	CREATE TABLE #tmpNotification (NotificationId BIGINT, Status VARCHAR(20), Retry TINYINT)
 
 	INSERT INTO #tmpNotificationGroup (NotificationId, Status, ErrMsg, Retry)
 	SELECT
-		t.c.value('@NotificationId', 'INT') AS NotificationId
+		t.c.value('@NotificationId', 'BIGINT') AS NotificationId
 		,t.c.value('@Status', 'VARCHAR(20)') AS Status
 		,t.c.value('@ErrMsg', 'NVARCHAR(MAX)') AS ErrMsg
 		,t.c.value('@Retry', 'TINYINT') AS Retry
 	FROM @XmlData.nodes('root/r') t(c)
 	OPTION (OPTIMIZE FOR (@XmlData = NULL))
 
-	DECLARE @TmpLastNotification TABLE (LastnotificationId INT, FunctionKey VARCHAR(100))
+	DECLARE @TmpLastNotification TABLE (LastnotificationId BIGINT, FunctionKey VARCHAR(50))
 	INSERT INTO @TmpLastNotification (LastnotificationId, FunctionKey)
 	SELECT 
-		t.c.value('@LastnotificationId', 'INT') AS LastnotificationId
-		,t.c.value('@FunctionKey', 'VARCHAR(100)') AS FunctionKey
+		t.c.value('@LastnotificationId', 'BIGINT') AS LastnotificationId
+		,t.c.value('@FunctionKey', 'VARCHAR(50)') AS FunctionId
 	FROM @XmlLastNotification.nodes('root/r') t(c)
-	OPTION (OPTIMIZE FOR(@XmlLastNotification = NULL))
+	OPTION (OPTIMIZE FOR (@XmlLastNotification = NULL))
 
-	IF NOT EXISTS (SELECT 1 FROM #tmpNotificationGroup) AND NOT EXISTS (SELECT 1 FROM @TmpLastNotification)
-		RETURN
+	IF EXISTS (SELECT 1 FROM #tmpNotificationGroup)
+	BEGIN
+		UPDATE cbn WITH(ROWLOCK)
+			SET cbn.Status = t.Status, cbn.Description = t.ErrMsg, cbn.Retry = t.Retry, cbn.UpdatedTime = GETDATE()
+		FROM dbo.CustBotNotification cbn
+			INNER JOIN #tmpNotificationGroup t ON t.NotificationId = cbn.NotificationID
+	END
 
-	UPDATE cbn WITH(ROWLOCK)
-		SET cbn.Status = t.Status, cbn.Description = t.ErrMsg, cbn.Retry = t.Retry
-	FROM dbo.CustBotNotification cbn
-		INNER JOIN #tmpNotificationGroup t ON t.NotificationId = cbn.NotificationID
-
-	UPDATE s WITH(ROWLOCK)
-		SET s.Value = t.LastnotificationId
-	FROM dbo.BotSystemSetting s
-		INNER JOIN @TmpLastNotification t ON t.FunctionKey = s.ServiceName
-    WHERE s.SettingName = 'SendLastNotificationId' + @Environment
-
-	IF @SyncSettingPRO = 1 AND @Environment <> 'UAT'
+	IF EXISTS (SELECT 1 FROM @TmpLastNotification)
 	BEGIN
 		UPDATE s WITH(ROWLOCK)
 			SET s.Value = t.LastnotificationId
 		FROM dbo.BotSystemSetting s
 			INNER JOIN @TmpLastNotification t ON t.FunctionKey = s.ServiceName
-		WHERE s.SettingName = 'SendLastNotificationIdUAT'
+		WHERE s.SettingName = 'SendLastNotificationId' + @Environment AND s.Value <> t.LastnotificationId
+
+		IF @SyncSettingPRO = 1 AND @Environment <> 'UAT'
+		BEGIN
+			UPDATE s WITH(ROWLOCK)
+				SET s.Value = t.LastnotificationId
+			FROM dbo.BotSystemSetting s
+				INNER JOIN @TmpLastNotification t ON t.FunctionKey = s.ServiceName
+			WHERE s.SettingName = 'SendLastNotificationIdUAT' AND s.Value <> t.LastnotificationId
+		END
 	END
 
 END

@@ -16,13 +16,13 @@ AS
 BEGIN
 	SET NOCOUNT ON
 
-	DECLARE @FunctionID TINYINT, @SendLastNotificationId INT, @SendBatchSize INT, @SendIncudeUUSCurrencyPRO BIT
+	DECLARE @FunctionID SMALLINT, @SendLastNotificationId BIGINT, @SendBatchSize INT, @SendIncudeUUSCurrencyPRO BIT
 
-	DECLARE @Function TABLE (SendLastNotificationId INT,  FunctionId INT, FunctionKey VARCHAR(50), Priority TINYINT)
+	DECLARE @Function TABLE (SendLastNotificationId BIGINT, FunctionId SMALLINT, FunctionKey VARCHAR(50), [Priority] SMALLINT, PRIMARY KEY (FunctionId))
 
-	DECLARE @___MaxNotificationId INT
+	DECLARE @MaxNotificationId BIGINT
 
-	SELECT @___MaxNotificationId = MAX(NotificationID) FROM dbo.CustBotNotification cbn WITH(NOLOCK)
+	SELECT @MaxNotificationId = MAX(NotificationID) FROM dbo.CustBotNotification cbn WITH(NOLOCK)
 
 	WAITFOR DELAY '00:00:00.200'
 
@@ -34,7 +34,7 @@ BEGIN
 	WHERE bf.Type = 2
 
 	UPDATE f
-		SET f.SendLastNotificationId = CONVERT(INT, bs.Value)
+		SET f.SendLastNotificationId = CONVERT(BIGINT, bs.Value)
 	FROM @Function f
 		INNER JOIN dbo.BotSystemSetting bs WITH(NOLOCK) ON bs.ServiceName = f.FunctionKey
 	WHERE bs.SettingName = 'SendLastNotificationId' + @Environment
@@ -45,59 +45,71 @@ BEGIN
 	FROM dbo.BotSystemSetting WITH(NOLOCK) 
 	WHERE ServiceName = 'SendNotification' AND SettingName IN ('BatchSize', 'IncudeUUSCurrencyPRO')
 
-	DECLARE @SendNotification TABLE (NotificationID int, FunctionKey VARCHAR(50),[Message] NVARCHAR(MAX), ChatID BIGINT, UserId INT, CustId INT, SubAccId INT, BotId INT, Status BIT, IsVerifyOTP BIT, ErrCode INT)
+	DECLARE @SendNotification TABLE 
+	(
+		NotificationId	BIGINT
+		,FunctionId		SMALLINT
+		,FunctionKey	VARCHAR(50)
+		,[Message]		NVARCHAR(MAX)
+		,UserId			INT
+		,CustId			INT
+		,SubAccId		INT
+	)
 
-	INSERT INTO @SendNotification (NotificationID, FunctionKey, Message, UserId, CustId, SubAccId)
-	SELECT TOP(@SendBatchSize) NotificationID, f.FunctionKey, Message, cbn.UserId, cba.CustId, cba.SubAccId
+	INSERT INTO @SendNotification (NotificationID, FunctionId, FunctionKey, Message, UserId, CustId, SubAccId)
+	SELECT TOP(@SendBatchSize) cbn.NotificationID, f.FunctionId, f.FunctionKey, cbn.Message, cbn.UserId, cba.CustId, cba.SubAccId
 	FROM dbo.CustBotNotification cbn WITH(NOLOCK)
 		INNER JOIN @Function f ON f.FunctionId = cbn.FunctionID 
 		LEFT JOIN dbo.CustBotAccount cba WITH(NOLOCK) ON cba.UserId = cbn.UserID
-		LEFT JOIN bodb02.dbo.Customer c WITH(NOLOCK) ON c.custid =  cba.CustID
-	WHERE cbn.NotificationID > f.SendLastNotificationId AND cbn.NotificationID <= @___MaxNotificationId AND cbn.Status = 'Initial'
-		AND ((c.currency = 20 AND @Environment = 'UAT') OR ((@SendIncudeUUSCurrencyPRO = 1 OR c.currency <> 20 )AND @Environment <> 'UAT'))
-	ORDER BY f.Priority ASC
+		LEFT JOIN bodb02.dbo.Customer c WITH(NOLOCK) ON c.custid = cba.CustID
+	WHERE cbn.NotificationID > f.SendLastNotificationId AND cbn.NotificationID <= @MaxNotificationId AND cbn.Status = 'Initial'
+		AND ((c.currency = 20 AND @Environment = 'UAT') OR ((@SendIncudeUUSCurrencyPRO = 1 OR c.currency <> 20 ) AND @Environment <> 'UAT'))
+	ORDER BY f.Priority ASC, cbn.NotificationID ASC
 
 	UPDATE cbn WITH(ROWLOCK)
 		SET cbn.Status = 'Sending'
 	FROM CustBotNotification cbn 
 		INNER JOIN @SendNotification s ON s.NotificationID = cbn.NotificationID
 
-	UPDATE s
-		SET s.BotId = cbm.BotId, s.ChatID = cbm.ChatId, s.Status = cbm.Status, s.IsVerifyOTP = cbm.IsVerifyOTP
-	FROM @SendNotification s
-		INNER JOIN dbo.CustBotMessenger cbm WITH(NOLOCK) ON cbm.UserId = s.UserId 
+	DECLARE @LastNotificationIdFuntion TABLE (LastNotificationId BIGINT, FunctionKey VARCHAR(50))
 
-	;WITH CTE AS(SELECT FunctionKey FROM @SendNotification GROUP BY FunctionKey)
-	,CTE_MinPriority AS (
-		SELECT MIN(bf.Priority) AS Priority 
-		FROM CTE e INNER JOIN dbo.BotFunction bf WITH(NOLOCK) ON bf.FunctionKey = e.FunctionKey
+	;WITH CTE AS(SELECT MAX(NotificationId) AS NotificationId, FunctionId FROM @SendNotification GROUP BY FunctionId)
+	,CTE_MaxPriority AS (
+		SELECT MAX(bf.Priority) AS Priority
+		FROM CTE e 
+			INNER JOIN dbo.BotFunction bf WITH(NOLOCK) ON bf.FunctionID = e.FunctionId
 	)
 	,CTE_ServiceName AS (
-		SELECT ServiceName
-		FROM dbo.BotSystemSetting bs WITH(NOLOCK)
-			INNER JOIN dbo.BotFunction bf WITH(NOLOCK) ON bf.FunctionKey = bs.ServiceName
-			INNER JOIN CTE_MinPriority cnp ON cnp.Priority > bf.Priority
-		WHERE bf.Type = 2 
+		SELECT bf.FunctionKey, bf.FunctionID, CASE WHEN bf.Priority = cnp.Priority THEN 1 ELSE 0 END AS IsMaxPriority
+		FROM dbo.BotFunction bf WITH(NOLOCK)
+			INNER JOIN CTE_MaxPriority cnp ON cnp.Priority >= bf.Priority
+		WHERE bf.Type = 2 AND bf.Priority IS NOT NULL
 	)
-	UPDATE bs WITH(ROWLOCK)
-		SET bs.Value = @___MaxNotificationId
-	FROM dbo.BotSystemSetting bs
-		INNER JOIN CTE_ServiceName cs ON cs.ServiceName = bs.ServiceName
-	WHERE SettingName = 'SendLastNotificationId' + @Environment
+	INSERT INTO @LastNotificationIdFuntion (LastNotificationId, FunctionKey)
+	SELECT ISNULL(e.NotificationId, @MaxNotificationId) AS LastnotificationId, s.FunctionKey
+	FROM CTE_ServiceName s
+		LEFT JOIN CTE e ON e.FunctionId = s.FunctionID AND s.IsMaxPriority = 1
 
 	SELECT 
 		s.NotificationID
 		,s.UserId
 		,s.CustId
 		,s.SubAccId
-		,s.Message
-		,s.BotId
-		,s.ChatID
 		,s.FunctionKey
-		,CASE WHEN s.ChatID IS NULL THEN 1 --Not map
-			  WHEN s.Status = 0 THEN 2 -- Unlink
-			  WHEN s.IsVerifyOTP = 0 THEN 3 -- unverifyOTP
+		,s.Message
+		,cbm.BotId
+		,cbm.ChatID
+		,CASE WHEN cbf.Status = 0 THEN 1 -- turn off Setting
+			  WHEN cbm.Status = 0 THEN 2 -- Unlink
+			  WHEN cbm.IsVerifyOTP = 0 THEN 3 -- unverifyOTP
 		ELSE 0 END AS ErrCode-- Ready to send
 	FROM @SendNotification s
+		INNER JOIN dbo.CustBotFunction cbf WITH(NOLOCK) ON cbf.UserID = s.UserId AND cbf.FunctionID = s.FunctionId
+		INNER JOIN dbo.CustBotMessenger cbm WITH(NOLOCK) ON cbm.UserId = s.UserId
+
+	SELECT 
+		LastNotificationId
+		,FunctionKey
+	FROM @LastNotificationIdFuntion
 
 END	

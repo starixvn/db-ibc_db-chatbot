@@ -16,7 +16,7 @@ AS
 	
 	Paramter's Explanations:
 		 @XmlData = '<root>
-							<r UserId="1" MsgTargetId="" MessageId="1" Message="XXX" Status="Intial" Description=""/>
+							<r UserId="1" MsgTargetId="2" MessageId="1" Message="XXX" Status="Initial" Description=""/>
 					  </root>'
 
 */
@@ -29,12 +29,12 @@ BEGIN
 
 	SELECT @SyncSettingPRO = Value FROM dbo.BotSystemSetting WITH(NOLOCK) WHERE ServiceName = 'PersonalMessage' AND SettingName = 'SyncSettingPRO'
 
-	CREATE TABLE #TmpNotification (NotificationId INT, ID INT)
+	CREATE TABLE #TmpNotification (NotificationId BIGINT, ID INT)
 
 	CREATE TABLE #ImportData 
 	(
-		ID				INT IDENTITY(1, 1)
-		,NotificationId INT
+		ID				INT IDENTITY(1, 1) PRIMARY KEY
+		,NotificationId BIGINT
 		,UserID			INT
 		,MsgTargetId	INT
 		,MessageId		INT
@@ -54,7 +54,7 @@ BEGIN
 	FROM @XmlData.nodes ('root/r') t(c)
 	OPTION (OPTIMIZE FOR (@XmlData = NULL))
 
-	INSERT INTO dbo.CustBotNotification (UserID, FunctionID, Message, Status, Description, CreatedDate, MessageID)
+	INSERT INTO dbo.CustBotNotification (UserID, FunctionID, Message, Status, Description, CreatedDate, ReferenceId)
 	OUTPUT inserted.NotificationID INTO #TmpNotification (NotificationId)
 	SELECT UserID, @FunctionId, Message, Status, Description, GETDATE(), MessageID
 	FROM #ImportData
@@ -72,10 +72,10 @@ BEGIN
 	FROM #ImportData i
 		INNER JOIN #TmpNotification tn ON tn.Id = i.Id
 
-	INSERT INTO dbo.NotificationReference (NotificationId, ReferenceId)
-	SELECT NotificationId, MsgTargetId
+	INSERT INTO dbo.NotificationReferenceLog (NotificationId, ReferenceId, FunctionId)
+	SELECT NotificationId, MsgTargetId, @FunctionId
 	FROM #ImportData
-	ORDER BY Id DESC
+	ORDER BY Id ASC
 
 	SELECT @SettingXML =
 	(

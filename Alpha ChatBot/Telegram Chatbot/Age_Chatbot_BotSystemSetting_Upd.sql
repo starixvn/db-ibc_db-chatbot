@@ -54,7 +54,7 @@ BEGIN
 		SET b.Value = t.Value
 	FROM dbo.BotSystemSetting b 
 		INNER JOIN @TmpSetting t ON t.SettingName = b.SettingName 
-	WHERE b.ServiceName = @ServiceName
+	WHERE b.ServiceName = @ServiceName AND b.Value <> t.Value
 
 END
 GO
