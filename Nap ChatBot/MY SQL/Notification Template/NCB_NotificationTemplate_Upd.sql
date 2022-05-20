@@ -21,6 +21,7 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_NotificationTemplate_Upd`(
 			- 20191217@Merlin: Check valid content before update -- Redmine ID: #125707
             - 20190215@Oliver: unremovable abnormalbes settings - Redmine: #128430
 			- 20200323@Oliver: Integrate Site Message -- Redmine ID: #129979
+			- 20220404@Malcolm: Intergate Problem accounts [RedmineId: #170182]
 	*/
 )
 NCB_NotificationTemplate_Upd:BEGIN
@@ -31,7 +32,7 @@ NCB_NotificationTemplate_Upd:BEGIN
 	DECLARE logContent 		TEXT CHARACTER SET utf8mb4;
 	DECLARE ACTION_ID 		INT DEFAULT 13;
     DECLARE jsonValue		JSON;
-	DECLARE indexLoop		INT;
+	DECLARE pID		INT;
 	DECLARE requiredParams  TEXT;
     
 	#Get Start Time to calcualte execution duration
@@ -39,100 +40,53 @@ NCB_NotificationTemplate_Upd:BEGIN
 	SET errCode = 0, errMsg = '';
   
 	IF EXISTS(
-	SELECT 1 FROM NotificationTemplate nt
-	WHERE nt.NotificationTemplateName = notificationTemplateName
-		AND nt.NotificationTemplateID <> notificationTemplateID
+		SELECT 1 FROM NotificationTemplate nt
+		WHERE nt.NotificationTemplateName = notificationTemplateName
+			AND nt.NotificationTemplateID <> notificationTemplateID
 	) 
 	THEN
 		SET errCode = 101, errMsg = 'The selected template name has already been taken';
 		LEAVE NCB_NotificationTemplate_Upd;
 	END IF;
 	
-	#Check params for template voiding tickets for licensee
-	SELECT Value INTO jsonValue FROM SystemSetting WHERE ID = 4 LIMIT 1;
-    DROP TEMPORARY TABLE IF EXISTS tmpSettingData;
-    CREATE TEMPORARY TABLE IF NOT EXISTS tmpSettingData(NotificationTypeID INT, NotificationTemplateID INT,TemplateRequiredParams TEXT);
-    SET indexLoop = 0;
-    WHILE (JSON_EXTRACT(jsonValue, CONCAT('$[',indexLoop, '].NotificationTemplateID'))) DO 
-		INSERT INTO tmpSettingData(NotificationTypeID, NotificationTemplateID, TemplateRequiredParams)
-        VALUES (
-            CASE
-                WHEN JSON_UNQUOTE(JSON_EXTRACT(jsonValue, CONCAT('$[', indexLoop, '].NotificationTypeID'))) = 'null'
-                THEN NULL
-                ELSE JSON_UNQUOTE(JSON_EXTRACT(jsonValue, CONCAT('$[', indexLoop, '].NotificationTypeID')))
-            END,
-            CASE
-                WHEN JSON_UNQUOTE(JSON_EXTRACT(jsonValue, CONCAT('$[', indexLoop, '].NotificationTemplateID'))) = 'null'
-                THEN NULL
-                ELSE JSON_UNQUOTE(JSON_EXTRACT(jsonValue, CONCAT('$[', indexLoop, '].NotificationTemplateID')))
-            END,
-			CASE
-                WHEN JSON_UNQUOTE(JSON_EXTRACT(jsonValue, CONCAT('$[', indexLoop, '].TemplateRequiredParams'))) = 'null'
-                THEN NULL
-                ELSE JSON_UNQUOTE(JSON_EXTRACT(jsonValue, CONCAT('$[', indexLoop, '].TemplateRequiredParams')))
-            END
-		);
-        
-        SET indexLoop := indexLoop + 1;
-    END WHILE;
+	DROP TEMPORARY TABLE IF EXISTS tmpNotificationTypeTable;
+	CREATE TEMPORARY TABLE IF NOT EXISTS tmpNotificationTypeTable (ID INT NOT NULL AUTO_INCREMENT, JsonSetting JSON, PRIMARY KEY(ID));
 	
-	#Check params for template voiding abnormalBets for internal
-	SELECT Value INTO jsonValue FROM SystemSetting WHERE ID = 9 LIMIT 1;
-    SET indexLoop = 0;
-    WHILE (JSON_EXTRACT(jsonValue, CONCAT('$[',indexLoop, '].NotificationTemplateID'))) DO 
-		INSERT INTO tmpSettingData(NotificationTypeID, NotificationTemplateID, TemplateRequiredParams)
-        VALUES (
-            CASE
-                WHEN JSON_UNQUOTE(JSON_EXTRACT(jsonValue, CONCAT('$[', indexLoop, '].NotificationTypeID'))) = 'null'
-                THEN NULL
-                ELSE JSON_UNQUOTE(JSON_EXTRACT(jsonValue, CONCAT('$[', indexLoop, '].NotificationTypeID')))
-            END,
-            CASE
-                WHEN JSON_UNQUOTE(JSON_EXTRACT(jsonValue, CONCAT('$[', indexLoop, '].NotificationTemplateID'))) = 'null'
-                THEN NULL
-                ELSE JSON_UNQUOTE(JSON_EXTRACT(jsonValue, CONCAT('$[', indexLoop, '].NotificationTemplateID')))
-            END,
-			CASE
-                WHEN JSON_UNQUOTE(JSON_EXTRACT(jsonValue, CONCAT('$[', indexLoop, '].TemplateRequiredParams'))) = 'null'
-                THEN NULL
-                ELSE JSON_UNQUOTE(JSON_EXTRACT(jsonValue, CONCAT('$[', indexLoop, '].TemplateRequiredParams')))
-            END
-		);
-        
-        SET indexLoop := indexLoop + 1;
-    END WHILE;
-
-	#Check params for template Site Message
-	SELECT Value INTO jsonValue FROM SystemSetting WHERE ID = 14 LIMIT 1;
-    SET indexLoop = 0;
-    WHILE (JSON_EXTRACT(jsonValue, CONCAT('$[',indexLoop, '].NotificationTemplateID'))) DO 
-		INSERT INTO tmpSettingData(NotificationTypeID, NotificationTemplateID, TemplateRequiredParams)
-        VALUES (
-            CASE
-                WHEN JSON_UNQUOTE(JSON_EXTRACT(jsonValue, CONCAT('$[', indexLoop, '].NotificationTypeID'))) = 'null'
-                THEN NULL
-                ELSE JSON_UNQUOTE(JSON_EXTRACT(jsonValue, CONCAT('$[', indexLoop, '].NotificationTypeID')))
-            END,
-            CASE
-                WHEN JSON_UNQUOTE(JSON_EXTRACT(jsonValue, CONCAT('$[', indexLoop, '].NotificationTemplateID'))) = 'null'
-                THEN NULL
-                ELSE JSON_UNQUOTE(JSON_EXTRACT(jsonValue, CONCAT('$[', indexLoop, '].NotificationTemplateID')))
-            END,
-			CASE
-                WHEN JSON_UNQUOTE(JSON_EXTRACT(jsonValue, CONCAT('$[', indexLoop, '].TemplateRequiredParams'))) = 'null'
-                THEN NULL
-                ELSE JSON_UNQUOTE(JSON_EXTRACT(jsonValue, CONCAT('$[', indexLoop, '].TemplateRequiredParams')))
-            END
-		);
-        
-        SET indexLoop := indexLoop + 1;
-    END WHILE;
-
+	INSERT INTO tmpNotificationTypeTable (JsonSetting)
+	SELECT Value
+	FROM SystemSetting 
+	WHERE Description LIKE '%Notification Template ID / MsgContentsType / NotificationType%';
+	
+	DROP TEMPORARY TABLE IF EXISTS tmpSettingData;
+    CREATE TEMPORARY TABLE IF NOT EXISTS tmpSettingData(NotificationTypeID INT, NotificationTemplateID INT,TemplateRequiredParams TEXT);
+	
+	SET pID = 1;
+	WHILE (EXISTS(SELECT 1 FROM tmpNotificationTypeTable WHERE ID = pID)) DO 
+		SELECT JsonSetting INTO jsonValue FROM tmpNotificationTypeTable WHERE ID = pID;
+		INSERT INTO tmpSettingData (NotificationTypeID, NotificationTemplateID, TemplateRequiredParams)
+		SELECT t.NotificationTypeID, t.NotificationTemplateID, NULLIF(t.TemplateRequiredParams, 'NULL')
+		FROM 
+			JSON_TABLE 
+			(
+				jsonValue, 
+				"$[*]"
+				COLUMNS 
+				(
+					NotificationTypeID 		SMALLINT UNSIGNED 	PATH "$.NotificationTypeID",
+					NotificationTemplateID 	INT UNSIGNED 		PATH "$.NotificationTemplateID",
+					TemplateRequiredParams 	TEXT 				PATH "$.TemplateRequiredParams"
+					
+				)
+				
+			) AS t;
+			
+			SET pID := pID + 1;
+	END WHILE;
+	
 	SELECT tmppjt.TemplateRequiredParams INTO requiredParams
 	FROM tmpSettingData tmppjt
 	WHERE tmppjt.NotificationTemplateID = notificationTemplateID
 		AND tmppjt.NotificationTypeID = notificationTypeID LIMIT 1;
-
 
 	DROP TEMPORARY TABLE IF EXISTS tmpParams;
     CREATE TEMPORARY TABLE IF NOT EXISTS tmpParams(Param VARCHAR(50));
@@ -147,16 +101,8 @@ NCB_NotificationTemplate_Upd:BEGIN
 		DEALLOCATE PREPARE Stmt;
 	END IF;
 
-	IF (
-		EXISTS (
-			SELECT 1 FROM tmpSettingData tmppjt
-			WHERE tmppjt.NotificationTemplateID = notificationTemplateID
-				AND tmppjt.NotificationTypeID = notificationTypeID
-		)
-        AND EXISTS (
-			SELECT 1 FROM tmpParams 
-			WHERE LOCATE(TRIM(Param), Content) = 0)
-    )
+	IF (EXISTS (SELECT 1 FROM tmpSettingData tmppjt WHERE tmppjt.NotificationTemplateID = notificationTemplateID AND tmppjt.NotificationTypeID = notificationTypeID) 
+		AND EXISTS (SELECT 1 FROM tmpParams WHERE LOCATE(TRIM(Param), Content) = 0))
 	THEN
 		SET errCode = 102, errMsg = 'Not allow to delete defined params';
 		LEAVE NCB_NotificationTemplate_Upd;

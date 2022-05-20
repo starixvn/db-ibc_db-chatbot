@@ -3,9 +3,9 @@ DROP PROCEDURE IF EXISTS NCB_NotificationType_Sel;
 DELIMITER //
 
 CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_NotificationType_Sel(
-	IN pageIndex INT, 
-	IN pageSize INT,
-    OUT totalItems INT
+	IN 	pageIndex 	INT, 
+	IN 	pageSize 	INT,
+    OUT totalItems 	INT
 	/*
 		Creator: Oliver@20190820
 			Task:
@@ -19,15 +19,16 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_NotificationType_Sel(
             	- 20190215@Oliver: unremovable abnormalbes settings - Redmine: #128430
 				- 20200323@Oliver: Integrate Site Message -- Redmine ID: #129979
 				- 20210423@Malcolm: Integrate abnormal account -- Redmine ID: #152175
+				- 20220404@Malcolm: Intergate Problem accounts [RedmineId: #170182]
     */
 	)
 SQL SECURITY DEFINER
 BEGIN
 	DECLARE rowStart	INT;
-	DECLARE Jsetting   JSON;
+	DECLARE jsonValue   JSON;
 
     DECLARE indexLoop   INT;
-	DECLARE _ID 			INT;
+	DECLARE pID 		INT;
     SET rowStart =	pageSize * (pageIndex - 1);  
     
     SET totalItems = (SELECT COUNT(1) FROM NotificationType nt);
@@ -37,31 +38,27 @@ BEGIN
 	
 	INSERT INTO tmpNotificationTypeTable (JsonSetting)
 	SELECT Value
-	FROM SystemSetting WHERE ID IN (4, 9, 14);
+	FROM SystemSetting 
+	WHERE Description LIKE '%Notification Template ID / MsgContentsType / NotificationType%';
 
     DROP TEMPORARY TABLE IF EXISTS tmpParseJsonTable;
-    CREATE TEMPORARY TABLE IF NOT EXISTS tmpParseJsonTable(NotificationTypeID INT);
+    CREATE TEMPORARY TABLE IF NOT EXISTS tmpParseJsonTable(NotificationTypeID SMALLINT UNSIGNED);
 
 	#Get Settings
-	SET _ID = 1;
-	
-	WHILE (EXISTS(SELECT 1 FROM tmpNotificationTypeTable WHERE ID =  _ID)) DO
-		SELECT JsonSetting INTO Jsetting FROM  tmpNotificationTypeTable WHERE ID = _ID;	
-		SET indexLoop = 0;	
-		WHILE (JSON_EXTRACT(Jsetting, CONCAT('$[',indexLoop, '].NotificationTypeID'))) DO 
-			INSERT INTO tmpParseJsonTable(NotificationTypeID)
-			VALUES (
-				CASE
-					WHEN JSON_UNQUOTE(JSON_EXTRACT(Jsetting, CONCAT('$[', indexLoop, '].NotificationTypeID'))) = 'null'
-					THEN NULL
-					ELSE JSON_UNQUOTE(JSON_EXTRACT(Jsetting, CONCAT('$[', indexLoop, '].NotificationTypeID')))
-				END
-			);
-			
-			SET indexLoop := indexLoop + 1;
-		END WHILE;
-		
-		SET _ID := _ID + 1;
+	SET pID = 1;
+	WHILE (EXISTS(SELECT 1 FROM tmpNotificationTypeTable WHERE ID =  pID)) DO
+		SELECT JsonSetting INTO jsonValue FROM  tmpNotificationTypeTable WHERE ID = pID;	
+		INSERT INTO tmpParseJsonTable (NotificationTypeID)
+		SELECT t.NotificationTypeID
+		FROM 
+			JSON_TABLE 
+			(
+				jsonValue, 
+				"$[*]"
+				COLUMNS (NotificationTypeID SMALLINT UNSIGNED 	PATH "$.NotificationTypeID")
+				
+			) AS t;
+		SET pID := pID + 1;
 	END WHILE;
     
     SELECT
@@ -69,11 +66,7 @@ BEGIN
 		nt.NotificationTypeName AS Name, 
 		s.SystemID AS SystemId,
 		s.SystemName AS SystemName,
-        CASE
-			WHEN (
-				tmppjt.NotificationTypeID IS NOT NULL
-            ) THEN 1
-			ELSE 0
+        CASE WHEN (tmppjt.NotificationTypeID IS NOT NULL) THEN 1 ELSE 0
 		END AS UnRemovable
 	FROM NotificationType nt
 	INNER JOIN `System` s ON nt.SystemID = s.SystemId

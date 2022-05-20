@@ -18,6 +18,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_NotificationType_Del(
 				- 20192312@Merlin.Le: Check not setting type before delete -- Redmine ID: #125707
 				- 20200323@Oliver: Integrate Site Message -- Redmine ID: #129979
                 - 20210513@Malcolm: Integrate Telegram - RedmineID: #151807
+				- 20220404@Malcolm: Intergate Problem accounts [RedmineId: #170182]
     */
    )
 SQL SECURITY DEFINER
@@ -28,42 +29,47 @@ BEGIN
     DECLARE duration 		INT;							
     DECLARE logContent 		TEXT CHARACTER SET utf8mb4;
     DECLARE ACTION_ID 		INT DEFAULT 17;
-	DECLARE jsonSetting     JSON;
+	DECLARE jsonValue       JSON;
     DECLARE iLoop   	    INT;
 	DECLARE jLoop   	    INT;
+	DECLARE pID 			INT;
 	
 	-- Get Start Time to calcualte execution duration
     SET startTime = UTC_TIMESTAMP(3);
     SET errCode = 0, errMsg = '';
+	
+	DROP TEMPORARY TABLE IF EXISTS tmpNotificationTypeTable;
+	CREATE TEMPORARY TABLE IF NOT EXISTS tmpNotificationTypeTable (ID INT NOT NULL AUTO_INCREMENT, JsonSetting JSON, PRIMARY KEY(ID));
+	
+	INSERT INTO tmpNotificationTypeTable (JsonSetting)
+	SELECT Value
+	FROM SystemSetting
+	WHERE Description LIKE '%Notification Template ID / MsgContentsType / NotificationType%';
     
-    DROP TEMPORARY TABLE IF EXISTS tmpSetting;
-    CREATE TEMPORARY TABLE tmpSetting (Id INT AUTO_INCREMENT NOT NULL, SettingId INT UNSIGNED NOT NULL, PRIMARY KEY (Id));
-    INSERT INTO tmpSetting (SettingId)
-    VALUES (4), (9), (14);
-
     DROP TEMPORARY TABLE IF EXISTS tmpParseJsonTable;
     CREATE TEMPORARY TABLE IF NOT EXISTS tmpParseJsonTable(NotificationTypeID INT);
     
-    SET jLoop = 1;
-    WHILE (SELECT 1 FROM tmpSetting WHERE Id = jLoop) DO
-		SELECT s.Value INTO jsonSetting
-        FROM SystemSetting s
-			INNER JOIN tmpSetting t ON t.SettingId = s.Id
-		WHERE t.Id = jLoop;
-		
-		SET iLoop = 0;
-		WHILE (JSON_EXTRACT(jsonSetting, CONCAT('$[',iLoop, '].NotificationTypeID'))) DO 
-			INSERT INTO tmpParseJsonTable(NotificationTypeID)
-			VALUES 
+	SET pID = 1;
+	WHILE (EXISTS(SELECT 1 FROM tmpNotificationTypeTable WHERE ID = pID)) DO 
+		SELECT JsonSetting INTO jsonValue FROM tmpNotificationTypeTable WHERE ID = pID;
+		INSERT INTO tmpParseJsonTable (NotificationTypeID)
+		SELECT t.NotificationTypeID
+		FROM 
+			JSON_TABLE 
 			(
-				NULLIF(JSON_UNQUOTE(JSON_EXTRACT(jsonSetting, CONCAT('$[', iLoop, '].NotificationTypeID'))), 'null')
-			);
+				jsonValue, 
+				"$[*]"
+				COLUMNS 
+				(
+					NotificationTypeID  SMALLINT UNSIGNED PATH "$.NotificationTypeID"
+					
+				)
+				
+			) AS t;
 			
-			SET iLoop := iLoop + 1;
-		END WHILE;
-		
-        SET jLoop := jLoop + 1;
-    END WHILE;
+			SET pID := pID + 1;
+	END WHILE;
+	
     IF 
     (
 		EXISTS
