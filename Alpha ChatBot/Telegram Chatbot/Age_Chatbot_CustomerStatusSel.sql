@@ -28,7 +28,7 @@ BEGIN
 	SELECT @xml = CAST(@CustList as XML)
 	
 	INSERT INTO #tblCust(CustID,SubAccID)
-	SELECT t.c.value('@id[1]','int'),
+	SELECT DISTINCT t.c.value('@id[1]','int'),
 		t.c.value('@sub[1]','int')
 	FROM @xml.nodes('Root/r') t(c)
 	
