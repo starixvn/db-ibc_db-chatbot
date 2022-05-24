@@ -46,7 +46,9 @@ BEGIN
 		
 	UPDATE t
 	SET t.IsLocked = c.Locked,
-		t.IsActive = CASE WHEN ((t.SubAccID > 0 AND t.IsActive = 1) OR t.SubAccID = 0) AND c.CloseInfo > 0 OR ci.[Enabled] = 0 THEN 0 ELSE 1 END
+		t.IsActive = CASE WHEN ((t.SubAccID > 0 AND t.IsActive = 1) OR t.SubAccID = 0) AND c.CloseInfo > 0 OR ci.[Enabled] = 0 THEN 0 
+							ELSE CASE WHEN t.SubAccID > 0 THEN t.IsActive ELSE 1 END
+						END
 	FROM #tblCust t
 		INNER JOIN Custinfo ci WITH(NOLOCK) ON t.custid = ci.custid
 		INNER JOIN CustProductStatus c WITH(NOLOCK) ON t.custid = c.custid	

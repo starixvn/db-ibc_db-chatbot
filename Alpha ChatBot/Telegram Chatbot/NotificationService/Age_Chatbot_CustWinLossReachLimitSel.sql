@@ -16,7 +16,7 @@ AS
 BEGIN
 	SET NOCOUNT ON;	
 	
-	SELECT TOP (@batchSize) wl.custid, bettype, wl.Winlost, 
+	SELECT TOP (@batchSize) wl.custid, LogID, bettype, wl.Winlost, 
 		CASE WHEN Winlost > 0 THEN MaxWinLimit ELSE MaxLossLimit END as WinLossLimit,
 		CASE WHEN Winlost > 0 THEN WinPercent ELSE LossPercent END as WinLossPercent,
 		ci.srecommend, ci.mrecommend, ci.recommend
