@@ -2,7 +2,8 @@
 ALTER PROCEDURE [dbo].[Age_Chatbot_WinLossLimitNotificationImport] 
 	@XmlData			XML
 	,@XmlDataLog		XML
-	,@Environment		VARCHAR(50) = ''	
+	,@MaxLogID			BIGINT
+	,@Environment		VARCHAR(50) = 'PRO'	
 	,@ErrCode			INT = 0 OUTPUT
 	,@ErrMsg			VARCHAR(1000) = '' OUTPUT
 AS
@@ -25,7 +26,8 @@ AS
 							<r UserId="2" LogID = "102" />
 							<r UserId="2" LogID = "103" />
 					  </root>'	
-		@Environment = 'UAT'/'PRO'			  
+		@Environment = 'UAT'/'PRO'
+		@MaxLogID: Last LogID scan	
 
 */
 BEGIN
@@ -83,6 +85,7 @@ BEGIN
 		FROM (
 			VALUES 
 				('JobStatus', 'Completed')
+				,('MaxLogID', CONVERT(VARCHAR(50), @MaxLogID))			   
 			   ,('LastRuntime', CONVERT(VARCHAR(50), GETDATE(), 120))			   
 		) n (SettingName, Value)
 		FOR XML PATH('r'), ROOT('root') 

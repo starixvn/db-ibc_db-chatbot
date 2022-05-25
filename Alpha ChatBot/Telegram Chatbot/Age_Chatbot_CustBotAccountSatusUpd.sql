@@ -23,13 +23,16 @@ BEGIN
 	DECLARE @userid INT,
 			@startRun DATETIME, 
 			@duration INT,
-			@ChatID INT
+			@ChatID INT,
+			@Language VARCHAR(10)
+			
 	DECLARE @BotName VARCHAR(200),
 			@IsTest BIT
 	
 	SELECT @startRun = GETDATE()
 	
-	SELECT @userid = userid
+	SELECT @userid = userid,
+		@Language = Language
 	FROM CustBotAccount WITH(NOLOCK)
 	WHERE custid = @CustID
 		AND subAccID = @SubAccID
@@ -93,6 +96,7 @@ BEGIN
 						+ ' BotName="' + COALESCE(@BotName, SPACE(1)) + '"'						
 						+ ' Status="' + COALESCE(CAST(@Status as VARCHAR(10)), SPACE(1)) + '"'
 						+ ' IsVerifyOTP="' + COALESCE(CAST(@IsVerifyOTP as VARCHAR(10)), SPACE(1)) + '"'
+						+ ' Language="' + COALESCE(@Language, SPACE(1)) + '"'						
 						+ ' SubAccName="' + COALESCE(dbo.f_GetSubUsername(@SubAccID), SPACE(1)) + '"'					
 						+ ' IP="' + COALESCE(@IP, SPACE(1)) + '"'
 						+ ' />'
