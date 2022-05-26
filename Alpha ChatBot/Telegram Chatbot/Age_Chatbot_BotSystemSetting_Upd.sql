@@ -4,7 +4,7 @@ ALTER PROCEDURE [dbo].[Age_Chatbot_BotSystemSetting_Upd]
 	,@Setting			 XML
 	,@SyncSettingPro	 BIT = 0
 	,@IncludeEnvironment BIT = 0
-	,@Environment	     VARCHAR(50) = ''
+	,@Environment	     VARCHAR(50) = 'LIVE'
 AS
 
 /*
@@ -26,7 +26,7 @@ AS
 BEGIN
 	SET NOCOUNT ON
 
-	SELECT @Environment = ISNULL(@Environment, '')
+	SELECT @Environment =  CASE WHEN @Environment <> 'UAT' THEN '' END
 
 	DECLARE @TmpSetting TABLE (SettingName VARCHAR(100), Value VARCHAR(1000))
 

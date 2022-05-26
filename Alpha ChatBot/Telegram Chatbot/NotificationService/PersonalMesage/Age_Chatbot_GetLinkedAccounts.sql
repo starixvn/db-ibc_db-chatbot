@@ -1,11 +1,8 @@
 /*<info serverAlias="DBBOT-bodb_ChatBot" executers="bodbDownlineNet" viewers="" selecters=""></info>*/
 ALTER PROCEDURE [dbo].[Age_Chatbot_GetLinkedAccounts] 	
-	@System			VARCHAR(50)
-	,@BotStatus		BIT
-	,@IsBotTest		BIT
-	,@CustIdList	VARCHAR(MAX)
+	@CustIdList	VARCHAR(MAX)
 	,@FunctionKey	VARCHAR(100) = ''
-	,@Environment   VARCHAR(20) = ''
+	,@Environment   VARCHAR(20) = 'LIVE'
 AS
 /*
 	Created: 20220428@Malcolm
@@ -18,17 +15,14 @@ AS
 BEGIN
 	SET NOCOUNT ON;
 	
-	DECLARE @BotId INT, @IncludeRealCurrencyUAT BIT = 0, @IncludeUUSCurrencyPRO BIT = 1, @FunctionID SMALLINT
+	DECLARE @BotId INT, @IncludeRealCurrencyUAT BIT = 0, @FunctionID SMALLINT
 
 	SELECT @FunctionID = FunctionID FROM BotFunction WITH(NOLOCK) WHERE FunctionKey = @FunctionKey AND Type = 2
 
-	SELECT @BotId = BotId FROM dbo.Bot WITH(NOLOCK) WHERE [System] = @System AND [Status] = @BotStatus AND IsTest = @IsBotTest
-
 	SELECT 
 		@IncludeRealCurrencyUAT = CASE WHEN SettingName = 'IncludeRealCurrencyUAT' THEN Value ELSE @IncludeRealCurrencyUAT END
-		,@IncludeUUSCurrencyPRO = CASE WHEN SettingName = 'IncludeUUSCurrencyPRO' THEN Value ELSE @IncludeUUSCurrencyPRO END
 	FROM dbo.BotSystemSetting WITH(NOLOCK) 
-		WHERE ServiceName = @FunctionKey AND SettingName IN ('IncludeRealCurrencyUAT', 'IncludeUUSCurrencyPRO')
+		WHERE ServiceName = @FunctionKey AND SettingName IN ('IncludeRealCurrencyUAT')
 	
 	CREATE TABLE #CustId (CustId INT, IsRealUser BIT)
 
@@ -47,14 +41,15 @@ BEGIN
 	DELETE t
 	FROM #CustId t
 	WHERE (@Environment = 'UAT' AND @IncludeRealCurrencyUAT = 0 AND t.IsRealUser = 0)
-		OR (@Environment <> 'UAT' AND @IncludeUUSCurrencyPRO = 0 AND t.IsRealUser = 1)
 
 	SELECT ca.CustID, ca.SubAccID, ca.Language, ca.CustomerLevel, ca.UserId, c.IsRealUser
 	FROM CustBotAccount ca WITH(NOLOCK)
 		INNER JOIN CustBotMessenger cm WITH(NOLOCK) ON ca.UserID = cm.UserID 
 		INNER JOIN CustBotFunction cf WITH(NOLOCK) ON ca.UserID = cf.UserID
 		INNER JOIN #CustId c ON c.CustId = ca.CustId
-	WHERE cm.BotID = @BotID
+		INNER JOIN dbo.Bot b WITH(NOLOCK) ON b.BotId = cm.BotId 
+	WHERE b.IsTest = CASE WHEN @Environment = 'UAT' THEN 1 ELSE 0 END
+		AND b.Status = 1
 		AND FunctionID = @FunctionID
 		AND cf.Status = 1 --enabled
 		AND cm.IsVerifyOTP = 1 

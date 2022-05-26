@@ -1,6 +1,6 @@
 /*<info serverAlias="DBBOT-bodb_ChatBot" executers="bodbAdminNet,bodbDownlineNet" viewers="" selecters=""></info>*/
 ALTER PROCEDURE [dbo].[Age_Chatbot_SendNotification] 
-	@Environment VARCHAR(20) = ''
+	@Environment VARCHAR(20) = 'LIVE'
 AS
 /*
 	Created: 20220512@Malcolm
@@ -16,7 +16,9 @@ AS
 BEGIN
 	SET NOCOUNT ON
 
-	DECLARE @FunctionID SMALLINT, @SendLastNotificationId BIGINT, @SendBatchSize INT, @SendIncudeUUSCurrencyPRO BIT
+	SELECT @Environment = CASE WHEN @Environment <> 'UAT' THEN '' ELSE 'UAT' END
+	
+	DECLARE @FunctionID SMALLINT, @SendLastNotificationId BIGINT, @SendBatchSize INT
 
 	DECLARE @Function TABLE (SendLastNotificationId BIGINT, FunctionId SMALLINT, FunctionKey VARCHAR(50), [Priority] SMALLINT, PRIMARY KEY (FunctionId))
 
@@ -39,11 +41,7 @@ BEGIN
 		INNER JOIN dbo.BotSystemSetting bs WITH(NOLOCK) ON bs.ServiceName = f.FunctionKey
 	WHERE bs.SettingName = 'SendLastNotificationId' + @Environment
 
-	SELECT 
-		@SendBatchSize = CASE WHEN SettingName = 'BatchSize' THEN Value ELSE @SendBatchSize END
-		,@SendIncudeUUSCurrencyPRO = CASE WHEN SettingName = 'IncudeUUSCurrencyPRO' THEN Value ELSE @SendIncudeUUSCurrencyPRO END
-	FROM dbo.BotSystemSetting WITH(NOLOCK) 
-	WHERE ServiceName = 'SendNotification' AND SettingName IN ('BatchSize', 'IncudeUUSCurrencyPRO')
+	SELECT @SendBatchSize = Value FROM dbo.BotSystemSetting WITH(NOLOCK) WHERE ServiceName = 'SendNotification' AND SettingName = 'BatchSize'
 
 	DECLARE @SendNotification TABLE 
 	(
@@ -54,20 +52,39 @@ BEGIN
 		,UserId			INT
 		,CustId			INT
 		,SubAccId		INT
+		,ErrCode		TINYINT
 	)
 
-	INSERT INTO @SendNotification (NotificationID, FunctionId, FunctionKey, Message, UserId, CustId, SubAccId)
-	SELECT TOP(@SendBatchSize) cbn.NotificationID, f.FunctionId, f.FunctionKey, cbn.Message, cbn.UserId, cba.CustId, cba.SubAccId
+	INSERT INTO @SendNotification (NotificationID, FunctionId, FunctionKey, Message, UserId, CustId, SubAccId, ErrCode)
+	SELECT TOP(@SendBatchSize) cbn.NotificationID, f.FunctionId, f.FunctionKey, cbn.Message, cbn.UserId, cba.CustId, cba.SubAccId, 
+		CASE WHEN b.Status = 0 THEN 1 ELSE 0 END
 	FROM dbo.CustBotNotification cbn WITH(NOLOCK)
 		INNER JOIN @Function f ON f.FunctionId = cbn.FunctionID 
-		LEFT JOIN dbo.CustBotAccount cba WITH(NOLOCK) ON cba.UserId = cbn.UserID
-		LEFT JOIN bodb02.dbo.Customer c WITH(NOLOCK) ON c.custid = cba.CustID
+		INNER JOIN dbo.CustBotAccount cba WITH(NOLOCK) ON cba.UserId = cbn.UserID
+		INNER JOIN dbo.CustBotMessenger cbm  WITH(NOLOCK) ON cbm.UserId = cbn.UserID
+		INNER JOIN dbo.Bot b WITH(NOLOCK) ON b.BotId = cbm.BotId 
 	WHERE cbn.NotificationID > f.SendLastNotificationId AND cbn.NotificationID <= @MaxNotificationId AND cbn.Status = 'Initial'
-		AND ((c.currency = 20 AND @Environment = 'UAT') OR ((@SendIncudeUUSCurrencyPRO = 1 OR c.currency <> 20 ) AND @Environment <> 'UAT'))
+		AND b.IsTest = CASE WHEN @Environment = 'UAT' THEN 1 ELSE 0 END
 	ORDER BY f.Priority ASC, cbn.NotificationID ASC
 
+	UPDATE s 
+		SET s.ErrCode = CASE WHEN cbf.Status = 0 THEN 2 -- turn off Setting
+							 WHEN cbm.Status = 0 THEN 3 -- Unlink
+			                 WHEN cbm.IsVerifyOTP = 0 THEN 4 -- unverifyOTP
+		                ELSE 0 END
+	FROM @SendNotification s
+		INNER JOIN dbo.CustBotFunction cbf WITH(NOLOCK) ON cbf.UserID = s.UserId AND cbf.FunctionID = s.FunctionId
+		INNER JOIN dbo.CustBotMessenger cbm WITH(NOLOCK) ON cbm.UserId = s.UserId
+	WHERE s.ErrCode = 0
+	
 	UPDATE cbn WITH(ROWLOCK)
-		SET cbn.Status = 'Sending'
+		SET cbn.Status = CASE WHEN s.ErrCode = 0 THEN 'Sending'
+						 ELSE 'Fail' END
+			,cbn.Description = CASE WHEN s.ErrCode = 1 THEN 'bot is disable'
+									WHEN s.ErrCode = 2 THEN 'turn off Setting'
+									WHEN s.ErrCode = 3 THEN 'Unlink'
+									WHEN s.ErrCode = 4 THEN 'unverifyOTP'
+								ELSE '' END		
 	FROM CustBotNotification cbn 
 		INNER JOIN @SendNotification s ON s.NotificationID = cbn.NotificationID
 
@@ -99,13 +116,10 @@ BEGIN
 		,s.Message
 		,cbm.BotId
 		,cbm.ChatID
-		,CASE WHEN cbf.Status = 0 THEN 1 -- turn off Setting
-			  WHEN cbm.Status = 0 THEN 2 -- Unlink
-			  WHEN cbm.IsVerifyOTP = 0 THEN 3 -- unverifyOTP
-		ELSE 0 END AS ErrCode-- Ready to send
 	FROM @SendNotification s
 		INNER JOIN dbo.CustBotFunction cbf WITH(NOLOCK) ON cbf.UserID = s.UserId AND cbf.FunctionID = s.FunctionId
 		INNER JOIN dbo.CustBotMessenger cbm WITH(NOLOCK) ON cbm.UserId = s.UserId
+	WHERE s.ErrCode = 0
 
 	SELECT 
 		LastNotificationId

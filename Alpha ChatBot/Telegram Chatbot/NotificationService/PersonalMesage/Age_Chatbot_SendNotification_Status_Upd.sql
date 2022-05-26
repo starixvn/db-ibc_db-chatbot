@@ -2,7 +2,7 @@
 ALTER PROCEDURE [dbo].[Age_Chatbot_SendNotification_Status_Upd]
 	@XmlData				XML
 	,@XmlLastNotification	XML
-	,@Environment			VARCHAR(20) = ''
+	,@Environment			VARCHAR(20) = 'LIVE'
 	,@ErrCode				INT = 0 OUTPUT
 	,@ErrMsg				NVARCHAR(4000) = '' OUTPUT
 AS
@@ -32,9 +32,7 @@ AS
 BEGIN
 	SET NOCOUNT ON
 
-	DECLARE @SyncSettingPRO BIT
-
-	SELECT @SyncSettingPRO = Value FROM dbo.BotSystemSetting WITH(NOLOCK) WHERE ServiceName = 'PersonalMessage' AND SettingName = 'SyncSettingPRO'
+	SELECT @Environment = CASE WHEN @Environment = 'UAT' THEN 'UAT' ELSE '' END
 
 	CREATE TABLE #tmpNotificationGroup (NotificationId BIGINT, Status VARCHAR(20), ErrMsg NVARCHAR(MAX), Retry TINYINT)
 	CREATE TABLE #tmpNotification (NotificationId BIGINT, Status VARCHAR(20), Retry TINYINT)
@@ -72,13 +70,20 @@ BEGIN
 			INNER JOIN @TmpLastNotification t ON t.FunctionKey = s.ServiceName
 		WHERE s.SettingName = 'SendLastNotificationId' + @Environment AND s.Value <> t.LastnotificationId
 
-		IF @SyncSettingPRO = 1 AND @Environment <> 'UAT'
+		IF @Environment <> 'UAT'
 		BEGIN
+			;WITH CTE AS
+			(
+				SELECT DISTINCT ServiceName
+				FROM dbo.BotSystemSetting s WITH(NOLOCK)
+				WHERE SettingName = 'SyncSettingPRO'
+			)
 			UPDATE s WITH(ROWLOCK)
 				SET s.Value = t.LastnotificationId
-			FROM dbo.BotSystemSetting s
+			FROM dbo.BotSystemSetting s	
 				INNER JOIN @TmpLastNotification t ON t.FunctionKey = s.ServiceName
 			WHERE s.SettingName = 'SendLastNotificationIdUAT' AND s.Value <> t.LastnotificationId
+				AND EXISTS (SELECT 1 FROM CTE e WHERE e.ServiceName = t.FunctionKey)
 		END
 	END
 

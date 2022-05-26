@@ -1,7 +1,7 @@
 /*<info serverAlias="DBBOT-bodb_ChatBot" executers="bodbDownlineNet" isFunction="0" isNested="0"></info>*/
 ALTER PROCEDURE [dbo].[Age_Chatbot_BotSystemSetting_Sel]
 	@ServiceName VARCHAR(100) 
-	,@Environment VARCHAR(50) = ''
+	,@Environment VARCHAR(50) = 'LIVE'
 AS
 
 /*

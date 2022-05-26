@@ -1,7 +1,7 @@
 /*<info serverAlias="DBBOT-bodb_ChatBot" executers="bodbAdminNet,bodbDownlineNet" viewers="" selecters=""></info>*/
 ALTER PROCEDURE [dbo].[Age_Chatbot_PersonalMessageImport] 
 	@XmlData			XML
-	,@Environment		VARCHAR(50) = ''
+	,@Environment		VARCHAR(50) = 'LIVE'
 	,@MaxMsgTargetId	INT
 	,@ErrCode			INT = 0 OUTPUT
 	,@ErrMsg			VARCHAR(1000) = '' OUTPUT
@@ -72,8 +72,8 @@ BEGIN
 	FROM #ImportData i
 		INNER JOIN #TmpNotification tn ON tn.Id = i.Id
 
-	INSERT INTO dbo.NotificationReferenceLog (NotificationId, ReferenceId, FunctionId)
-	SELECT NotificationId, MsgTargetId, @FunctionId
+	INSERT INTO dbo.NotificationReferenceLog (NotificationId, ReferenceId, FunctionId, Environment)
+	SELECT NotificationId, MsgTargetId, @FunctionId, @Environment
 	FROM #ImportData
 	ORDER BY Id ASC
 
