@@ -16,7 +16,7 @@ AS
 	
 	Paramter's Explanations:
 		 @XmlData = '<root>
-							<r UserId="1" MsgTargetId="2" MessageId="1" Message="XXX" Status="Initial" Description=""/>
+							<r UserId="1" MsgTargetId="2" MessageId="1" Message="XXX" Status="Initial"/>
 					  </root>'
 
 */
@@ -40,23 +40,21 @@ BEGIN
 		,MessageId		INT
 		,Message		NVARCHAR(MAX)
 		,Status			VARCHAR(20)
-		,Description	NVARCHAR(1000)
 	)
 
-	INSERT INTO #ImportData (UserID, MsgTargetId, MessageId, Message, Status, Description)
+	INSERT INTO #ImportData (UserID, MsgTargetId, MessageId, Message, Status)
 	SELECT 
 		t.c.value('@UserId', 'INT')					 AS UserID
 		,t.c.value('@MsgTargetId', 'INT')			 AS MsgTargetId
 		,t.c.value('@MessageId', 'INT')				 AS MessageId
 		,t.c.value('@Message', 'NVARCHAR(MAX)')		 AS Message
 		,t.c.value('@Status', 'VARCHAR(20)')		 AS Status
-		,t.c.value('@Description', 'NVARCHAR(1000)') AS Description
 	FROM @XmlData.nodes ('root/r') t(c)
 	OPTION (OPTIMIZE FOR (@XmlData = NULL))
 
 	INSERT INTO dbo.CustBotNotification (UserID, FunctionID, Message, Status, Description, CreatedDate, ReferenceId)
 	OUTPUT inserted.NotificationID INTO #TmpNotification (NotificationId)
-	SELECT UserID, @FunctionId, Message, Status, Description, GETDATE(), MessageID
+	SELECT UserID, @FunctionId, Message, Status, '', GETDATE(), MessageID
 	FROM #ImportData
 	ORDER BY ID ASC
 

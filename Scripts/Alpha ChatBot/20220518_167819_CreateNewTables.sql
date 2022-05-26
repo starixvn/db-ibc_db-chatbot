@@ -12,6 +12,7 @@ CREATE TABLE dbo.NotificationReferenceLog
 	,ReferenceID	BIGINT NULL
 	,FunctionID		SMALLINT NULL
 	,Environment    VARCHAR(20)
+	,CreatedDate	DATETIME DEFAULT GETDATE()
 ) ON [DATA]
 
 CREATE CLUSTERED INDEX CIX_NotificationID_ReferenceID ON dbo.NotificationReferenceLog (NotificationID, ReferenceID) ON [DATA]

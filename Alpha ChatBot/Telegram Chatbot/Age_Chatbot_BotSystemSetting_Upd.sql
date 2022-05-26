@@ -26,7 +26,7 @@ AS
 BEGIN
 	SET NOCOUNT ON
 
-	SELECT @Environment =  CASE WHEN @Environment <> 'UAT' THEN '' END
+	SELECT @Environment = CASE WHEN @Environment <> 'UAT' THEN '' ELSE 'UAT' END
 
 	DECLARE @TmpSetting TABLE (SettingName VARCHAR(100), Value VARCHAR(1000))
 
