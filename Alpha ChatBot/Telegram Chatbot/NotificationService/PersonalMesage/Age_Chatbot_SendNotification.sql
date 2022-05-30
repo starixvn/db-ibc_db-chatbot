@@ -84,7 +84,8 @@ BEGIN
 									WHEN s.ErrCode = 2 THEN 'turn off Setting'
 									WHEN s.ErrCode = 3 THEN 'Unlink'
 									WHEN s.ErrCode = 4 THEN 'unverifyOTP'
-								ELSE '' END		
+								ELSE '' END	
+			,cbn.UpdatedTime = GETDATE()
 	FROM CustBotNotification cbn 
 		INNER JOIN @SendNotification s ON s.NotificationID = cbn.NotificationID
 

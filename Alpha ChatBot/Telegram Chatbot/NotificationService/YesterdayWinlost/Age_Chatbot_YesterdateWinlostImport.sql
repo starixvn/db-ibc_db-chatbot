@@ -34,7 +34,7 @@ BEGIN
 
 	CREATE TABLE #ImportData 
 	(
-		ID				INT
+		ID				INT IDENTITY(1, 1)
 		,NotificationId BIGINT
 		,UserID			INT
 		,Message		NVARCHAR(MAX)
@@ -49,25 +49,6 @@ BEGIN
 	FROM @XmlData.nodes ('root/r') t(c)
 	OPTION (OPTIMIZE FOR (@XmlData = NULL))
 
-	IF EXISTS (
-		SELECT 1
-		FROM #ImportData i	
-			INNER JOIN dbo.NotificationReferenceLog nrl WITH(NOLOCK)
-				ON nrl.ReferenceID = i.UserID AND nrl.Environment = @Environment AND nrl.CreatedDate = @WinlostDate AND nrl.FunctionId = @FunctionId
-	)
-	BEGIN
-		DELETE i
-		FROM #ImportData i 
-			INNER JOIN dbo.NotificationReferenceLog nrl WITH(NOLOCK)
-				ON nrl.ReferenceID = i.UserID AND nrl.Environment = @Environment AND nrl.CreatedDate = @WinlostDate AND  nrl.FunctionId = @FunctionId
-	END
-
-	UPDATE n
-		SET n.Id = n.rn
-	FROM (
-		SELECT n.ID, ROW_NUMBER() OVER(ORDER BY UserID ASC) AS rn
-		FROM #ImportData n
-	) n
 
 	INSERT INTO dbo.CustBotNotification (UserID, FunctionID, Message, Status, CreatedDate)
 	OUTPUT inserted.NotificationID INTO #TmpNotification (NotificationId)
@@ -88,7 +69,7 @@ BEGIN
 		INNER JOIN #TmpNotification tn ON tn.Id = i.Id
 
 	INSERT INTO dbo.NotificationReferenceLog (NotificationId, ReferenceID, FunctionId, Environment, CreatedDate)
-	SELECT NotificationId, UserID, @FunctionId, @Environment, @WinlostDate
+	SELECT NotificationId, UserID, @FunctionId, @Environment, GETDATE()
 	FROM #ImportData
 	ORDER BY Id ASC
 
