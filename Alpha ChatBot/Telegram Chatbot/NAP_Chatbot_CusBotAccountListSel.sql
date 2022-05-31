@@ -103,4 +103,5 @@ BEGIN
 			INNER JOIN Bot b WITH(NOLOCK) ON rs.BotID = b.BotID
 			INNER JOIN bodb02.dbo.Exchange e ON rs.currency = e.ExchangeID
 		WHERE rn BETWEEN @RowStart AND @RowEnd
+		ORDER BY rn ASC
 END

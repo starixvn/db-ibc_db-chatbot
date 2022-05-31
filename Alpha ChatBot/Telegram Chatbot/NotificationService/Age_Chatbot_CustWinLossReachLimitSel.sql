@@ -27,11 +27,13 @@ BEGIN
 	WHERE LogID >= @LastLogID		
 	ORDER BY LogID ASC
 	
+	SELECT @MaxLogID = MAX(LogID) FROM #Result
+	
 	SELECT rs.*, su.username as super, m.username as master, a.username as agent, s.ProductID
 	FROM #Result rs
 		INNER JOIN DBTXN.bodb02.dbo.SportBettypeMatrix s WITH(NOLOCK) ON rs.bettype = s.bettype
 		INNER JOIN customer su WITH(NOLOCK) ON rs.srecommend = su.custid
 		INNER JOIN customer m WITH(NOLOCK) ON rs.mrecommend = m.custid
-		INNER JOIN customer a WITH(NOLOCK) ON rs.recommend = a.custid
-		
+		INNER JOIN customer a WITH(NOLOCK) ON rs.recommend = a.custid	
+	
 END	

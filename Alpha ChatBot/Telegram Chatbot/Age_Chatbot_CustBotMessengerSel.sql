@@ -29,7 +29,7 @@ BEGIN
 	WHERE custid = @custid
 		AND SubAccID = @SubAccID
 	
-	SELECT userid, b.BotID, b.Name as BotName, c.ChatID, c.Status, IsVerifyOTP,@Language as Language
+	SELECT userid, b.BotID, b.Name as BotName, b.System, c.ChatID, c.Status, IsVerifyOTP,@Language as Language
 	FROM CustBotMessenger c WITH(NOLOCK) 
 		INNER JOIN Bot b WITH(NOLOCK) ON c.BotID = b.BotID
 	WHERE userid = @userid

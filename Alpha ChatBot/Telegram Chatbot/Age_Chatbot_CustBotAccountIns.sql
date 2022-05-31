@@ -94,6 +94,10 @@ BEGIN
 		RETURN;	
 	END
 	
+	UPDATE CustBotAccount WITH(ROWLOCK)
+	SET Language = @Language
+	WHERE userid = @userid
+	
 	MERGE CustBotFunction as Target
 	USING (SELECT @userid as userid, FunctionID FROM BotFunction WITH(NOLOCK) 
 			WHERE Status <= @IsTest
