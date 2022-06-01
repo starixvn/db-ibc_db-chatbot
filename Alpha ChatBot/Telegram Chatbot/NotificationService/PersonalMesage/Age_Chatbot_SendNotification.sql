@@ -33,7 +33,7 @@ BEGIN
 	SELECT bf.FunctionID, bf.FunctionKey, bf.Priority
 	FROM dbo.BotFunction bf WITH(NOLOCK)
 		INNER JOIN CTE e ON e.ServiceName = bf.FunctionKey
-	WHERE bf.Type = 2
+	WHERE bf.Type = 2 AND bf.Status <= CASE WHEN @Environment <> 'UAT' THEN 0 ELSE 1 END
 
 	UPDATE f
 		SET f.SendLastNotificationId = CONVERT(BIGINT, bs.Value)
@@ -68,22 +68,22 @@ BEGIN
 	ORDER BY f.Priority ASC, cbn.NotificationID ASC
 
 	UPDATE s 
-		SET s.ErrCode = CASE WHEN cbf.Status = 0 THEN 2 -- turn off Setting
-							 WHEN cbm.Status = 0 THEN 3 -- Unlink
-			                 WHEN cbm.IsVerifyOTP = 0 THEN 4 -- unverifyOTP
+		SET s.ErrCode = CASE WHEN cbm.Status = 0 THEN 2 -- Unlink
+							 WHEN cbm.IsVerifyOTP = 0 THEN 3 -- unverifyOTP
+							 WHEN cbf.Status = 0 THEN 4 -- turn off Setting          
 		                ELSE 0 END
 	FROM @SendNotification s
-		INNER JOIN dbo.CustBotFunction cbf WITH(NOLOCK) ON cbf.UserID = s.UserId AND cbf.FunctionID = s.FunctionId
 		INNER JOIN dbo.CustBotMessenger cbm WITH(NOLOCK) ON cbm.UserId = s.UserId
+		LEFT JOIN dbo.CustBotFunction cbf WITH(NOLOCK) ON cbf.UserID = s.UserId AND cbf.FunctionID = s.FunctionId
 	WHERE s.ErrCode = 0
 	
 	UPDATE cbn WITH(ROWLOCK)
 		SET cbn.Status = CASE WHEN s.ErrCode = 0 THEN 'Sending'
 						 ELSE 'Fail' END
-			,cbn.Description = CASE WHEN s.ErrCode = 1 THEN 'bot is disable'
-									WHEN s.ErrCode = 2 THEN 'turn off Setting'
-									WHEN s.ErrCode = 3 THEN 'Unlink'
-									WHEN s.ErrCode = 4 THEN 'unverifyOTP'
+			,cbn.Description = CASE WHEN s.ErrCode = 1 THEN 'Bot is disable'
+									WHEN s.ErrCode = 2 THEN 'Your telegram is unlinked with Mockup Chatbot so  you cannot receive notifications anymore.'
+									WHEN s.ErrCode = 3 THEN 'UnverifyOTP'
+									WHEN s.ErrCode = 4 THEN 'The Notification setting is turned off so you cannot receive notifications anymore.'		
 								ELSE '' END	
 			,cbn.UpdatedTime = GETDATE()
 	FROM CustBotNotification cbn 
