@@ -67,7 +67,7 @@ BEGIN
 		t.c.value('@Id', 'INT') AS Id
 		,t.c.value('@LogId', 'INT')	AS LogId
 	FROM @XmlDataLog.nodes ('root/r') t(c)
-	OPTION (OPTIMIZE FOR (@XmlData = NULL))
+	OPTION (OPTIMIZE FOR (@XmlDataLog = NULL))
 
 	INSERT INTO dbo.CustBotNotification (UserID, FunctionID, Message, Status, Description, CreatedDate, ReferenceId)
 	OUTPUT inserted.NotificationID INTO #TmpNotification (NotificationId)
