@@ -1,6 +1,7 @@
 /*<info serverAlias="DBBOT-bodb_ChatBot" executers="bodbAdminNet,bodbDownlineNet" viewers="" selecters=""></info>*/
 ALTER PROCEDURE [dbo].[Age_Chatbot_CustBotFunctionUpd] 
 	@UserID INT,	
+	@BotID INT = 0,
 	@Setting VARCHAR(MAX)= '',
 	@Creator INT,
 	@IP	VARCHAR(30)= '',
@@ -51,6 +52,15 @@ BEGIN
 	BEGIN
 		SELECT @ErrCode = 101,
 			@ErrMsg = 'Invalid account'
+		RETURN;	
+	END
+	
+	IF NOT EXISTS(SELECT 1 FROM CustBotMessenger WITH(NOLOCK) 
+				WHERE userid = @userid AND botid = @botid
+					AND status = 1 AND IsVerifyOTP = 1)
+	BEGIN
+		SELECT @ErrCode = 102,
+			@ErrMsg = 'Your telegram has been unlinked with Chatbot mockup.'
 		RETURN;	
 	END
 	

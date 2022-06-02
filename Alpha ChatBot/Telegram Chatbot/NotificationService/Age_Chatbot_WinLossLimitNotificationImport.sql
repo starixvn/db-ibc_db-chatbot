@@ -35,7 +35,7 @@ BEGIN
 	
 	CREATE TABLE #tmpData (ID INT IDENTITY(1,1) PRIMARY KEY,UserID INT, Message NVARCHAR(MAX),Status VARCHAR(20))
 	CREATE TABLE #tmpDataLog (ID INT IDENTITY(1,1) PRIMARY KEY,UserID INT, LogID BIGINT)
-	CREATE TABLE #tmpNotification (ID INT IDENTITY(1,1) PRIMARY KEY,UserID INT, Message NVARCHAR(MAX))
+	CREATE TABLE #tmpNotification (NotificationID BIGINT PRIMARY KEY,UserID INT, Message NVARCHAR(MAX))
 	
 	DECLARE @SettingXML NVARCHAR(300), @SyncSettingPRO BIT, @FunctionId INT 
 	SELECT @FunctionId = FunctionId FROM dbo.BotFunction WITH(NOLOCK) WHERE FunctionKey = 'MemberWinLossLimit' AND Type = 2

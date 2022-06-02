@@ -1,6 +1,7 @@
 /*<info serverAlias="DBBOT-bodb_ChatBot" executers="bodbDownlineNet" viewers="" selecters=""></info>*/
 ALTER PROCEDURE [dbo].[Age_Chatbot_CustBotAccountLanguageUpd] 		
 	@UserID 	INT,
+	@BotID		INT=0,
 	@Language 	VARCHAR(10) = '',	
 	@IP			VARCHAR(30)= '',
 	@ErrCode 	INT = 0 OUTPUT,
@@ -31,7 +32,16 @@ BEGIN
 		@SubAccID = SubAccID
 	FROM CustBotAccount WITH(NOLOCK)	
 	WHERE userid = @userid
-		
+	
+	IF NOT EXISTS(SELECT 1 FROM CustBotMessenger WITH(NOLOCK) 
+				WHERE userid = @userid AND botid = @botid
+					AND status = 1 AND IsVerifyOTP = 1)
+	BEGIN
+		SELECT @ErrCode = 102,
+			@ErrMsg = 'Your telegram has been unlinked with Chatbot mockup.'
+		RETURN;	
+	END
+	
 	UPDATE CustBotAccount WITH(ROWLOCK)
 	SET Language = @Language
 	WHERE userid = @userid

@@ -31,7 +31,8 @@ BEGIN
 			@old_Status BIT,
 			@old_IsVerifyOTP BIT,
 			@BotName VARCHAR(200),
-			@IsTest BIT
+			@IsTest BIT,
+			@IsUpdated BIT =0
 	
 	SELECT @startRun = GETDATE()	
 	
@@ -58,10 +59,19 @@ BEGIN
 	SELECT @BotName = Name, 
 		@IsTest = IsTest
 	FROM Bot WITH(NOLOCK) WHERE BotID = @BotID
+	
+	IF	@Status = 1
+	BEGIN
+		UPDATE CustBotAccount WITH(ROWLOCK)
+		SET Language = @Language
+		WHERE userid = @userid
 		
-	UPDATE CustBotAccount WITH(ROWLOCK)
-	SET Language = @Language
-	WHERE userid = @userid
+		SET @IsUpdated= 1
+	END
+	ELSE
+	BEGIN
+		SET @Language = @Old_Language--write log language not change
+	END
 	
 	IF @Status <> @old_Status AND @IsVerifyOTP <> @Old_IsVerifyOTP
 	BEGIN
@@ -81,8 +91,13 @@ BEGIN
 		WHEN Matched AND @Status = 1 THEN
 			UPDATE SET Status = 1
 		WHEN NOT MATCHED AND @status = 1 THEN INSERT(UserID,FunctionID,Status) VALUES(Source.UserID,Source.FunctionID,1);
+		
+		SET @IsUpdated= 1
 	END
 	
+	IF @IsUpdated= 0
+		RETURN;
+		
 	SELECT @Duration = DATEDIFF (MILLISECOND, @startRun, GETDATE())
 	
 	-- Write log
@@ -94,6 +109,7 @@ BEGIN
 						+ ' ChatID="' + COALESCE(CAST(@ChatID as VARCHAR(10)), SPACE(1)) + '"'
 						+ ' Status="' + COALESCE(CAST(@Old_Status as VARCHAR(10)), SPACE(1)) + '"'
 						+ ' IsVerifyOTP="' + COALESCE(CAST(@IsVerifyOTP as VARCHAR(10)), SPACE(1)) + '"'
+						+ ' Language="' + COALESCE(@Old_Language, SPACE(1)) + '"'
 						+ ' SubAccName="' + COALESCE(dbo.f_GetSubUsername(@SubAccID), SPACE(1)) + '"'					
 						+ ' IP="' + COALESCE(@IP, SPACE(1)) + '"'
 						+ ' />'
@@ -103,6 +119,7 @@ BEGIN
 						+ ' ChatID="' + COALESCE(CAST(@ChatID as VARCHAR(10)), SPACE(1)) + '"'						
 						+ ' Status="' + COALESCE(CAST(@Status as VARCHAR(10)), SPACE(1)) + '"'
 						+ ' IsVerifyOTP="' + COALESCE(CAST(@IsVerifyOTP as VARCHAR(10)), SPACE(1)) + '"'
+						+ ' Language="' + COALESCE(@Language, SPACE(1)) + '"'
 						+ ' SubAccName="' + COALESCE(dbo.f_GetSubUsername(@SubAccID), SPACE(1)) + '"'					
 						+ ' IP="' + COALESCE(@IP, SPACE(1)) + '"'
 						+ ' />'
@@ -111,6 +128,7 @@ BEGIN
 			@UserID = @creator,
 			@CustID = @CustID,
 			@ActionID = 95068,
-			@TrackingValue = @LogDataNew,			
+			@TrackingValue = @LogDataNew,	
+			@TrackingValue2 = @LogDataOld,			
 			@Duration = @Duration			
 END	
