@@ -17,12 +17,11 @@ BEGIN
 	
 	DECLARE @BotId INT, @IncludeRealCurrencyUAT BIT = 0, @FunctionID SMALLINT
 
-	SELECT @FunctionID = FunctionID FROM BotFunction WITH(NOLOCK) WHERE FunctionKey = @FunctionKey AND Type = 2
+	SELECT @FunctionID = FunctionID FROM dbo.BotFunction WITH(NOLOCK) WHERE FunctionKey = @FunctionKey AND Type = 2
 
-	SELECT 
-		@IncludeRealCurrencyUAT = CASE WHEN SettingName = 'IncludeRealCurrencyUAT' THEN Value ELSE @IncludeRealCurrencyUAT END
+	SELECT @IncludeRealCurrencyUAT = CONVERT(BIT, Value)
 	FROM dbo.BotSystemSetting WITH(NOLOCK) 
-		WHERE ServiceName = @FunctionKey AND SettingName IN ('IncludeRealCurrencyUAT')
+	WHERE ServiceName = @FunctionKey AND SettingName = 'IncludeRealCurrencyUAT'
 	
 	CREATE TABLE #CustId (CustId INT, IsRealUser BIT)
 
@@ -34,8 +33,9 @@ BEGIN
 		SET t.IsRealUser = n.IsRealUser
 	FROM #CustId t
 	CROSS APPLY (
-		SELECT CASE WHEN c.currency = 20 THEN 1 ELSE 0 END AS IsRealUser
-		FROM bodb02.dbo.Customer c WITH(NOLOCK) WHERE c.custid = T.CustId
+		SELECT CASE WHEN c.currency = 20 THEN 0 ELSE 1 END AS IsRealUser
+		FROM bodb02.dbo.Customer c WITH(NOLOCK) 
+		WHERE c.custid = t.CustId
 	) n
 
 	DELETE t
@@ -43,14 +43,14 @@ BEGIN
 	WHERE (@Environment = 'UAT' AND @IncludeRealCurrencyUAT = 0 AND t.IsRealUser = 0)
 
 	SELECT ca.CustID, ca.SubAccID, ca.Language, ca.CustomerLevel, ca.UserId, c.IsRealUser
-	FROM CustBotAccount ca WITH(NOLOCK)
-		INNER JOIN CustBotMessenger cm WITH(NOLOCK) ON ca.UserID = cm.UserID 
-		INNER JOIN CustBotFunction cf WITH(NOLOCK) ON ca.UserID = cf.UserID
+	FROM dbo.CustBotAccount ca WITH(NOLOCK)
+		INNER JOIN dbo.CustBotMessenger cm WITH(NOLOCK) ON ca.UserID = cm.UserID 
+		INNER JOIN dbo.CustBotFunction cf WITH(NOLOCK) ON ca.UserID = cf.UserID
 		INNER JOIN #CustId c ON c.CustId = ca.CustId
 		INNER JOIN dbo.Bot b WITH(NOLOCK) ON b.BotId = cm.BotId 
 	WHERE b.IsTest = CASE WHEN @Environment = 'UAT' THEN 1 ELSE 0 END
 		AND b.Status = 1
-		AND FunctionID = @FunctionID
+		AND cf.FunctionID = @FunctionID
 		AND cf.Status = 1 --enabled
 		AND cm.IsVerifyOTP = 1 
 		AND cm.Status = 1

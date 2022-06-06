@@ -8,7 +8,7 @@
 
 CREATE TABLE dbo.NotificationReferenceLog
 (
-	NotificationID	INT NULL
+	NotificationID	BIGINT NULL
 	,ReferenceID	BIGINT NULL
 	,FunctionID		SMALLINT NULL
 	,Environment    VARCHAR(20)

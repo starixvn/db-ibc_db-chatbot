@@ -40,20 +40,18 @@ BEGIN
 	SELECT @__UserId = MAX(UserId) FROM dbo.CustBotAccount WITH(NOLOCK)
 
 	SELECT @FunctionID = FunctionID FROM dbo.BotFunction WITH(NOLOCK) WHERE FunctionKey = 'YesterdayWinLoss' AND Type = 2
-
-	SELECT @IncludeRealCurrencyUAT = Value FROM dbo.BotSystemSetting WITH(NOLOCK)  WHERE ServiceName = 'YesterdayWinLoss' AND SettingName = 'IncludeRealCurrencyUAT'
 	
 	DECLARE @Tmp TABLE (CustId INT, SubAccID INT, Language VARCHAR(10), CustomerLevel TINYINT, UserId INT, IsRealUser BIT)
 
 	INSERT INTO @Tmp (CustId, SubAccID, Language, CustomerLevel, UserId, IsRealUser)
 	SELECT TOP(@BatchSize) ca.CustID, ca.SubAccID, ca.Language, ca.CustomerLevel, ca.UserId, CASE WHEN c.currency = 20 THEN 0 ELSE 1 END AS IsRealUser
-	FROM CustBotAccount ca WITH(NOLOCK)
-		INNER JOIN CustBotMessenger cm WITH(NOLOCK) ON ca.UserID = cm.UserID 
-		INNER JOIN CustBotFunction cf WITH(NOLOCK) ON ca.UserID = cf.UserID
+	FROM dbo.CustBotAccount ca WITH(NOLOCK)
+		INNER JOIN dbo.CustBotMessenger cm WITH(NOLOCK) ON ca.UserID = cm.UserID 
+		INNER JOIN dbo.CustBotFunction cf WITH(NOLOCK) ON ca.UserID = cf.UserID
 		INNER JOIN dbo.Bot b WITH(NOLOCK) ON b.BotId = cm.BotId 
 		INNER JOIN bodb02.dbo.Customer c WITH(NOLOCK) ON c.custid = ca.CustId
 	WHERE b.IsTest = CASE WHEN @Environment = 'UAT' THEN 1 ELSE 0 END
-		AND b.Status = 1 AND FunctionID = @FunctionID AND cf.Status = 1 AND cm.IsVerifyOTP = 1 AND cm.Status = 1 
+		AND b.Status = 1 AND cf.FunctionID = @FunctionID AND cf.Status = 1 AND cm.IsVerifyOTP = 1 AND cm.Status = 1 
 		AND ca.UserId > @LastUserId AND ca.UserId <= @__UserId
 		AND (@Environment = 'UAT' AND @IncludeRealCurrencyUAT = 0 AND c.currency = 20 OR @Environment <> 'UAT' OR @IncludeRealCurrencyUAT = 1) 
 

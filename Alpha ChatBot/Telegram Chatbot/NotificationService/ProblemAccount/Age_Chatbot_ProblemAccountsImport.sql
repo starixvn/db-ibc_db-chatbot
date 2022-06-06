@@ -37,6 +37,7 @@ BEGIN
 	SELECT @SyncSettingPRO = Value FROM dbo.BotSystemSetting WITH(NOLOCK) WHERE ServiceName = 'ProblemAccount' AND SettingName = 'SyncSettingPRO'
 
 	CREATE TABLE #TmpNotification (NotificationId BIGINT, ID INT)
+	CREATE CLUSTERED INDEX ix_Id ON #TmpNotification (Id)
 
 	CREATE TABLE #ImportData 
 	(
@@ -61,6 +62,8 @@ BEGIN
 		,NotificationId BIGINT
 		,LogId INT
 	)
+
+	CREATE CLUSTERED INDEX ix_Id ON #ImportDataLog (Id)
 
 	INSERT INTO #ImportDataLog (ID, LogId)
 	SELECT 

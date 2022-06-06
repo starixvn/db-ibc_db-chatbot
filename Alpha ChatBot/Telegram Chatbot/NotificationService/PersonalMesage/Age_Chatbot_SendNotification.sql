@@ -18,11 +18,9 @@ BEGIN
 
 	SELECT @Environment = CASE WHEN @Environment <> 'UAT' THEN '' ELSE 'UAT' END
 	
-	DECLARE @FunctionID SMALLINT, @SendLastNotificationId BIGINT, @SendBatchSize INT
+	DECLARE @FunctionID SMALLINT, @SendLastNotificationId BIGINT, @SendBatchSize INT, @MaxNotificationId BIGINT
 
 	DECLARE @Function TABLE (SendLastNotificationId BIGINT, FunctionId SMALLINT, FunctionKey VARCHAR(50), [Priority] SMALLINT, PRIMARY KEY (FunctionId))
-
-	DECLARE @MaxNotificationId BIGINT
 
 	SELECT @MaxNotificationId = MAX(NotificationID) FROM dbo.CustBotNotification cbn WITH(NOLOCK)
 
@@ -33,7 +31,7 @@ BEGIN
 	SELECT bf.FunctionID, bf.FunctionKey, bf.Priority
 	FROM dbo.BotFunction bf WITH(NOLOCK)
 		INNER JOIN CTE e ON e.ServiceName = bf.FunctionKey
-	WHERE bf.Type = 2 AND bf.Status <= CASE WHEN @Environment <> 'UAT' THEN 0 ELSE 1 END
+	WHERE bf.Type = 2 AND bf.Status <= CASE WHEN @Environment <> 'UAT' THEN 0 ELSE 1 END AND bf.Priority IS NOT NULL
 
 	UPDATE f
 		SET f.SendLastNotificationId = CONVERT(BIGINT, bs.Value)
@@ -41,7 +39,7 @@ BEGIN
 		INNER JOIN dbo.BotSystemSetting bs WITH(NOLOCK) ON bs.ServiceName = f.FunctionKey
 	WHERE bs.SettingName = 'SendLastNotificationId' + @Environment
 
-	SELECT @SendBatchSize = Value FROM dbo.BotSystemSetting WITH(NOLOCK) WHERE ServiceName = 'SendNotification' AND SettingName = 'BatchSize'
+	SELECT @SendBatchSize = CONVERT(INT, Value) FROM dbo.BotSystemSetting WITH(NOLOCK) WHERE ServiceName = 'SendNotification' AND SettingName = 'BatchSize'
 
 	DECLARE @SendNotification TABLE 
 	(
@@ -56,8 +54,7 @@ BEGIN
 	)
 
 	INSERT INTO @SendNotification (NotificationID, FunctionId, FunctionKey, Message, UserId, CustId, SubAccId, ErrCode)
-	SELECT TOP(@SendBatchSize) cbn.NotificationID, f.FunctionId, f.FunctionKey, cbn.Message, cbn.UserId, cba.CustId, cba.SubAccId, 
-		CASE WHEN b.Status = 0 THEN 1 ELSE 0 END
+	SELECT TOP(@SendBatchSize) cbn.NotificationID, f.FunctionId, f.FunctionKey, cbn.Message, cbn.UserId, cba.CustId, cba.SubAccId, CASE WHEN b.Status = 0 THEN 1 ELSE 0 END AS ErrCode
 	FROM dbo.CustBotNotification cbn WITH(NOLOCK)
 		INNER JOIN @Function f ON f.FunctionId = cbn.FunctionID 
 		INNER JOIN dbo.CustBotAccount cba WITH(NOLOCK) ON cba.UserId = cbn.UserID
@@ -80,13 +77,13 @@ BEGIN
 	UPDATE cbn WITH(ROWLOCK)
 		SET cbn.Status = CASE WHEN s.ErrCode = 0 THEN 'Sending'
 						 ELSE 'Fail' END
-			,cbn.Description = CASE WHEN s.ErrCode = 1 THEN 'Bot is disable'
+			,cbn.Description = CASE WHEN s.ErrCode = 1 THEN 'The bot is disabled so you cannot receive notifications anymore.'
 									WHEN s.ErrCode = 2 THEN 'Your telegram is unlinked with Mockup Chatbot so  you cannot receive notifications anymore.'
-									WHEN s.ErrCode = 3 THEN 'UnverifyOTP'
+									WHEN s.ErrCode = 3 THEN 'Your telegram is unverified OTP so you cannot receive notifications.'
 									WHEN s.ErrCode = 4 THEN 'The Notification setting is turned off so you cannot receive notifications anymore.'		
 								ELSE '' END	
 			,cbn.UpdatedTime = GETDATE()
-	FROM CustBotNotification cbn 
+	FROM dbo.CustBotNotification cbn 
 		INNER JOIN @SendNotification s ON s.NotificationID = cbn.NotificationID
 
 	DECLARE @LastNotificationIdFuntion TABLE (LastNotificationId BIGINT, FunctionKey VARCHAR(50))
@@ -118,7 +115,6 @@ BEGIN
 		,cbm.BotId
 		,cbm.ChatID
 	FROM @SendNotification s
-		INNER JOIN dbo.CustBotFunction cbf WITH(NOLOCK) ON cbf.UserID = s.UserId AND cbf.FunctionID = s.FunctionId
 		INNER JOIN dbo.CustBotMessenger cbm WITH(NOLOCK) ON cbm.UserId = s.UserId
 	WHERE s.ErrCode = 0
 

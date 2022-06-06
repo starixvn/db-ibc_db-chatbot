@@ -1,12 +1,12 @@
 /*<info serverAlias="DBCUST-CustDB" executers="bodbDownlineNet" viewers="" selecters=""></info>*/
 ALTER PROCEDURE [dbo].[Age_Chatbot_ProblemAccounts_Sel]
-	@BatchSize		INT,
-	@LastLogId		INT,
-	@MaxLogId		INT OUTPUT
+	@BatchSize		INT
+	,@LastLogId		INT
+	,@MaxLogId		INT OUTPUT
 AS
 /*
 	Created: 20220510@Malcolm
-	Task: get all bot action for telegram service 
+	Task: get member marked as Prpblem account
 	DB: DBCUST/CustDB
 	
 	Revisions:
@@ -29,10 +29,10 @@ BEGIN
 	FROM dbo.CategoryConfig WITH(NOLOCK)
 	WHERE CustomerClass IS NOT NULL
 
-	DECLARE @Tmp TABLE (LogID BIGINT,custid	INT,CategoryID SMALLINT,CustomerClass SMALLINT,CreatedDate DATETIME)
+	DECLARE @Tmp TABLE (LogID BIGINT,custid	INT)
 
-	INSERT INTO @Tmp (LogID, custid, CategoryID, CustomerClass, CreatedDate)
-	SELECT TOP(@BatchSize) LogID, custid, CategoryID, CustomerClass, CreatedDate
+	INSERT INTO @Tmp (LogID, custid)
+	SELECT TOP(@BatchSize) LogID, custid
 	FROM dbo.CustCategoryHistory d WITH(NOLOCK)
 	WHERE EXISTS (SELECT 1 FROM #CategoryConfig c WHERE c.CustomerClass = d.CustomerClass)
 		AND NOT EXISTS (SELECT 1 FROM #CategoryConfig c WHERE c.CustomerClass = d.OldCustomerClass)
@@ -49,4 +49,5 @@ BEGIN
 	FROM @Tmp t
 		INNER JOIN dbo.Customer c WITH(NOLOCK) ON t.custid = c.custid
 
+	DROP TABLE #CategoryConfig
 END

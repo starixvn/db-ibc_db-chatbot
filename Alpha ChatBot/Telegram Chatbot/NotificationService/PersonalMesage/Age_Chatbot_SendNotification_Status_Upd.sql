@@ -50,7 +50,7 @@ BEGIN
 	INSERT INTO @TmpLastNotification (LastnotificationId, FunctionKey)
 	SELECT 
 		t.c.value('@LastnotificationId', 'BIGINT') AS LastnotificationId
-		,t.c.value('@FunctionKey', 'VARCHAR(50)') AS FunctionId
+		,t.c.value('@FunctionKey', 'VARCHAR(50)') AS FunctionKey
 	FROM @XmlLastNotification.nodes('root/r') t(c)
 	OPTION (OPTIMIZE FOR (@XmlLastNotification = NULL))
 
@@ -86,6 +86,9 @@ BEGIN
 				AND EXISTS (SELECT 1 FROM CTE e WHERE e.ServiceName = t.FunctionKey)
 		END
 	END
+
+	DROP TABLE #tmpNotification
+	DROP TABLE #tmpNotificationGroup
 
 END
 GO

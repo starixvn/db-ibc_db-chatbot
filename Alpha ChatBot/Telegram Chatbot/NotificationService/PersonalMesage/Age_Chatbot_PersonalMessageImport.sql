@@ -70,8 +70,8 @@ BEGIN
 	FROM #ImportData i
 		INNER JOIN #TmpNotification tn ON tn.Id = i.Id
 
-	INSERT INTO dbo.NotificationReferenceLog (NotificationId, ReferenceId, FunctionId, Environment)
-	SELECT NotificationId, MsgTargetId, @FunctionId, @Environment
+	INSERT INTO dbo.NotificationReferenceLog (NotificationId, ReferenceId, FunctionId, Environment, CreatedDate)
+	SELECT NotificationId, MsgTargetId, @FunctionId, @Environment, GETDATE()
 	FROM #ImportData
 	ORDER BY Id ASC
 
