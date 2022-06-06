@@ -76,7 +76,7 @@ BEGIN
 	
 	UPDATE cbn WITH(ROWLOCK)
 		SET cbn.Status = CASE WHEN s.ErrCode = 0 THEN 'Sending'
-						 ELSE 'Fail' END
+						 ELSE 'Invalid' END
 			,cbn.Description = CASE WHEN s.ErrCode = 1 THEN 'The bot is disabled so you cannot receive notifications anymore.'
 									WHEN s.ErrCode = 2 THEN 'Your telegram is unlinked with Mockup Chatbot so  you cannot receive notifications anymore.'
 									WHEN s.ErrCode = 3 THEN 'Your telegram is unverified OTP so you cannot receive notifications.'
