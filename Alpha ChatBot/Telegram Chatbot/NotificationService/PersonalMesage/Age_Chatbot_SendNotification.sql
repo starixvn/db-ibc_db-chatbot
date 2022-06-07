@@ -83,6 +83,7 @@ BEGIN
 									WHEN s.ErrCode = 4 THEN 'The Notification setting is turned off so you cannot receive notifications anymore.'		
 								ELSE '' END	
 			,cbn.UpdatedTime = GETDATE()
+			,cbn.Retry = 0
 	FROM dbo.CustBotNotification cbn 
 		INNER JOIN @SendNotification s ON s.NotificationID = cbn.NotificationID
 
