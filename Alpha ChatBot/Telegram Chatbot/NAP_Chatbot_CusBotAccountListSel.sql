@@ -38,7 +38,7 @@ BEGIN
 	SELECT  @PageIndex = @PageIndex - 1, @RowStart = @PageSize * @PageIndex + 1, @RowEnd = @RowStart + @PageSize - 1 
 
 	CREATE TABLE #Result (custid INT, SubAccID INT, username VARCHAR(50), SubAccount VARCHAR(50), ChatID INT, BotID INT, roleid TINYINT, 
-				LinkStatus VARCHAR(50),Language VARCHAR(10), currency INT, Status VARCHAR(20), rn INT PRIMARY KEY(custid,SubAccID))
+				LinkStatus VARCHAR(50),Language VARCHAR(10), currency INT, Status VARCHAR(20), rn INT PRIMARY KEY(custid,SubAccID,BotID))
 	
 	INSERT INTO @tblSite(site)
 	SELECT value 

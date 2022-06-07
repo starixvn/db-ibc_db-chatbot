@@ -23,8 +23,8 @@ BEGIN
 										credit MONEY,
 										MaxLossLimit MONEY,
 										MaxWinLimit SMALLMONEY,
-										WinPercent SMALLMONEY,
-										LossPercent SMALLMONEY
+										WinPercent MONEY,
+										LossPercent MONEY
 										)
 		
 	INSERT INTO #tmpData (custid,bettype,winlost,winlostdate)

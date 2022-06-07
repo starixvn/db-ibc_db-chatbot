@@ -60,6 +60,16 @@ BEGIN
 		@IsTest = IsTest
 	FROM Bot WITH(NOLOCK) WHERE BotID = @BotID
 	
+	IF @Status = 1 AND @IsVerifyOTP = 1
+		AND NOT EXISTS(SELECT 1 FROM CustBotMessenger WITH(NOLOCK) 
+				WHERE userid = @userid AND botid = @botid
+					AND status = 1 AND IsVerifyOTP = 1)
+	BEGIN
+		SELECT @ErrCode = 102,
+			@ErrMsg = 'Your telegram has been unlinked with '+ @BotName +' .'
+		RETURN;	
+	END
+	
 	IF	@Status = 1
 	BEGIN
 		UPDATE CustBotAccount WITH(ROWLOCK)
