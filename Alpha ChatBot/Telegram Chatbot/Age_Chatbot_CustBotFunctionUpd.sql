@@ -31,7 +31,9 @@ BEGIN
 			@SubAccID INT = 0,	
 			@startRun DATETIME, 
 			@duration INT,
-			@xml XML
+			@xml XML,
+			@BotName VARCHAR(200)
+			
 	DECLARE @tblSetting TABLE (id INT, status BIT, Old_status BIT)
 	
 	SELECT @startRun = GETDATE()
@@ -48,6 +50,8 @@ BEGIN
 	FROM CustBotAccount WITH(NOLOCK)
 	WHERE userid = @userid
 	
+	SELECT @BotName = Name FROM Bot WITH(NOLOCK) WHERE botID = @botID
+	
 	IF @custid IS NULL
 	BEGIN
 		SELECT @ErrCode = 101,
@@ -60,7 +64,7 @@ BEGIN
 					AND status = 1 AND IsVerifyOTP = 1)
 	BEGIN
 		SELECT @ErrCode = 102,
-			@ErrMsg = 'Your telegram has been unlinked with Chatbot mockup.'
+			@ErrMsg = 'Your telegram has been unlinked with ' + @BotName +' .'
 		RETURN;	
 	END
 	
