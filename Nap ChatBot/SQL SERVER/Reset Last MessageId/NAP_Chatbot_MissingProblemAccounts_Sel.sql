@@ -10,6 +10,7 @@ AS
 
 	Revisions:
 		- 20220404@Malcolm: Initialize SP [RedmineId: #170182]
+		- 20220607@Malcolm: Get customer class from 1 to 7 [RedmineId: #173799]
 */
 
 BEGIN
@@ -34,7 +35,7 @@ BEGIN
 	SELECT LogID, custid, CategoryID, CustomerClass, OldCustomerClass, CreatedDate
 	FROM dbo.Dep_CustCategoryHistory d WITH(NOLOCK)
 	WHERE EXISTS (SELECT 1 FROM #CategoryConfig c WHERE c.CustomerClass = d.CustomerClass)
-		AND NOT EXISTS (SELECT 1 FROM #CategoryConfig c WHERE c.CustomerClass = d.OldCustomerClass)
+		AND d.OldCustomerClass BETWEEN 1 AND 7
 		AND d.LogID > @FromLogId 
 		AND d.LogID <= @MaxLogId
 		
@@ -52,5 +53,6 @@ BEGIN
 		LEFT JOIN dbo.Dep_CustSuper d WITH(NOLOCK) ON d.custid = c.srecommend
 		LEFT JOIN dbo.CategoryConfig cg WITH(NOLOCK) ON cg.CategoryID = t.CategoryID
 	ORDER BY t.LogID DESC
+
 	DROP TABLE #CategoryConfig
 END

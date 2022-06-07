@@ -14,11 +14,12 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_ProblemAccount_Import(
     Task      : NAP ChatBot - Import data from Problem accounts
 	DB: DBCB-ChatBot
     Params    :
-      - @Message : [{"LogId":1, "CustId":1, "Username":"Supertest1", "SiteName":"12BET","CategoryId":"2", "CustomerClass":"2", "CreatedDate":"2022-04-04 00:00:00", "IsTest":"0"}]
+      - @Message : [{"LogId":1, "CustId":1, "Username":"Supertest1", "Username2":"abdkkll", "SiteName":"12BET","CategoryId":"2", "CustomerClass":"2", "CreatedDate":"2022-04-04 00:00:00", "IsTest":"0"}]
       - @CategoryInfo : [{"CategoryId":"1", "CategoryNameEN":"Group Betting", "CategoryNameCS":"群组投注"}]
 	  - @CustomerClassInfo : [{"CustomerClass":"1", "CustomerClassNameEN":"Group Betting", "CustomerClassNameCS":"群组投注"}]
     Revisions :
       - 20220404@Malcolm: Initiliaze SP [RedmineID: #170182]
+	  - 20220607@Malcolm: Get Username2 [RedmineID: #173799]
 
   */
 )
@@ -50,7 +51,11 @@ NCB_ProblemAccount_Import:BEGIN
 	
 	DECLARE PLANNED_NOTIFICATION_STATUSID	TINYINT UNSIGNED DEFAULT 0;
 	DECLARE PLANNED_NOTIFICATION_STATUS VARCHAR(10) DEFAULT 'Planned';
-	DECLARE pNumberOfCustomer  INT DEFAULT 50;
+	
+	DECLARE CREATING_NOTIFICATION_STATUSID TINYINT UNSIGNED DEFAULT 7;
+	DECLARE CREATING_NOTIFICATION_STATUS VARCHAR(10) DEFAULT 'Creating';
+  
+	DECLARE pNumberOfCustomer  INT DEFAULT 40;
 	
 	SET startTime = UTC_TIMESTAMP();
 	SET errCode = 0, errMsg = '';
@@ -69,6 +74,7 @@ NCB_ProblemAccount_Import:BEGIN
 		LogId				BIGINT,
 		CustId          	INT,
 		Username			VARCHAR(50),
+		Username2			VARCHAR(50),
 		SiteName 	   	 	VARCHAR(20),
 		CategoryId			SMALLINT,
 		CustomerClass 		SMALLINT,
@@ -78,8 +84,8 @@ NCB_ProblemAccount_Import:BEGIN
 		LicenseeStatusID 	TINYINT UNSIGNED
 	);
 	
-	INSERT INTO tmp_Message (LogId, CustId, Username, SiteName, CategoryId, CustomerClass, CreatedDate, IsTest)   
-	SELECT t.LogId, t.CustId, t.Username, t.SiteName, t.CategoryId, t.CustomerClass, t.CreatedDate, t.IsTest
+	INSERT INTO tmp_Message (LogId, CustId, Username, Username2, SiteName, CategoryId, CustomerClass, CreatedDate, IsTest)   
+	SELECT t.LogId, t.CustId, t.Username, t.Username2, t.SiteName, t.CategoryId, t.CustomerClass, t.CreatedDate, t.IsTest
 	FROM 
 		JSON_TABLE
 		(
@@ -90,6 +96,7 @@ NCB_ProblemAccount_Import:BEGIN
 				LogId 			BIGINT 				PATH "$.LogId"
 				,CustId 		INT 				PATH "$.CustId"
 				,Username 		VARCHAR(50) 		PATH "$.Username"
+				,Username2 		VARCHAR(50) 		PATH "$.Username2"
 				,SiteName 		VARCHAR(20) 		PATH "$.SiteName"
 				,CategoryId 	SMALLINT 			PATH "$.CategoryId"
 				,CustomerClass 	SMALLINT  			PATH "$.CustomerClass"
@@ -270,6 +277,7 @@ NCB_ProblemAccount_Import:BEGIN
 		LogId 					BIGINT
         ,CustId        			INT
         ,Username           	VARCHAR(50)
+		,Username2              VARCHAR(50)
         ,CategoryId         	SMALLINT 
         ,CustomerClass			SMALLINT 
         ,CreatedDate        	DATETIME
@@ -287,6 +295,7 @@ NCB_ProblemAccount_Import:BEGIN
 		LogId
         ,CustId
         ,Username
+		,Username2
         ,CategoryId
         ,CustomerClass
         ,CreatedDate
@@ -301,6 +310,7 @@ NCB_ProblemAccount_Import:BEGIN
 		h.LogId
         ,h.CustId
         ,h.Username
+		,h.Username2
         ,h.CategoryId
         ,h.CustomerClass
         ,h.CreatedDate
@@ -325,6 +335,7 @@ NCB_ProblemAccount_Import:BEGIN
 		,LogId 					BIGINT
 		,CustId        			INT
 		,Username           	VARCHAR(50)
+		,Username2           	VARCHAR(50)
 		,CategoryId         	SMALLINT 
 		,CustomerClass			SMALLINT 
 		,CreatedDate        	DATETIME
@@ -342,7 +353,8 @@ NCB_ProblemAccount_Import:BEGIN
 		ID 						
 		,LogId 					
 		,CustId        			
-		,Username           		
+		,Username       
+		,Username2
 		,CategoryId         	
 		,CustomerClass			
 		,CreatedDate        			
@@ -359,6 +371,7 @@ NCB_ProblemAccount_Import:BEGIN
 			LogId
 			,CustId
 			,Username
+			,Username2
 			,CategoryId
 			,CustomerClass
 			,CreatedDate
@@ -368,7 +381,7 @@ NCB_ProblemAccount_Import:BEGIN
 			,StatusID
 			,Status
 			,ChannelId
-			,FLOOR((DENSE_RANK() OVER(PARTITION BY CustomerClass, CategoryId, ConversationGroupID, StatusID ORDER BY Username ASC, LogId ASC) - 1)/pNumberOfCustomer) AS NoOfBatch
+			,FLOOR((DENSE_RANK() OVER(PARTITION BY CustomerClass, CategoryId, ConversationGroupID, StatusID ORDER BY Username2 ASC, LogId ASC) - 1)/pNumberOfCustomer) AS NoOfBatch
 		FROM tmp_NotificationRecipientList
 	),CTE_Group AS
 	(
@@ -376,6 +389,7 @@ NCB_ProblemAccount_Import:BEGIN
 			LogId
 			,CustId
 			,Username
+			,Username2
 			,CategoryId
 			,CustomerClass
 			,CreatedDate
@@ -393,6 +407,7 @@ NCB_ProblemAccount_Import:BEGIN
 			,LogId
 			,CustId
 			,Username
+			,Username2
 			,CategoryId
 			,CustomerClass
 			,CreatedDate
@@ -431,7 +446,7 @@ NCB_ProblemAccount_Import:BEGIN
 			,MIN(CategoryId) 	AS CategoryId
 			,MIN(StatusID) 		AS StatusID
 			,MIN(Status) 		AS Status
-			,GROUP_CONCAT(DISTINCT Username ORDER BY Username ASC SEPARATOR ', ') AS UsernameList
+			,GROUP_CONCAT(DISTINCT CONCAT(Username2,' (', Username, ')') ORDER BY Username2 ASC SEPARATOR ', ') AS UsernameList
 		  FROM tmp_Result
 		  GROUP BY ID
 	)
@@ -467,7 +482,7 @@ NCB_ProblemAccount_Import:BEGIN
 						, '{Class Number}', h.CustomerClass)
 					, '{Class Name EN CN}', h.CustomerClassName)
 				, '{Reason EN CN}',h.Reason) AS Content
-			,startTime, 0 SendImmediately, STARIXIT_CUSTID, pCreatedDate, h.Status, h.StatusID, h.ChannelID
+			,startTime, 0 SendImmediately, STARIXIT_CUSTID, pCreatedDate, CREATING_NOTIFICATION_STATUS, CREATING_NOTIFICATION_STATUSID, h.ChannelID
 	    FROM tmp_Notification h
 	  	INNER JOIN tmp_MsgContentTypeTemplate ct ON ct.MsgContentsType = pMsgContentsType
 	    WHERE h.ID = iLoop;
@@ -481,12 +496,16 @@ NCB_ProblemAccount_Import:BEGIN
 		INSERT INTO NotificationRecipientList(NotificationID, ConversationGroupID, ChatGroupTypeID, RecipientID, Status, StatusID)
 		SELECT DISTINCT pNotificationID, d.ConversationGroupID, d.ChatGroupTypeID, d.RecipientID, d.Status, d.StatusID
 		FROM tmp_Result d
-		WHERE d.ID = iLOOP;
+		WHERE d.ID = iLoop;
 		
 		INSERT INTO NotificationReference (NotificationID, ReferenceId, DataSource)
 		SELECT DISTINCT pNotificationID, LogId, 'DBCUST.CustDB.dbo.Dep_CustCategoryHistory'
 		FROM tmp_Result r  
-		WHERE r.ID = iLOOP;
+		WHERE r.ID = iLoop;
+		
+		UPDATE Notification n
+			INNER JOIN tmp_Notification t ON t.ID = iLoop AND n.NotificationID = pNotificationID
+		SET n.Status = t.Status, n.StatusId = t.StatusId;
 	
 		SET iLoop := iLoop + 1;	
 	END WHILE;
