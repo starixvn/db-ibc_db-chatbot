@@ -24,17 +24,18 @@ AS
 BEGIN
 	SET NOCOUNT ON
 	
-	DECLARE @SettingXML NVARCHAR(300), @SyncSettingPRO BIT, @FunctionId INT
+	DECLARE @SettingXML NVARCHAR(300), @SyncSettingPRO BIT, @FunctionId INT, @ID INT 
 
 	SELECT @FunctionId = FunctionId FROM dbo.BotFunction WITH(NOLOCK) WHERE FunctionKey = 'YesterdayWinLoss' AND Type = 2
 
 	SELECT @SyncSettingPRO = Value FROM dbo.BotSystemSetting WITH(NOLOCK) WHERE ServiceName = 'YesterdayWinLoss' AND SettingName = 'SyncSettingPRO'
 
 	CREATE TABLE #TmpNotification (NotificationId BIGINT, ID INT)
+	CREATE CLUSTERED INDEX cix_Id ON #TmpNotification(ID)
 
 	CREATE TABLE #ImportData 
 	(
-		ID				INT IDENTITY(1, 1)
+		ID				INT IDENTITY(1, 1) PRIMARY KEY
 		,NotificationId BIGINT
 		,UserID			INT
 		,Message		NVARCHAR(MAX)
@@ -49,30 +50,43 @@ BEGIN
 	FROM @XmlData.nodes ('root/r') t(c)
 	OPTION (OPTIMIZE FOR (@XmlData = NULL))
 
+	SET @ID = 1
+	
+	WHILE 1 = 1
+	BEGIN
+		TRUNCATE TABLE #TmpNotification
 
-	INSERT INTO dbo.CustBotNotification (UserID, FunctionID, Message, Status, CreatedDate)
-	OUTPUT inserted.NotificationID INTO #TmpNotification (NotificationId)
-	SELECT UserID, @FunctionId, Message, Status, GETDATE()
-	FROM #ImportData
-	ORDER BY ID ASC
+		INSERT INTO dbo.CustBotNotification (UserID, FunctionID, Message, Status, CreatedDate)
+		OUTPUT inserted.NotificationID INTO #TmpNotification (NotificationId)
+		SELECT UserID, @FunctionId, Message, Status, GETDATE()
+		FROM #ImportData
+		WHERE ID >= @ID AND ID < @ID + 2000
+		ORDER BY ID ASC
 
-	UPDATE n
-		SET n.Id = n.rn
-	FROM (
-		SELECT n.ID, n.NotificationId, ROW_NUMBER() OVER(ORDER BY NotificationId ASC) AS rn
-		FROM #TmpNotification n
-	) n
+		IF @@ROWCOUNT = 0
+			BREAK
 
-	UPDATE i
-		SET i.NotificationId = tn.NotificationId
-	FROM #ImportData i
-		INNER JOIN #TmpNotification tn ON tn.Id = i.Id
+		UPDATE n
+			SET n.Id = n.rn
+		FROM (
+			SELECT n.ID, n.NotificationId, ROW_NUMBER() OVER(ORDER BY NotificationId ASC) + @ID - 1 AS rn
+			FROM #TmpNotification n
+		) n
 
-	INSERT INTO dbo.NotificationReferenceLog (NotificationId, ReferenceID, FunctionId, Environment, CreatedDate)
-	SELECT NotificationId, UserID, @FunctionId, @Environment, GETDATE()
-	FROM #ImportData
-	ORDER BY Id ASC
+		UPDATE i
+			SET i.NotificationId = tn.NotificationId
+		FROM #ImportData i
+			INNER JOIN #TmpNotification tn ON tn.Id = i.Id
 
+		INSERT INTO dbo.NotificationReferenceLog (NotificationId, ReferenceID, FunctionId, Environment, CreatedDate)
+		SELECT NotificationId, UserID, @FunctionId, @Environment, GETDATE()
+		FROM #ImportData
+		WHERE ID >= @ID AND ID < @ID + 2000
+		ORDER BY Id ASC
+
+		SET @ID += 2000
+	END
+	
 	SELECT @SettingXML =
 	(
 		SELECT DISTINCT 
