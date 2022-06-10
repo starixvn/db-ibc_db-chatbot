@@ -491,6 +491,8 @@ NCB_ProblemAccount_Import:BEGIN
 	  
 		INSERT INTO tmpNotificationIdList(NotificationID)
 		VALUES (pNotificationID);
+		
+		DO SLEEP(180);
 	
 		#Insert recipient list
 		INSERT INTO NotificationRecipientList(NotificationID, ConversationGroupID, ChatGroupTypeID, RecipientID, Status, StatusID)
