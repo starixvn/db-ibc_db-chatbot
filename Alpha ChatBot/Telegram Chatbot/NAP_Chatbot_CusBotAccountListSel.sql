@@ -37,7 +37,7 @@ BEGIN
 	DECLARE @RowStart INT, @RowEnd INT
 	SELECT  @PageIndex = @PageIndex - 1, @RowStart = @PageSize * @PageIndex + 1, @RowEnd = @RowStart + @PageSize - 1 
 
-	CREATE TABLE #Result (custid INT, SubAccID INT, username VARCHAR(50), SubAccount VARCHAR(50), ChatID INT, BotID INT, roleid TINYINT, 
+	CREATE TABLE #Result (custid INT, SubAccID INT, username VARCHAR(50), SubAccount VARCHAR(50), ChatID BIGINT, BotID INT, roleid TINYINT, 
 				LinkStatus VARCHAR(50),Language VARCHAR(10), currency INT, Status VARCHAR(20), rn INT PRIMARY KEY(custid,SubAccID,BotID))
 	
 	INSERT INTO @tblSite(site)
@@ -61,11 +61,11 @@ BEGIN
 			WHEN cm.Status = 1 AND cm.IsVerifyOTP = 0 THEN 'Verifying' END as LinkStatus,
 		ca.Language,
 		c.currency,
-		CASE WHEN (cs.custid IS NULL AND cps.closeInfo = 0 AND cps.suspendInfo = 0) 
-					OR  (cs.custid IS NOT NULL AND cs.Closed = 0) THEN 'Active'
-			WHEN (cs.custid IS NULL AND cps.closeInfo > 0) 
-				OR  (cs.custid IS NOT NULL AND cs.Closed = 1) THEN 'Closed'
-			WHEN cs.custid IS NULL AND cps.closeInfo = 0 AND cps.suspendInfo > 0 THEN 'Suspended' END as Status,
+		CASE WHEN (cs.custid IS NULL AND cps.closeInfo > 0) 
+				OR  (cs.custid IS NOT NULL AND (cs.Closed = 1 OR cps.closeInfo > 0)) THEN 'Closed'
+			WHEN cps.closeInfo = 0 AND cps.suspendInfo > 0 THEN 'Suspended'  
+			WHEN (cs.custid IS NULL AND cps.closeInfo = 0 AND cps.suspendInfo = 0) 
+					OR  (cs.custid IS NOT NULL AND cs.Closed = 0) THEN 'Active' END as Status,
 		ROW_NUMBER() OVER (ORDER BY c.username ASC, cs.username ASC, roleid DESC) rn	
 	FROM CustBotAccount ca WITH(NOLOCK)
 		INNER JOIN CustBotMessenger cm WITH(NOLOCK) ON ca.UserID = cm.UserID
@@ -88,11 +88,12 @@ BEGIN
 					ELSE 0 END 
 		AND c.currency IN (SELECT currency FROM @tblCurrency)
 		AND 1 = CASE WHEN @status = 0 THEN 1
-					WHEN @status = 1 AND ((cs.custid IS NULL AND cps.closeInfo = 0 AND cps.suspendInfo = 0) 
+					WHEN @status = 1 AND cps.closeInfo = 0 AND cps.suspendInfo = 0 
+										AND (cs.custid IS NULL  
 										OR  (cs.custid IS NOT NULL AND cs.Closed = 0)) THEN 1
 					WHEN @status = 2 AND ((cs.custid IS NULL AND cps.closeInfo > 0) 
-										OR  (cs.custid IS NOT NULL AND cs.Closed = 1)) THEN 1					
-					WHEN @status = 3 AND cs.custid IS NULL AND cps.closeInfo = 0 AND cps.suspendInfo > 0 THEN 1
+										OR  (cs.custid IS NOT NULL AND (cs.Closed = 1 OR cps.closeInfo > 0))) THEN 1					
+					WHEN @status = 3 AND cps.closeInfo = 0 AND cps.suspendInfo > 0 THEN 1
 					ELSE 0 END
 					
 		SELECT @TotalRows = @@ROWCOUNT 

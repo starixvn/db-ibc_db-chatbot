@@ -92,4 +92,5 @@ BEGIN
 		LEFT JOIN bodb02.dbo.custSub cs2 WITH(NOLOCK) ON ca2.custid = cs2.custid
 													AND ca2.SubAccID = cs2.SubAccID	
 	WHERE rn BETWEEN @RowStart AND @RowEnd
+	ORDER BY rn ASC
 END	

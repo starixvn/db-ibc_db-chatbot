@@ -23,7 +23,7 @@ BEGIN
 	DECLARE @userid INT,
 			@startRun DATETIME, 
 			@duration INT,
-			@ChatID INT,
+			@ChatID BIGINT,
 			@Language VARCHAR(10)
 			
 	DECLARE @BotName VARCHAR(200),

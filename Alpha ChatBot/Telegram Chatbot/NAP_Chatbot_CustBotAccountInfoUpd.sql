@@ -27,7 +27,7 @@ BEGIN
 			@duration INT
 	
 	DECLARE @Old_Language VARCHAR(10),			
-			@ChatID INT,
+			@ChatID BIGINT,
 			@old_Status BIT,
 			@old_IsVerifyOTP BIT,
 			@BotName VARCHAR(200),

@@ -2,7 +2,7 @@
 ALTER PROCEDURE [dbo].[Age_Chatbot_CustBotAccountIns] 	
 	@CustID INT,
 	@SubAccID INT = 0,
-	@ChatID INT,
+	@ChatID BIGINT,
 	@BotID INT,
 	@Language VARCHAR(10) = '',		
 	@IP	VARCHAR(30)= '',
