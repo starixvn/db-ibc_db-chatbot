@@ -1,7 +1,7 @@
 /*<info serverAlias="DBBOT-bodb_ChatBot" executers="bodbAdminNet" viewers="" selecters=""></info>*/
 
 ALTER PROCEDURE [dbo].[NAP_Chatbot_CustBotNotificationListSel] 	
-	@FunctionID		SMALLINT = NULL,
+	@FunctionIDs	VARCHAR(1000) = NULL,
 	@Username		VARCHAR(30) = NULL,
 	@FromDate		DATETIME,
 	@ToDate			DATETIME,
@@ -72,15 +72,16 @@ BEGIN
 					)ca
 	WHERE UpdatedTime BETWEEN @FromDate AND @ToDate
 		AND Status = ISNULL(@Status,Status)
-		AND FunctionID = ISNULL(@FunctionID,FunctionID)
+		AND 1 = CASE WHEN @FunctionIDs IS NULL THEN 1
+					WHEN @FunctionIDs IS NOT NULL AND FunctionID IN (SELECT value FROM STRING_SPLIT(@FunctionIDs,',')) THEN 1 ELSE 0 END
 		AND NotificationID = ISNULL(@NotificationID,NotificationID)
 		
 	
 	SELECT @TotalRows = @@ROWCOUNT 
 	
-	SELECT NotificationID, FunctionID, Message, Recipient,
-		SendDate, Status, Description, Retry
+	SELECT NotificationID, f.FunctionName, Message, Recipient, SendDate, rs.Status, Description, Retry
 	FROM #Result rs
+		INNER JOIN BotFunction f WITH(NOLOCK) ON rs.FunctionID = f.FunctionID
 		CROSS APPLY (SELECT TOP 1 CASE WHEN cs.subaccid IS NULL THEN c.username ELSE cs.username END as Recipient
 					FROM bodb02.dbo.customer c WITH(NOLOCK) 
 						LEFT JOIN bodb02.dbo.custsub cs WITH(NOLOCK) ON rs.CustID = cs.CustID AND rs.SubAccID = cs.SubAccID

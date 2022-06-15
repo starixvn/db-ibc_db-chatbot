@@ -1,8 +1,9 @@
-/*<info serverAlias="DBBOT-bodb_ChatBot" executers="bodbDownlineNet" viewers="" selecters=""></info>*/
+/*<info serverAlias="DBBOT-bodb_ChatBot" executers="bodbDownlineNet,bodbAdminNet" viewers="" selecters=""></info>*/
 ALTER PROCEDURE [dbo].[Age_Chatbot_CustBotAccountLanguageUpd] 		
 	@UserID 	INT,
 	@BotID		INT=0,
-	@Language 	VARCHAR(10) = '',	
+	@Language 	VARCHAR(10) = '',
+	@Creator 	INT = 0,	
 	@IP			VARCHAR(30)= '',
 	@ErrCode 	INT = 0 OUTPUT,
 	@ErrMsg  	VARCHAR(1000) = '' OUTPUT
@@ -21,7 +22,8 @@ BEGIN
 	DECLARE @startRun DATETIME, 
 			@duration INT,
 			@CustID INT,
-			@SubAccID INT = 0				
+			@SubAccID INT = 0,
+			@BotName VARCHAR(200)			
 	
 	SELECT @startRun = GETDATE()
 		
@@ -33,12 +35,15 @@ BEGIN
 	FROM CustBotAccount WITH(NOLOCK)	
 	WHERE userid = @userid
 	
+	SELECT @BotName = Name
+	FROM Bot WITH(NOLOCK) WHERE BotID = @BotID
+	
 	IF NOT EXISTS(SELECT 1 FROM CustBotMessenger WITH(NOLOCK) 
 				WHERE userid = @userid AND botid = @botid
 					AND status = 1 AND IsVerifyOTP = 1)
 	BEGIN
 		SELECT @ErrCode = 102,
-			@ErrMsg = 'Your telegram has been unlinked with Chatbot mockup.'
+			@ErrMsg = 'Your telegram has been unlinked with '+ @BotName +' .'
 		RETURN;	
 	END
 	
@@ -65,7 +70,7 @@ BEGIN
 						+ ' />'
 						
 	EXEC DBLOG.bodb_CustomerLog.dbo.WriteLog_UserLog_RunSP 
-			@UserId				= @CustId,
+			@UserId				= @Creator,
 			@CustId				= @CustId,
 			@ActionId			= 95067,
 			@TrackingValue		= @LogDataNew,

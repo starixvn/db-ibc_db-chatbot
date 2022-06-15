@@ -3,8 +3,7 @@ ALTER PROCEDURE [dbo].[NAP_Chatbot_CustBotAccountInfoUpd]
 	@userid INT,
 	@BotID INT,
 	@Status BIT = 1,
-	@IsVerifyOTP BIT = 1,	
-	@Language VARCHAR(10) = '',
+	@IsVerifyOTP BIT = 1,		
 	@Creator INT,
 	@IP	VARCHAR(30)= '',
 	@ErrCode INT = 0 OUTPUT,
@@ -26,7 +25,7 @@ BEGIN
 			@startRun DATETIME, 
 			@duration INT
 	
-	DECLARE @Old_Language VARCHAR(10),			
+	DECLARE @Language VARCHAR(10),			
 			@ChatID BIGINT,
 			@old_Status BIT,
 			@old_IsVerifyOTP BIT,
@@ -38,7 +37,7 @@ BEGIN
 	
 	SELECT @custid = CustID,
 		@subAccID = SubAccID,
-		@Old_Language = Language
+		@Language = Language
 	FROM CustBotAccount WITH(NOLOCK)
 	WHERE userid = @userid
 	
@@ -70,43 +69,26 @@ BEGIN
 		RETURN;	
 	END
 	
-	IF	@Status = 1
-	BEGIN
-		UPDATE CustBotAccount WITH(ROWLOCK)
-		SET Language = @Language
-		WHERE userid = @userid
-		
-		SET @IsUpdated= 1
-	END
-	ELSE
-	BEGIN
-		SET @Language = @Old_Language--write log language not change
-	END
-	
-	IF @Status <> @old_Status AND @IsVerifyOTP <> @Old_IsVerifyOTP
-	BEGIN
-		UPDATE CustBotMessenger WITH(ROWLOCK)
-		SET Status = @Status,
-			IsVerifyOTP = @IsVerifyOTP
-		WHERE UserID = @UserID
-			AND BotID = @BotID
-			
-		MERGE CustBotFunction as Target
-		USING (SELECT @userid as userid, FunctionID FROM BotFunction WITH(NOLOCK) 
-				WHERE Status <= @IsTest
-				AND type = 2 --Notification settings
-			) as Source
-		ON Target.userid = Source.userid AND Target.FunctionID = Source.FunctionID
-		WHEN Matched AND @Status = 0 THEN DELETE
-		WHEN Matched AND @Status = 1 THEN
-			UPDATE SET Status = 1
-		WHEN NOT MATCHED AND @status = 1 THEN INSERT(UserID,FunctionID,Status) VALUES(Source.UserID,Source.FunctionID,1);
-		
-		SET @IsUpdated= 1
-	END
-	
-	IF @IsUpdated= 0
+	IF @Status = @old_Status AND @IsVerifyOTP = @Old_IsVerifyOTP
 		RETURN;
+		
+	UPDATE CustBotMessenger WITH(ROWLOCK)
+	SET Status = @Status,
+		IsVerifyOTP = @IsVerifyOTP
+	WHERE UserID = @UserID
+		AND BotID = @BotID
+		
+	MERGE CustBotFunction as Target
+	USING (SELECT @userid as userid, FunctionID FROM BotFunction WITH(NOLOCK) 
+			WHERE Status <= @IsTest
+			AND type = 2 --Notification settings
+		) as Source
+	ON Target.userid = Source.userid AND Target.FunctionID = Source.FunctionID
+	WHEN Matched AND @Status = 0 THEN DELETE
+	WHEN Matched AND @Status = 1 THEN
+		UPDATE SET Status = 1
+	WHEN NOT MATCHED AND @status = 1 THEN INSERT(UserID,FunctionID,Status) VALUES(Source.UserID,Source.FunctionID,1);
+	
 		
 	SELECT @Duration = DATEDIFF (MILLISECOND, @startRun, GETDATE())
 	
@@ -119,7 +101,7 @@ BEGIN
 						+ ' ChatID="' + COALESCE(CAST(@ChatID as VARCHAR(10)), SPACE(1)) + '"'
 						+ ' Status="' + COALESCE(CAST(@Old_Status as VARCHAR(10)), SPACE(1)) + '"'
 						+ ' IsVerifyOTP="' + COALESCE(CAST(@IsVerifyOTP as VARCHAR(10)), SPACE(1)) + '"'
-						+ ' Language="' + COALESCE(@Old_Language, SPACE(1)) + '"'
+						+ ' Language="' + COALESCE(@Language, SPACE(1)) + '"'
 						+ ' SubAccName="' + COALESCE(dbo.f_GetSubUsername(@SubAccID), SPACE(1)) + '"'					
 						+ ' IP="' + COALESCE(@IP, SPACE(1)) + '"'
 						+ ' />'
