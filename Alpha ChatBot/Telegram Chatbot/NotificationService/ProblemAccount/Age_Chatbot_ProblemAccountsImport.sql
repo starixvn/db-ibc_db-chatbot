@@ -39,38 +39,31 @@ BEGIN
 	CREATE TABLE #TmpNotification (NotificationId BIGINT, ID INT)
 	CREATE CLUSTERED INDEX ix_Id ON #TmpNotification (Id)
 
-	CREATE TABLE #ImportData 
-	(
-		ID				INT PRIMARY KEY
-		,UserID			INT
-		,Message		NVARCHAR(MAX)
-		,Status			VARCHAR(20)
-	)
-
-	INSERT INTO #ImportData (Id, UserID, Message, Status)
-	SELECT 
-		t.c.value('@Id', 'INT') AS Id
-		,t.c.value('@UserId', 'INT') AS UserID
-		,t.c.value('@Message', 'NVARCHAR(MAX)') AS Message
-		,t.c.value('@Status', 'VARCHAR(20)') AS Status
-	FROM @XmlData.nodes ('root/r') t(c)
-	OPTION (OPTIMIZE FOR (@XmlData = NULL))
-
-	CREATE TABLE #ImportDataLog
-	(
-		Id INT
-		,NotificationId BIGINT
-		,LogId INT
-	)
-
+	CREATE TABLE #ImportData (ID INT PRIMARY KEY, UserID INT, Message NVARCHAR(MAX), Status VARCHAR(20))
+	CREATE TABLE #ImportDataLog (Id INT, NotificationId BIGINT, LogId INT)
 	CREATE CLUSTERED INDEX cix_Id ON #ImportDataLog (Id)
 
-	INSERT INTO #ImportDataLog (ID, LogId)
-	SELECT 
-		t.c.value('@Id', 'INT') AS Id
-		,t.c.value('@LogId', 'INT')	AS LogId
-	FROM @XmlDataLog.nodes ('root/r') t(c)
-	OPTION (OPTIMIZE FOR (@XmlDataLog = NULL))
+	BEGIN TRY
+		INSERT INTO #ImportData (Id, UserID, Message, Status)
+		SELECT 
+			t.c.value('@Id', 'INT') AS Id
+			,t.c.value('@UserId', 'INT') AS UserID
+			,t.c.value('@Message', 'NVARCHAR(MAX)') AS Message
+			,t.c.value('@Status', 'VARCHAR(20)') AS Status
+		FROM @XmlData.nodes ('root/r') t(c)
+		OPTION (OPTIMIZE FOR (@XmlData = NULL))
+
+		INSERT INTO #ImportDataLog (ID, LogId)
+		SELECT 
+			t.c.value('@Id', 'INT') AS Id
+			,t.c.value('@LogId', 'INT')	AS LogId
+		FROM @XmlDataLog.nodes ('root/r') t(c)
+		OPTION (OPTIMIZE FOR (@XmlDataLog = NULL))
+	END TRY
+	BEGIN CATCH
+		SELECT @ErrCode = @@ERROR, @ErrMsg = ERROR_MESSAGE()
+		RETURN
+	END CATCH
 
 	SET @ID = 1
 	
