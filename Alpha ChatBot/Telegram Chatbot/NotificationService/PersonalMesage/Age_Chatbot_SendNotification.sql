@@ -55,8 +55,8 @@ BEGIN
 
 	INSERT INTO @SendNotification (NotificationID, FunctionId, FunctionKey, Message, UserId, CustId, SubAccId, ErrCode)
 	SELECT TOP(@SendBatchSize) cbn.NotificationID, f.FunctionId, f.FunctionKey, cbn.Message, cbn.UserId, cba.CustId, cba.SubAccId, CASE WHEN b.Status = 0 THEN 1 ELSE 0 END AS ErrCode
-	FROM dbo.CustBotNotification cbn WITH(NOLOCK)
-		INNER JOIN @Function f ON f.FunctionId = cbn.FunctionID 
+	FROM @Function f
+		INNER LOOP JOIN dbo.CustBotNotification cbn WITH(NOLOCK) ON f.FunctionId = cbn.FunctionID 
 		INNER JOIN dbo.CustBotAccount cba WITH(NOLOCK) ON cba.UserId = cbn.UserID
 		INNER JOIN dbo.CustBotMessenger cbm  WITH(NOLOCK) ON cbm.UserId = cbn.UserID
 		INNER JOIN dbo.Bot b WITH(NOLOCK) ON b.BotId = cbm.BotId 
