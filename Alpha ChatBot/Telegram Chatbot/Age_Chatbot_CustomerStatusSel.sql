@@ -53,5 +53,7 @@ BEGIN
 		INNER JOIN Custinfo ci WITH(NOLOCK) ON t.custid = ci.custid
 		INNER JOIN CustProductStatus c WITH(NOLOCK) ON t.custid = c.custid	
 		
-	SELECT * FROM #tblCust		
+	SELECT * FROM #tblCust	
+		
+	DROP TABLE #tblCust	
 END	

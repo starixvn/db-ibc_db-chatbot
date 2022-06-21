@@ -114,9 +114,10 @@ BEGIN
 	WHEN Matched THEN 
 		UPDATE SET Target.ChatID = Source.ChatID, 			
 			Target.Status = 1,
-			Target.IsVerifyOTP = 0
+			Target.IsVerifyOTP = 0,
+			Target.UpdatedTime = GETDATE()
 	WHEN NOT MATCHED THEN
-		INSERT ([UserId],[BotId],[ChatId],[Status],[IsVerifyOTP]) VALUES(@userid,@BotID,@ChatID,1,0);
+		INSERT ([UserId],[BotId],[ChatId],[Status],[IsVerifyOTP],[UpdatedTime]) VALUES(@userid,@BotID,@ChatID,1,0,GETDATE());
 
 	SELECT @Duration = DATEDIFF (MILLISECOND, @startRun, GETDATE())
 	

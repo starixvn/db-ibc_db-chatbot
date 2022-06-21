@@ -18,9 +18,11 @@ AS
 */
 BEGIN
 	SET NOCOUNT ON;
-
-	SELECT ca.UserID, ca.custid, ca.SubAccID, ca.CustomerLevel, ca.Language
-	INTO #Result
+	
+	CREATE TABLE #Result(UserID INT,CustID INT,SubAccID INT,CustomerLevel TINYINT,Language VARCHAR(10))
+	
+	INSERT INTO #Result(UserID,CustID,SubAccID,CustomerLevel,Language)
+	SELECT ca.UserID, ca.custid, ca.SubAccID, ca.CustomerLevel, ca.Language	
 	FROM CustBotMessenger cm WITH(NOLOCK)
 		INNER JOIN CustBotAccount ca WITH(NOLOCK) ON cm.userid = ca.userid
 	WHERE BotID = @BotID
@@ -36,5 +38,6 @@ BEGIN
 	WHERE cf.userid IN (SELECT userid FROM #Result)
 		AND f.Status <= @IsTest		
 	ORDER BY f.[Order] 	
-
+	
+	DROP TABLE #Result
 END		

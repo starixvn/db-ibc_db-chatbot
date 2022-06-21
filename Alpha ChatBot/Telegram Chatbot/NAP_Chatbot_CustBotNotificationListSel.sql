@@ -89,4 +89,6 @@ BEGIN
 					) t
 	WHERE rn BETWEEN @RowStart AND @RowEnd
 	ORDER BY rn ASC
+	
+	DROP TABLE #Result
 END	

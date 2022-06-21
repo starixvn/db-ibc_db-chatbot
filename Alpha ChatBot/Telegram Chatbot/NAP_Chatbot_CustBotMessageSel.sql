@@ -93,4 +93,6 @@ BEGIN
 													AND ca2.SubAccID = cs2.SubAccID	
 	WHERE rn BETWEEN @RowStart AND @RowEnd
 	ORDER BY rn ASC
+	
+	DROP TABLE #Result
 END	

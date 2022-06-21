@@ -67,7 +67,8 @@ BEGIN
 	
 	UPDATE CustBotMessenger WITH(ROWLOCK)
 	SET Status = @Status,
-		IsVerifyOTP = @IsVerifyOTP
+		IsVerifyOTP = @IsVerifyOTP,
+		UpdatedTime = GETDATE()
 	WHERE UserID = @UserID
 		AND BotID = @BotID
 			

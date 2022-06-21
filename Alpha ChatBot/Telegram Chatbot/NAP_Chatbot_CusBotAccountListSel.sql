@@ -38,7 +38,7 @@ BEGIN
 	SELECT  @PageIndex = @PageIndex - 1, @RowStart = @PageSize * @PageIndex + 1, @RowEnd = @RowStart + @PageSize - 1 
 
 	CREATE TABLE #Result (custid INT, SubAccID INT, username VARCHAR(50), SubAccount VARCHAR(50), ChatID BIGINT, BotID INT, roleid TINYINT, 
-				LinkStatus VARCHAR(50),Language VARCHAR(10), currency INT, Status VARCHAR(20), rn INT PRIMARY KEY(custid,SubAccID,BotID))
+				LinkStatus VARCHAR(50),Language VARCHAR(10), currency INT, Status VARCHAR(20), UpdatedTime DATETIME, rn INT PRIMARY KEY(custid,SubAccID,BotID))
 	
 	INSERT INTO @tblSite(site)
 	SELECT value 
@@ -55,7 +55,7 @@ BEGIN
 	SELECT value 
 	FROM STRING_SPLIT(@currency,',')
 		
-	INSERT INTO #Result(custid,SubAccID,username,SubAccount,ChatID,BotID,roleid,LinkStatus,Language,currency,Status,rn)
+	INSERT INTO #Result(custid,SubAccID,username,SubAccount,ChatID,BotID,roleid,LinkStatus,Language,currency,Status,UpdatedTime,rn)
 	SELECT ca.custid, ca.SubAccID, c.username, cs.username as SubAccount,cm.ChatID,cm.BotID,c.roleid,
 		CASE WHEN cm.Status = 1 AND cm.IsVerifyOTP = 1 THEN 'Linked'
 			WHEN cm.Status = 1 AND cm.IsVerifyOTP = 0 THEN 'Verifying' END as LinkStatus,
@@ -66,6 +66,7 @@ BEGIN
 			WHEN cps.closeInfo = 0 AND cps.suspendInfo > 0 THEN 'Suspended'  
 			WHEN (cs.custid IS NULL AND cps.closeInfo = 0 AND cps.suspendInfo = 0) 
 					OR  (cs.custid IS NOT NULL AND cs.Closed = 0) THEN 'Active' END as Status,
+		cm.UpdatedTime,			
 		ROW_NUMBER() OVER (ORDER BY c.username ASC, cs.username ASC, roleid DESC) rn	
 	FROM CustBotAccount ca WITH(NOLOCK)
 		INNER JOIN CustBotMessenger cm WITH(NOLOCK) ON ca.UserID = cm.UserID
@@ -99,10 +100,12 @@ BEGIN
 		SELECT @TotalRows = @@ROWCOUNT 
 
 		SELECT b.BotID, b.Name as BotName, custid, SubAccID, username, SubAccount, ChatID,
-				roleid, LinkStatus,Language, e.currency, rs.Status
+				roleid, LinkStatus,Language, e.currency, rs.Status, rs.UpdatedTime
 		FROM #Result rs
 			INNER JOIN Bot b WITH(NOLOCK) ON rs.BotID = b.BotID
 			INNER JOIN bodb02.dbo.Exchange e ON rs.currency = e.ExchangeID
 		WHERE rn BETWEEN @RowStart AND @RowEnd
 		ORDER BY rn ASC
+		
+	DROP TABLE #Result
 END
