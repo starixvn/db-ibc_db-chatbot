@@ -11,6 +11,7 @@ AS
 
 	Revisions:
 		- 20220404@Malcolm: Initialize SP [RedmineId: #170182]
+		- 20220607@Malcolm: Get customer class from 1 to 7 [RedmineId: #173799]
 */
 
 BEGIN
@@ -35,21 +36,20 @@ BEGIN
 	SELECT TOP(@BatchSize) LogID, custid, CategoryID, CustomerClass, CreatedDate
 	FROM dbo.Dep_CustCategoryHistory d WITH(NOLOCK)
 	WHERE EXISTS (SELECT 1 FROM #CategoryConfig c WHERE c.CustomerClass = d.CustomerClass)
-		AND NOT EXISTS (SELECT 1 FROM #CategoryConfig c WHERE c.CustomerClass = d.OldCustomerClass)
+		AND d.OldCustomerClass BETWEEN 1 AND 7
 		AND d.LogID > @LastLogId 
 		AND d.LogID <= @MaxLogId
 	ORDER BY d.LogID ASC
 
-	SELECT t.LogID, t.custid, c.username, ISNULL(d.site, '') AS [SiteName], t.CategoryID, t.CustomerClass, t.CreatedDate, CASE WHEN c.currency IN (20, 27, 28) THEN 1 ELSE 0 END AS IsTest
+	SELECT t.LogID, t.custid, ISNULL(SUBSTRING(c.username2, CHARINDEX('$', c.username2) + 1, 50), '')  AS username2 , c.username, ISNULL(d.site, '') AS [SiteName], t.CategoryID, t.CustomerClass, t.CreatedDate, CASE WHEN c.currency IN (20, 27, 28) THEN 1 ELSE 0 END AS IsTest
 	FROM @Tmp t
-		LEFT JOIN dbo.Customer c WITH(NOLOCK) ON t.custid = c.custid
+		INNER JOIN dbo.Customer c WITH(NOLOCK) ON t.custid = c.custid
 		LEFT JOIN dbo.Dep_CustSuper d WITH(NOLOCK) ON d.custid = c.srecommend
+	ORDER BY t.LogID ASC
 
-	SELECT c.CategoryID
-	FROM dbo.CategoryConfig c WITH(NOLOCK)
-	WHERE EXISTS (SELECT 1 FROM @Tmp t WHERE t.CategoryID = c.CategoryID)
+	SELECT DISTINCT t.CategoryID FROM @Tmp t
 
-	SELECT DISTINCT CustomerClass FROM @Tmp t
+	SELECT DISTINCT t.CustomerClass FROM @Tmp t
 
 	DROP TABLE #CategoryConfig
 END
