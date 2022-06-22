@@ -71,8 +71,9 @@ BEGIN
 		                ELSE 0 END
 	FROM @SendNotification s
 		INNER JOIN dbo.CustBotMessenger cbm WITH(NOLOCK) ON cbm.UserId = s.UserId
+		INNER JOIN dbo.Bot b WITH(NOLOCK) ON b.BotId = cbm.BotId
 		LEFT JOIN dbo.CustBotFunction cbf WITH(NOLOCK) ON cbf.UserID = s.UserId AND cbf.FunctionID = s.FunctionId
-	WHERE s.ErrCode = 0
+	WHERE s.ErrCode = 0 AND b.IsTest = CASE WHEN @Environment = 'UAT' THEN 1 ELSE 0 END
 	
 	UPDATE cbn WITH(ROWLOCK)
 		SET cbn.Status = CASE WHEN s.ErrCode = 0 THEN 'Sending'
@@ -117,7 +118,8 @@ BEGIN
 		,cbm.ChatID
 	FROM @SendNotification s
 		INNER JOIN dbo.CustBotMessenger cbm WITH(NOLOCK) ON cbm.UserId = s.UserId
-	WHERE s.ErrCode = 0
+		INNER JOIN dbo.Bot b WITH(NOLOCK) ON b.BotId = cbm.BotId 
+	WHERE s.ErrCode = 0 AND b.IsTest = CASE WHEN @Environment = 'UAT' THEN 1 ELSE 0 END
 
 	SELECT 
 		LastNotificationId

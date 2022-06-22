@@ -17,6 +17,9 @@ BEGIN
 	
 	DECLARE @IncludeRealCurrencyUAT BIT = 0, @FunctionID SMALLINT, @__UserId INT, @LastUserId INT, @BatchSize INT, @SWinlostDate DATETIME
 
+	IF @Environment <> 'UAT'
+		SET @Environment = ''
+
 	SELECT 
 		@BatchSize = CASE WHEN SettingName = 'BatchSize' THEN CONVERT(INT, Value) ELSE @BatchSize END
 		,@SWinlostDate = CASE WHEN SettingName = 'WinlostDate' + @Environment THEN CONVERT(DATETIME, Value) ELSE @SWinlostDate END
@@ -54,6 +57,7 @@ BEGIN
 		AND b.Status = 1 AND cf.FunctionID = @FunctionID AND cf.Status = 1 AND cm.IsVerifyOTP = 1 AND cm.Status = 1 
 		AND ca.UserId > @LastUserId AND ca.UserId <= @__UserId
 		AND (@Environment = 'UAT' AND @IncludeRealCurrencyUAT = 0 AND c.currency = 20 OR @Environment <> 'UAT' OR @IncludeRealCurrencyUAT = 1) 
+	ORDER BY Ca.UserId ASC
 
 	IF @@ROWCOUNT < @BatchSize
 		SET @MaxUserId = @__UserId
