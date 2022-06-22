@@ -27,6 +27,7 @@ BEGIN
 		LEFT JOIN bodb02.dbo.CustSub cs WITH(NOLOCK) ON cs.SubAccID = ca.SubAccID AND ca.custid = cs.custid
 	WHERE ca.custid = @custid
 		AND ca.SubAccID = @SubAccID
+		AND cm.Status = 1
 		
 	SELECT f.FunctionID, f.FunctionName, cf.Status
 	FROM CustBotAccount ca WITH(NOLOCK) 
