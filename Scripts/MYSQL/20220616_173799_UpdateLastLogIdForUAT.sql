@@ -6,7 +6,7 @@
 */
 
 UPDATE SystemSetting
-	SET Value = '1520418'
+	SET Value = '1522511'
 WHERE ID IN (3, 8, 13);
 
 UPDATE SystemSetting
@@ -15,6 +15,6 @@ WHERE ID IN (16, 17);
 
 
 UPDATE SystemSetting
-	SET Value ='1476268'
+	SET Value ='2001427'
 WHERE ID = 20; -- Last LogID
 
