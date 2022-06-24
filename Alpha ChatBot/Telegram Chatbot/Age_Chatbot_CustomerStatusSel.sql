@@ -40,7 +40,7 @@ BEGIN
 	WHERE t.SubAccID > 0
 		
 	UPDATE t
-	SET t.IsProtectedMode = c.IsProtectedMode
+	SET t.IsProtectedMode = ISNULL(c.IsProtectedMode, 0)
 	FROM #tblCust t
 		INNER JOIN CustLoginInfo c WITH(NOLOCK) ON t.custid = c.custid
 		

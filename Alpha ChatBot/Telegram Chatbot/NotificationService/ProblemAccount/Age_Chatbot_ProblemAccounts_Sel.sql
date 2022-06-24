@@ -29,10 +29,10 @@ BEGIN
 	FROM dbo.CategoryConfig WITH(NOLOCK)
 	WHERE CustomerClass IS NOT NULL
 
-	DECLARE @Tmp TABLE (LogID BIGINT,custid	INT)
+	DECLARE @Tmp TABLE (LogID BIGINT,custid	INT, CreatedDate DATETIME)
 
-	INSERT INTO @Tmp (LogID, custid)
-	SELECT TOP(@BatchSize) LogID, custid
+	INSERT INTO @Tmp (LogID, custid, CreatedDate)
+	SELECT TOP(@BatchSize) LogID, custid, d.CreatedDate
 	FROM dbo.CustCategoryHistory d WITH(NOLOCK)
 	WHERE EXISTS (SELECT 1 FROM #CategoryConfig c WHERE c.CustomerClass = d.CustomerClass)
 		AND NOT EXISTS (SELECT 1 FROM #CategoryConfig c WHERE c.CustomerClass = d.OldCustomerClass)
@@ -45,7 +45,7 @@ BEGIN
 		SELECT @MaxLogId = MAX(LogId) FROM @Tmp
 	END
 
-	SELECT t.LogID, t.custid, c.username, c.recommend, c.mrecommend, c.srecommend
+	SELECT t.LogID, t.CreatedDate, t.custid, c.username, c.recommend, c.mrecommend, c.srecommend
 	FROM @Tmp t
 		INNER JOIN dbo.Customer c WITH(NOLOCK) ON t.custid = c.custid
 
