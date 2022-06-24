@@ -2,7 +2,8 @@
 
 ALTER PROCEDURE [dbo].[Age_Chatbot_BotSelAll] 	
 	@IsTest BIT = 0,
-	@Status BIT = 1
+	@Status BIT = 1,
+	@BotID 	INT = 0
 AS
 /*
 	Created: 20220323@Johnson
@@ -14,9 +15,18 @@ AS
 */
 BEGIN
 	SET NOCOUNT ON;
-
-	SELECT *
-	FROM Bot WITH(NOLOCK)
-	WHERE IsTest = @IsTest
-		AND Status = @Status--enabled
+	
+	IF @BotID > 0
+	BEGIN
+		SELECT *
+		FROM Bot WITH(NOLOCK)
+		WHERE BotID = @BotID
+	END
+	ELSE
+	BEGIN
+		SELECT *
+		FROM Bot WITH(NOLOCK)
+		WHERE IsTest = @IsTest
+			AND Status = @Status--enabled
+	END
 END
