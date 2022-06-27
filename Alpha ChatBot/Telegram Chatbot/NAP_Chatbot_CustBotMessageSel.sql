@@ -30,10 +30,18 @@ BEGIN
 		@SubAccID INT = 0,
 		@UserID INT 
 	
-	CREATE TABLE #Result(rn INT PRIMARY KEY, Sender INT, Receiver INT, Message NVARCHAR(MAX),CreatedDate DATETIME, Status TINYINT)
+	DECLARE @tblSite TABLE (site NVARCHAR(100))
+	
+	CREATE TABLE #Result(rn INT PRIMARY KEY, Sender INT, Receiver INT, Message NVARCHAR(MAX),CreatedDate DATETIME, Status TINYINT, rn2 INT)
 	DECLARE @RowStart INT, @RowEnd INT
 	SELECT  @PageIndex = @PageIndex - 1, @RowStart = @PageSize * @PageIndex + 1, @RowEnd = @RowStart + @PageSize - 1 
-
+	
+	INSERT INTO @tblSite(site)
+	SELECT site
+	FROM bodb02.dbo.Site s WITH(NOLOCK)
+	WHERE 1 = CASE WHEN @IsSpecial = 0 AND SpecialGroup = 1 THEN 0 ELSE 1 END
+		AND isLicensee = 0
+		
 	IF @username <> ''
 	BEGIN
 		SELECT @custid = custid 
@@ -74,6 +82,25 @@ BEGIN
 												AND (cm.Sender = c.UserID OR cm.Receiver = c.UserID)) THEN 1 
 					ELSE 0 END
 	
+	DELETE rs
+	FROM #Result rs
+		LEFT JOIN CustBotAccount ca WITH(NOLOCK) ON ca.userid = rs.Sender
+		LEFT JOIN bodb02.dbo.customer c WITH(NOLOCK) ON c.custid = ca.custid		
+		LEFT JOIN CustBotAccount ca2 WITH(NOLOCK) ON ca2.userid = rs.Receiver
+		LEFT JOIN bodb02.dbo.customer c2 WITH(NOLOCK) ON c2.custid = ca2.custid
+	WHERE 1 = CASE WHEN rs.sender > 0 AND c.site NOT IN (SELECT site FROM @tblSite) THEN 1	
+				WHEN rs.Receiver > 0 AND c2.site NOT IN (SELECT site FROM @tblSite) THEN 1
+				ELSE 0 END	
+	
+	;WITH T AS (
+		SELECT rn, ROW_NUMBER() OVER (ORDER BY rn ASC) rn2
+		FROM #Result 
+	)
+	UPDATE rs
+	SET rs.rn2 = T.rn2
+	FROM #Result rs
+		INNER JOIN T ON rs.rn = t.rn
+	
 	SELECT @TotalRows = @@ROWCOUNT
 	
 	SELECT CASE WHEN Sender<= 0 THEN 'Chatbot'
@@ -91,8 +118,8 @@ BEGIN
 		LEFT JOIN bodb02.dbo.customer c2 WITH(NOLOCK) ON c2.custid = ca2.custid
 		LEFT JOIN bodb02.dbo.custSub cs2 WITH(NOLOCK) ON ca2.custid = cs2.custid
 													AND ca2.SubAccID = cs2.SubAccID	
-	WHERE rn BETWEEN @RowStart AND @RowEnd
-	ORDER BY rn ASC
+	WHERE rn2 BETWEEN @RowStart AND @RowEnd
+	ORDER BY rn2 ASC
 	
 	DROP TABLE #Result
 END	

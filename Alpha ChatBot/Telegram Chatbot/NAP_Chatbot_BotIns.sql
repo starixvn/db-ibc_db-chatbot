@@ -1,7 +1,8 @@
 /*<info serverAlias="DBBOT-bodb_ChatBot" executers="bodbAdminNet" viewers="" selecters=""></info>*/
 
 ALTER PROCEDURE [dbo].[NAP_Chatbot_BotIns] 	
-	@Name		VARCHAR(200),
+	@Username	VARCHAR(200),
+	@DisplayName VARCHAR(200),
 	@System		VARCHAR(50),
 	@AccessToken VARCHAR(500),
 	@Status		BIT,
@@ -32,7 +33,7 @@ BEGIN
 	
 	IF EXISTS(SELECT 1
 			FROM Bot WITH(NOLOCK)
-			WHERE Name = @Name		
+			WHERE username = @username		
 				 AND System = @System		
 				 AND AccessToken = @AccessToken
 			)
@@ -43,12 +44,13 @@ BEGIN
 	END	
 	
 	INSERT INTO [dbo].[Bot]
-           ([Name]
+           ([username]
            ,[System]
            ,[Accesstoken]
            ,[Status]
-           ,[IsTest])
-    VALUES(@Name,@System,@Accesstoken,@Status,@IsTest)
+           ,[IsTest]
+		   ,[DisplayName])
+    VALUES(@username,@System,@Accesstoken,@Status,@IsTest,@DisplayName)
 	
 	SELECT @Duration = DATEDIFF (MILLISECOND, @startRun, GETDATE())
 	
@@ -56,7 +58,8 @@ BEGIN
 	DECLARE @LogDataNew VARCHAR(MAX)
 						
 	SELECT  @LogDataNew = '<R'						
-						+ ' BotName="' + COALESCE(@Name, SPACE(1)) + '"'
+						+ ' BotName="' + COALESCE(@username, SPACE(1)) + '"'
+						+ ' DisplayName="' + COALESCE(@DisplayName, SPACE(1)) + '"'
 						+ ' System="' + COALESCE(@System, SPACE(1)) + '"'
 						+ ' AccessToken="' + COALESCE(@AccessToken, SPACE(1)) + '"'
 						+ ' Status="' + COALESCE(CAST(@Status as VARCHAR(10)), SPACE(1)) + '"'

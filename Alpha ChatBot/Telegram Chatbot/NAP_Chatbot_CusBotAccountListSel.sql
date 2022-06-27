@@ -37,7 +37,7 @@ BEGIN
 	DECLARE @RowStart INT, @RowEnd INT
 	SELECT  @PageIndex = @PageIndex - 1, @RowStart = @PageSize * @PageIndex + 1, @RowEnd = @RowStart + @PageSize - 1 
 
-	CREATE TABLE #Result (custid INT, SubAccID INT, username VARCHAR(50), SubAccount VARCHAR(50), ChatID BIGINT, BotID INT, roleid TINYINT, 
+	CREATE TABLE #Result (custid INT, SubAccID INT, username VARCHAR(50), SubAccount VARCHAR(50), ChatID BIGINT, site VARCHAR(20), BotID INT, roleid TINYINT, 
 				LinkStatus VARCHAR(50),Language VARCHAR(10), currency INT, Status VARCHAR(20), UpdatedTime DATETIME, rn INT PRIMARY KEY(custid,SubAccID,BotID))
 	
 	INSERT INTO @tblSite(site)
@@ -55,8 +55,8 @@ BEGIN
 	SELECT value 
 	FROM STRING_SPLIT(@currency,',')
 		
-	INSERT INTO #Result(custid,SubAccID,username,SubAccount,ChatID,BotID,roleid,LinkStatus,Language,currency,Status,UpdatedTime,rn)
-	SELECT ca.custid, ca.SubAccID, c.username, cs.username as SubAccount,cm.ChatID,cm.BotID,c.roleid,
+	INSERT INTO #Result(custid,SubAccID,username,SubAccount,ChatID,site,BotID,roleid,LinkStatus,Language,currency,Status,UpdatedTime,rn)
+	SELECT ca.custid, ca.SubAccID, c.username, cs.username as SubAccount,cm.ChatID,c.site,cm.BotID,c.roleid,
 		CASE WHEN cm.Status = 1 AND cm.IsVerifyOTP = 1 THEN 'Linked'
 			WHEN cm.Status = 1 AND cm.IsVerifyOTP = 0 THEN 'Verifying' END as LinkStatus,
 		ca.Language,
@@ -99,7 +99,7 @@ BEGIN
 					
 		SELECT @TotalRows = @@ROWCOUNT 
 
-		SELECT b.BotID, b.Name as BotName, custid, SubAccID, username, SubAccount, ChatID,
+		SELECT b.BotID, b.DisplayName as BotName, custid, SubAccID, rs.username, SubAccount, ChatID, rs.site,
 				roleid, LinkStatus,Language, e.currency, rs.Status, rs.UpdatedTime
 		FROM #Result rs
 			INNER JOIN Bot b WITH(NOLOCK) ON rs.BotID = b.BotID

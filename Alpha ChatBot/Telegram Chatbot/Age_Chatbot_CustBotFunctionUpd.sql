@@ -50,7 +50,7 @@ BEGIN
 	FROM CustBotAccount WITH(NOLOCK)
 	WHERE userid = @userid
 	
-	SELECT @BotName = Name FROM Bot WITH(NOLOCK) WHERE botID = @botID
+	SELECT @BotName = DisplayName FROM Bot WITH(NOLOCK) WHERE botID = @botID
 	
 	IF @custid IS NULL
 	BEGIN

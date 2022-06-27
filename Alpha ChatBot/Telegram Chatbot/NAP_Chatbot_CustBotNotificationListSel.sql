@@ -7,6 +7,7 @@ ALTER PROCEDURE [dbo].[NAP_Chatbot_CustBotNotificationListSel]
 	@ToDate			DATETIME,
 	@NotificationID BIGINT = NULL,
 	@Status			VARCHAR(20)= NULL,
+	@IsSpecial		BIT = 0,
 	@PageIndex 		INT = 1,
 	@PageSize  		INT = 500,
 	@TotalRows 		INT = 0 OUTPUT
@@ -36,12 +37,21 @@ BEGIN
 						Status VARCHAR(20), 
 						Description NVARCHAR(1000), 
 						Retry TINYINT, 
-						rn INT)
+						rn INT,
+						rn2 INT)
+	
+	DECLARE @tblSite TABLE (site NVARCHAR(100))
 	
 	DECLARE @UserID INT = 0
 	DECLARE @RowStart INT, @RowEnd INT
 	SELECT  @PageIndex = @PageIndex - 1, @RowStart = @PageSize * @PageIndex + 1, @RowEnd = @RowStart + @PageSize - 1 
-
+	
+	INSERT INTO @tblSite(site)
+	SELECT site
+	FROM bodb02.dbo.Site s WITH(NOLOCK)
+	WHERE 1 = CASE WHEN @IsSpecial = 0 AND SpecialGroup = 1 THEN 0 ELSE 1 END
+		AND isLicensee = 0
+		
 	IF @Username IS NOT NULL
 	BEGIN		
 		SELECT @UserID = UserID FROM CustBotAccount WITH(NOLOCK)
@@ -76,7 +86,20 @@ BEGIN
 					WHEN @FunctionIDs IS NOT NULL AND FunctionID IN (SELECT value FROM STRING_SPLIT(@FunctionIDs,',')) THEN 1 ELSE 0 END
 		AND NotificationID = ISNULL(@NotificationID,NotificationID)
 		
+	DELETE rs
+	FROM #Result rs
+		INNER JOIN bodb02.dbo.customer c WITH(NOLOCK) ON rs.custid = c.custid
+	WHERE c.site NOT IN (SELECT site FROM @tblSite)	
 	
+	;WITH T AS (
+		SELECT rn, ROW_NUMBER() OVER (ORDER BY rn ASC) rn2
+		FROM #Result 
+	)
+	UPDATE rs
+	SET rs.rn2 = T.rn2
+	FROM #Result rs
+		INNER JOIN T ON rs.rn = t.rn
+		
 	SELECT @TotalRows = @@ROWCOUNT 
 	
 	SELECT NotificationID, f.FunctionName, Message, Recipient, SendDate, rs.Status, Description, Retry
@@ -87,8 +110,8 @@ BEGIN
 						LEFT JOIN bodb02.dbo.custsub cs WITH(NOLOCK) ON rs.CustID = cs.CustID AND rs.SubAccID = cs.SubAccID
 					WHERE rs.custid = c.custid
 					) t
-	WHERE rn BETWEEN @RowStart AND @RowEnd
-	ORDER BY rn ASC
+	WHERE rn2 BETWEEN @RowStart AND @RowEnd
+	ORDER BY rn2 ASC
 	
 	DROP TABLE #Result
 END	

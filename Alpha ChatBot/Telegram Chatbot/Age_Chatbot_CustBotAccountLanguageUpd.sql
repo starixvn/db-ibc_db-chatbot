@@ -35,7 +35,7 @@ BEGIN
 	FROM CustBotAccount WITH(NOLOCK)	
 	WHERE userid = @userid
 	
-	SELECT @BotName = Name
+	SELECT @BotName = DisplayName
 	FROM Bot WITH(NOLOCK) WHERE BotID = @BotID
 	
 	IF NOT EXISTS(SELECT 1 FROM CustBotMessenger WITH(NOLOCK) 

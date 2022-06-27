@@ -2,7 +2,8 @@
 
 ALTER PROCEDURE [dbo].[NAP_Chatbot_BotUpd] 
 	@BotID		INT,
-	@Name		VARCHAR(200),
+	@username	VARCHAR(200),
+	@DisplayName VARCHAR(200),
 	@System		VARCHAR(50),
 	@AccessToken VARCHAR(500),
 	@Status		BIT,
@@ -26,7 +27,8 @@ AS
 BEGIN
 	SET NOCOUNT ON
 			
-	DECLARE @Old_Name		VARCHAR(200),
+	DECLARE @Old_username	VARCHAR(200),
+			@Old_Displayname VARCHAR(200),
 			@Old_System		VARCHAR(50),
 			@Old_AccessToken VARCHAR(500),
 			@Old_Status		BIT,
@@ -36,8 +38,9 @@ BEGIN
 	
 	SELECT @startRun = GETDATE()
 	
-	SELECT @Old_Name = Name,		
-          @Old_System = System,		
+	SELECT @Old_userName = username,
+          @Old_DisplayName = DisplayName,
+		  @Old_System = System,		  
           @Old_AccessToken = AccessToken,
           @Old_Status = Status,		
           @Old_IsTest = IsTest
@@ -51,11 +54,12 @@ BEGIN
 		RETURN;
 	END	
 	
-	IF @Old_Name = @Name AND @Old_System = @System AND @Old_AccessToken = @AccessToken AND @Old_Status = @Status AND @Old_IsTest = @IsTest
+	IF @Old_username = @username AND @Old_DisplayName = @DisplayName AND @Old_System = @System AND @Old_AccessToken = @AccessToken AND @Old_Status = @Status AND @Old_IsTest = @IsTest
 		RETURN;
 	
 	UPDATE Bot WITH(ROWLOCK)
-	SET Name = @Name,		
+	SET username = @username,
+		DisplayName = @DisplayName,
         System = @System,		
         AccessToken = @AccessToken,
         Status = @Status,		
@@ -69,7 +73,8 @@ BEGIN
 			@LogDataOld VARCHAR(MAX)
 	
 	SELECT  @LogDataOld = '<R'						
-						+ ' BotName="' + COALESCE(@Old_Name, SPACE(1)) + '"'
+						+ ' BotName="' + COALESCE(@Old_username, SPACE(1)) + '"'
+						+ ' DisplayName="' + COALESCE(@Old_DisplayName, SPACE(1)) + '"'
 						+ ' System="' + COALESCE(@Old_System, SPACE(1)) + '"'
 						+ ' AccessToken="' + COALESCE(@Old_AccessToken, SPACE(1)) + '"'
 						+ ' Status="' + COALESCE(CAST(@Old_Status as VARCHAR(10)), SPACE(1)) + '"'
@@ -78,7 +83,8 @@ BEGIN
 						+ ' />'
 						
 	SELECT  @LogDataNew = '<R'						
-						+ ' BotName="' + COALESCE(@Name, SPACE(1)) + '"'
+						+ ' BotName="' + COALESCE(@username, SPACE(1)) + '"'
+						+ ' DisplayName="' + COALESCE(@DisplayName, SPACE(1)) + '"'
 						+ ' System="' + COALESCE(@System, SPACE(1)) + '"'
 						+ ' AccessToken="' + COALESCE(@AccessToken, SPACE(1)) + '"'
 						+ ' Status="' + COALESCE(CAST(@Status as VARCHAR(10)), SPACE(1)) + '"'

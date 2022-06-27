@@ -60,7 +60,7 @@ BEGIN
 		RETURN;	
 	END	
 	
-	SELECT @BotName = Name, 
+	SELECT @BotName = DisplayName, 
 		@IsTest = IsTest
 	FROM Bot WITH(NOLOCK) 
 	WHERE BotID = @BotID

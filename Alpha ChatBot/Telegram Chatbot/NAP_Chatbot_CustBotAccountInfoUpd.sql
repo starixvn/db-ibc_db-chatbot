@@ -55,7 +55,7 @@ BEGIN
 	WHERE UserID = @UserID
 		AND BotID = @BotID
 	
-	SELECT @BotName = Name, 
+	SELECT @BotName = DisplayName, 
 		@IsTest = IsTest
 	FROM Bot WITH(NOLOCK) WHERE BotID = @BotID
 	

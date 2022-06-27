@@ -19,7 +19,7 @@ BEGIN
 	SET NOCOUNT ON
 	
 	SELECT ca.UserID, ca.custid, ca.SubAccID, c.username, cs.username as SubAccount, cm.ChatID,
-		b.Name as BotName, ca.Language, cm.Status, cm.IsVerifyOTP
+		b.DisplayName as BotName, ca.Language, cm.Status, cm.IsVerifyOTP
 	FROM CustBotAccount ca WITH(NOLOCK) 
 		INNER JOIN CustBotMessenger cm WITH(NOLOCK) ON ca.userid = cm.userid
 		INNER JOIN bodb02.dbo.customer c WITH(NOLOCK) ON ca.custid = c.custid

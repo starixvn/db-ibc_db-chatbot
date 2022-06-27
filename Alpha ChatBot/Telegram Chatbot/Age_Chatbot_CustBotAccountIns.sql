@@ -51,7 +51,7 @@ BEGIN
 	DECLARE @BotName VARCHAR(200),
 			@IsTest BIT
 			
-	SELECT @BotName = Name, 
+	SELECT @BotName = DisplayName, 
 		@IsTest = IsTest
 	FROM Bot WITH(NOLOCK) 
 	WHERE BotID = @BotID
