@@ -7,6 +7,7 @@ ALTER PROCEDURE [dbo].[NAP_Chatbot_CustBotNotificationListSel]
 	@ToDate			DATETIME,
 	@NotificationID BIGINT = NULL,
 	@Status			VARCHAR(20)= NULL,
+	@BotIDs			VARCHAR(1000) = '',
 	@IsSpecial		BIT = 0,
 	@PageIndex 		INT = 1,
 	@PageSize  		INT = 500,
@@ -24,12 +25,14 @@ AS
 		- @FunctionID : 0: All, NotificationType
 		- @Username: recipient
 		- @Status: NULL: All, Draft, Initial, Sending, Completed, Invalid, Fail
+		- @BotIDs: list all botid
 */
 BEGIN
 	SET NOCOUNT ON;
 	
 	CREATE TABLE #Result(NotificationID BIGINT PRIMARY KEY, 
 						FunctionID SMALLINT, 
+						BotID SMALLINT,
 						Message NVARCHAR(MAX), 
 						custid INT, 
 						SubAccId INT, 
@@ -71,8 +74,8 @@ BEGIN
 		END			
 	END
 	
-	INSERT INTO #Result(NotificationID, FunctionID, Message, custid, SubAccId, SendDate, Status, Description, Retry,rn)
-	SELECT NotificationID, FunctionID, cn.Message, ca.custid, ca.SubAccId, UpdatedTime as SendDate, cn.Status, Description, Retry,
+	INSERT INTO #Result(NotificationID, FunctionID, BotID, Message, custid, SubAccId, SendDate, Status, Description, Retry,rn)
+	SELECT NotificationID, FunctionID, cn.BotID, cn.Message, ca.custid, ca.SubAccId, UpdatedTime as SendDate, cn.Status, Description, Retry,
 		ROW_NUMBER() OVER (ORDER BY UpdatedTime DESC) rn		
 	FROM CustBotNotification cn WITH(NOLOCK)
 		CROSS APPLY (SELECT TOP 1 custid, subaccid FROM CustBotAccount ca WITH(NOLOCK) 
@@ -85,6 +88,7 @@ BEGIN
 		AND 1 = CASE WHEN @FunctionIDs IS NULL THEN 1
 					WHEN @FunctionIDs IS NOT NULL AND FunctionID IN (SELECT value FROM STRING_SPLIT(@FunctionIDs,',')) THEN 1 ELSE 0 END
 		AND NotificationID = ISNULL(@NotificationID,NotificationID)
+		AND BotID IN (SELECT value FROM STRING_SPLIT(@BotIDs,','))
 		
 	DELETE rs
 	FROM #Result rs
@@ -102,8 +106,9 @@ BEGIN
 		
 	SELECT @TotalRows = @@ROWCOUNT 
 	
-	SELECT NotificationID, f.FunctionName, Message, Recipient, SendDate, rs.Status, Description, Retry
+	SELECT NotificationID, f.FunctionName, b.DisplayName as BotName, Message, Recipient, SendDate, rs.Status, Description, Retry
 	FROM #Result rs
+		INNER JOIN Bot b WITH(NOLOCK) ON rs.BotID = b.BotID
 		INNER JOIN BotFunction f WITH(NOLOCK) ON rs.FunctionID = f.FunctionID
 		CROSS APPLY (SELECT TOP 1 CASE WHEN cs.subaccid IS NULL THEN c.username ELSE cs.username END as Recipient
 					FROM bodb02.dbo.customer c WITH(NOLOCK) 

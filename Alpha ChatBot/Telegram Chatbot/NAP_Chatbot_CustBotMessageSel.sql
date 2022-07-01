@@ -7,6 +7,7 @@ ALTER PROCEDURE [dbo].[NAP_Chatbot_CustBotMessageSel]
 	@ToDate 	DATETIME,
 	@Status		TINYINT = 0,
 	@IsSpecial	BIT = 0,
+	@BotIDs 	VARCHAR(1000)='',
 	@PageIndex	INT = 1,
 	@PageSize	INT = 100,
 	@TotalRows	INT =0 OUTPUT
@@ -32,7 +33,7 @@ BEGIN
 	
 	DECLARE @tblSite TABLE (site NVARCHAR(100))
 	
-	CREATE TABLE #Result(rn INT PRIMARY KEY, Sender INT, Receiver INT, Message NVARCHAR(MAX),CreatedDate DATETIME, Status TINYINT, rn2 INT)
+	CREATE TABLE #Result(rn INT PRIMARY KEY, Sender INT, Receiver INT, BotID SMALLINT, Message NVARCHAR(MAX),CreatedDate DATETIME, Status TINYINT, rn2 INT)
 	DECLARE @RowStart INT, @RowEnd INT
 	SELECT  @PageIndex = @PageIndex - 1, @RowStart = @PageSize * @PageIndex + 1, @RowEnd = @RowStart + @PageSize - 1 
 	
@@ -62,11 +63,12 @@ BEGIN
 			AND SubAccID = @SubAccID
 	END	
 	
-	INSERT INTO #Result(Sender,Receiver,Message,CreatedDate,Status,rn)
-	SELECT Sender, Receiver,Message, CreatedDate,Status,
+	INSERT INTO #Result(Sender,Receiver,BotID,Message,CreatedDate,Status,rn)
+	SELECT Sender, Receiver, BotID, Message, CreatedDate,Status,
 		ROW_NUMBER() OVER (ORDER BY CreatedDate DESC) rn
 	FROM CustBotMessage cm WITH(NOLOCK)													
 	WHERE createdDate BETWEEN @FromDate AND @ToDate
+		AND BotID IN (SELECT Value FROM STRING_SPLIT(@BotIDs,','))
 		AND 1 = CASE WHEN @FunctionID = 0 THEN 1
 					WHEN @FunctionID <> 0 AND FunctionID = @FunctionID THEN 1
 					ELSE 0 END
@@ -108,8 +110,10 @@ BEGIN
 				END as SentBy,
 			CASE WHEN Receiver<= 0 THEN 'Chatbot'
 				ELSE CASE WHEN ca2.SubAccID > 0 THEN cs2.username ELSE c2.username END
-				END as SentTo,Message,CreatedDate,Status
+				END as SentTo,
+			b.DisplayName as BotName, rs.Message, rs.CreatedDate, rs.Status
 	FROM #Result rs
+		INNER JOIN Bot b WITH(NOLOCK) ON rs.BotID = b.BotID 
 		LEFT JOIN CustBotAccount ca WITH(NOLOCK) ON ca.userid = rs.Sender
 		LEFT JOIN bodb02.dbo.customer c WITH(NOLOCK) ON c.custid = ca.custid
 		LEFT JOIN bodb02.dbo.custSub cs WITH(NOLOCK) ON ca.custid = cs.custid

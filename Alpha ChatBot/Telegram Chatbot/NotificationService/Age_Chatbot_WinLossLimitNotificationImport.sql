@@ -17,8 +17,8 @@ AS
 	
 	Paramter's Explanations:
 		@XmlData = '<root>
-							<r UserId="1" Message="XXX" Status="Initial" />
-							<r UserId="2" Message="XXX" Status="Initial" />
+							<r UserId="1" BotId="1" Message="XXX" Status="Initial" />
+							<r UserId="2" BotId="1" Message="XXX" Status="Initial" />
 					  </root>'
 		@XmlDataLog = '<root>
 							<r UserId="1" LogID = "100" />
@@ -33,7 +33,7 @@ AS
 BEGIN
 	SET NOCOUNT ON
 	
-	CREATE TABLE #tmpData (ID INT IDENTITY(1,1) PRIMARY KEY,UserID INT, Message NVARCHAR(MAX),Status VARCHAR(20))
+	CREATE TABLE #tmpData (ID INT IDENTITY(1,1) PRIMARY KEY,UserID INT, BotID INT, Message NVARCHAR(MAX),Status VARCHAR(20))
 	CREATE TABLE #tmpDataLog (ID INT IDENTITY(1,1) PRIMARY KEY,UserID INT, LogID BIGINT)
 	CREATE TABLE #tmpNotification (NotificationID BIGINT PRIMARY KEY,UserID INT, Message NVARCHAR(MAX))
 	
@@ -42,8 +42,9 @@ BEGIN
 
 	SELECT @SyncSettingPRO = Value FROM dbo.BotSystemSetting WITH(NOLOCK) WHERE ServiceName = 'MemberWinLossLimit' AND SettingName = 'SyncSettingPRO'
 	
-	INSERT INTO #tmpData (UserID,Message,Status)
+	INSERT INTO #tmpData (UserID,BotID,Message,Status)
 	SELECT t.c.value('@UserId', 'INT')	AS UserID		
+		,t.c.value('@BotId', 'INT')	AS BotID		
 		,t.c.value('@Message', 'NVARCHAR(MAX)')	AS Message
 		,t.c.value('@Status', 'VARCHAR(20)')	AS Status
 	FROM @XmlData.nodes ('root/r') t(c)
@@ -64,9 +65,10 @@ BEGIN
 			   ,[CreatedDate]
 			   ,[UpdatedTime]
 			   ,[Retry]
-			   ,[ReferenceId])
+			   ,[ReferenceId]
+			   ,[BotID])
 	OUTPUT INSERTED.NotificationID, INSERTED.UserID INTO #tmpNotification(NotificationID,UserID)		   
-	SELECT UserID, @FunctionID, Message, Status, '' as Description, GETDATE(), GETDATE(), 0, NULL
+	SELECT UserID, @FunctionID, Message, Status, '' as Description, GETDATE(), GETDATE(), 0, NULL, BotID
 	FROM #tmpData
 	
 	INSERT INTO [dbo].[NotificationReferenceLog]

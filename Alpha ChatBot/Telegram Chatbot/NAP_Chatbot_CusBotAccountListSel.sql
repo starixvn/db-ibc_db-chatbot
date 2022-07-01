@@ -9,6 +9,7 @@ ALTER PROCEDURE [dbo].[NAP_Chatbot_CustBotAccountListSel]
 	@LinkStatus 	TINYINT = 0,
 	@Level 			TINYINT = 0,
 	@Currency 		VARCHAR(MAX) = '',
+	@BotIDs 		VARCHAR(1000) = '',
 	@Status 		TINYINT = 0,
 	@PageIndex 		INT = 1,
 	@PageSize  		INT = 100,
@@ -27,6 +28,7 @@ AS
 		- @Level: 0: All, 2,3,4 SMA
 		- @Status: 0: All, 1: Active, 2: Closed, 3: Suspended
 		- @Currency: '1,2,3'
+		- @BotIDs: List botids
 		
 */
 BEGIN
@@ -75,7 +77,8 @@ BEGIN
 		LEFT JOIN bodb02.dbo.CustProductStatus cps WITH(NOLOCK) ON c.custid = cps.custid
 	WHERE 1 = CASE WHEN @username <> '' AND (c.username LIKE '%'+@username+'%' OR cs.username LIKE '%'+@username+'%') THEN 1 
 					WHEN @username = '' THEN 1 ELSE 0 END
-		AND cm.Chatid = ISNULL(@ChatID,cm.ChatID)				
+		AND cm.Chatid = ISNULL(@ChatID,cm.ChatID)
+		AND cm.BotID IN (SELECT value FROM STRING_SPLIT(@BotIDs,','))
 		AND 1 = CASE WHEN @LinkStatus = 0 AND cm.Status = 1 THEN 1	
 					WHEN @LinkStatus = 1 AND cm.Status = 1 AND cm.IsVerifyOTP = 1 THEN 1
 					WHEN @LinkStatus = 2 AND cm.Status = 1 AND cm.IsVerifyOTP = 0 THEN 1

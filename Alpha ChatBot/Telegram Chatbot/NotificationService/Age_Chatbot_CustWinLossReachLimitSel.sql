@@ -36,9 +36,9 @@ BEGIN
 	IF ISNULL(@MaxLogID,0) =  0
 		SELECT @MaxLogID = @LastLogID
 	
-	SELECT rs.*, su.username as super, m.username as master, a.username as agent, s.ProductID
+	SELECT rs.*, su.username as super, m.username as master, a.username as agent, s.RealProductId ProductID
 	FROM #Result rs
-		INNER JOIN DBTXN.bodb02.dbo.SportBettypeMatrix s WITH(NOLOCK) ON rs.bettype = s.bettype
+		INNER JOIN ProductSettingDetail s WITH(NOLOCK) ON rs.bettype = s.bettype and SettingType = 6
 		INNER JOIN customer su WITH(NOLOCK) ON rs.srecommend = su.custid
 		INNER JOIN customer m WITH(NOLOCK) ON rs.mrecommend = m.custid
 		INNER JOIN customer a WITH(NOLOCK) ON rs.recommend = a.custid	
