@@ -17,7 +17,7 @@ AS
 	
 	Paramter's Explanations:
 		 @XmlData = '<root>
-						<r Id="1" UserId="1" Message="" Status="Initial"/>
+						<r Id="1" UserId="1" BotId="1" Message="" Status="Initial"/>
                     </root>'
 
 		 @XmlDataLog = '<root>
@@ -39,14 +39,15 @@ BEGIN
 	CREATE TABLE #TmpNotification (NotificationId BIGINT, ID INT)
 	CREATE CLUSTERED INDEX ix_Id ON #TmpNotification (Id)
 
-	CREATE TABLE #ImportData (ID INT PRIMARY KEY, UserID INT, Message NVARCHAR(MAX), Status VARCHAR(20))
+	CREATE TABLE #ImportData (ID INT PRIMARY KEY, UserID INT, BotId INT, Message NVARCHAR(MAX), Status VARCHAR(20))
 	CREATE TABLE #ImportDataLog (Id INT, NotificationId BIGINT, LogId INT)
 	CREATE CLUSTERED INDEX cix_Id ON #ImportDataLog (Id)
 
 	BEGIN TRY
-		INSERT INTO #ImportData (Id, UserID, Message, Status)
+		INSERT INTO #ImportData (Id, BotId, UserID, Message, Status)
 		SELECT 
 			t.c.value('@Id', 'INT') AS Id
+			,t.c.value('@BotId', 'INT') AS BotId
 			,t.c.value('@UserId', 'INT') AS UserID
 			,t.c.value('@Message', 'NVARCHAR(MAX)') AS Message
 			,t.c.value('@Status', 'VARCHAR(20)') AS Status
@@ -71,9 +72,9 @@ BEGIN
 	BEGIN
 		TRUNCATE TABLE #TmpNotification
 
-		INSERT INTO dbo.CustBotNotification (UserID, FunctionID, Message, Status, Description, CreatedDate, ReferenceId)
+		INSERT INTO dbo.CustBotNotification (UserID, BotId, FunctionID, Message, Status, Description, CreatedDate, UpdatedTime, ReferenceId)
 		OUTPUT inserted.NotificationID INTO #TmpNotification (NotificationId)
-		SELECT UserID, @FunctionId, Message, Status, '', GETDATE(), NULL
+		SELECT UserID, BotId, @FunctionId, Message, Status, '', GETDATE(), GETDATE(), NULL
 		FROM #ImportData
 		WHERE ID >= @ID AND ID < @ID + 200
 		ORDER BY ID ASC

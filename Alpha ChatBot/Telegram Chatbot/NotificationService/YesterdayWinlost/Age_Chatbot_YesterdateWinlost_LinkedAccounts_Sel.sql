@@ -44,10 +44,10 @@ BEGIN
 
 	SELECT @FunctionID = FunctionID FROM dbo.BotFunction WITH(NOLOCK) WHERE FunctionKey = 'YesterdayWinLoss' AND Type = 2
 	
-	DECLARE @Tmp TABLE (CustId INT, SubAccID INT, Language VARCHAR(10), CustomerLevel TINYINT, UserId INT, IsRealUser BIT)
+	DECLARE @Tmp TABLE (CustId INT, SubAccID INT, Language VARCHAR(10), CustomerLevel TINYINT, UserId INT, BotId INT, IsRealUser BIT)
 
-	INSERT INTO @Tmp (CustId, SubAccID, Language, CustomerLevel, UserId, IsRealUser)
-	SELECT TOP(@BatchSize) ca.CustID, ca.SubAccID, ca.Language, ca.CustomerLevel, ca.UserId, CASE WHEN c.currency = 20 THEN 0 ELSE 1 END AS IsRealUser
+	INSERT INTO @Tmp (CustId, SubAccID, Language, CustomerLevel, UserId, BotId, IsRealUser)
+	SELECT TOP(@BatchSize) ca.CustID, ca.SubAccID, ca.Language, ca.CustomerLevel, ca.UserId, cm.BotId, CASE WHEN c.currency = 20 THEN 0 ELSE 1 END AS IsRealUser
 	FROM dbo.CustBotAccount ca WITH(NOLOCK)
 		INNER JOIN dbo.CustBotMessenger cm WITH(NOLOCK) ON ca.UserID = cm.UserID 
 		INNER JOIN dbo.CustBotFunction cf WITH(NOLOCK) ON ca.UserID = cf.UserID
@@ -64,7 +64,7 @@ BEGIN
 	ELSE
 		SELECT @MaxUserId = MAX(UserId) FROM @Tmp
 
-	SELECT CustId, SubAccID, Language, CustomerLevel, UserId, IsRealUser
+	SELECT CustId, SubAccID, Language, CustomerLevel, UserId, IsRealUser, BotId
 	FROM @Tmp	
 
 END	

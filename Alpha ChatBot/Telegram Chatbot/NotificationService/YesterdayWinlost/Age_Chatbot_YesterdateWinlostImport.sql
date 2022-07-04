@@ -17,7 +17,7 @@ AS
 	
 	Paramter's Explanations:
 		 @XmlData = '<root>
-							<r UserId="1" Message="XXX" Status="Initial"/>
+							<r UserId="1" BotId="1" Message="XXX" Status="Initial"/>
 					  </root>'
 
 */
@@ -38,13 +38,15 @@ BEGIN
 		ID				INT IDENTITY(1, 1) PRIMARY KEY
 		,NotificationId BIGINT
 		,UserID			INT
+		,BotId			INT
 		,Message		NVARCHAR(MAX)
 		,Status			VARCHAR(20)
 	)
 
-	INSERT INTO #ImportData (UserID, Message, Status)
+	INSERT INTO #ImportData (UserID, BotId, Message, Status)
 	SELECT 
 		t.c.value('@UserId', 'INT')					 AS UserID
+		,t.c.value('@BotId', 'INT')					 AS BotId
 		,t.c.value('@Message', 'NVARCHAR(MAX)')		 AS Message
 		,t.c.value('@Status', 'VARCHAR(20)')		 AS Status
 	FROM @XmlData.nodes ('root/r') t(c)
@@ -56,9 +58,9 @@ BEGIN
 	BEGIN
 		TRUNCATE TABLE #TmpNotification
 
-		INSERT INTO dbo.CustBotNotification (UserID, FunctionID, Message, Status, CreatedDate)
+		INSERT INTO dbo.CustBotNotification (UserID, BotId, FunctionID, Message, Status, CreatedDate, UpdatedTime)
 		OUTPUT inserted.NotificationID INTO #TmpNotification (NotificationId)
-		SELECT UserID, @FunctionId, Message, Status, GETDATE()
+		SELECT UserID, BotId, @FunctionId, Message, Status, GETDATE(), GETDATE()
 		FROM #ImportData
 		WHERE ID >= @ID AND ID < @ID + 2000
 		ORDER BY ID ASC

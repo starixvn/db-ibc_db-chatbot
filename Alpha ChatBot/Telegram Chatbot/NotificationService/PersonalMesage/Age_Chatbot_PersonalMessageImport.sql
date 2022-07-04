@@ -16,7 +16,7 @@ AS
 	
 	Paramter's Explanations:
 		 @XmlData = '<root>
-							<r UserId="1" MsgTargetId="2" MessageId="1" Message="XXX" Status="Initial"/>
+							<r UserId="1" BotId="1" MsgTargetId="2" MessageId="1" Message="XXX" Status="Initial"/>
 					  </root>'
 
 */
@@ -37,15 +37,17 @@ BEGIN
 		ID				INT IDENTITY(1, 1) PRIMARY KEY
 		,NotificationId BIGINT
 		,UserID			INT
+		,BotId			INT
 		,MsgTargetId	INT
 		,MessageId		INT
 		,Message		NVARCHAR(MAX)
 		,Status			VARCHAR(20)
 	)
 
-	INSERT INTO #ImportData (UserID, MsgTargetId, MessageId, Message, Status)
+	INSERT INTO #ImportData (UserID, BotId, MsgTargetId, MessageId, Message, Status)
 	SELECT 
 		t.c.value('@UserId', 'INT')					 AS UserID
+		,t.c.value('@BotId', 'INT')					 AS BotId
 		,t.c.value('@MsgTargetId', 'INT')			 AS MsgTargetId
 		,t.c.value('@MessageId', 'INT')				 AS MessageId
 		,t.c.value('@Message', 'NVARCHAR(MAX)')		 AS Message
@@ -59,9 +61,9 @@ BEGIN
 	BEGIN
 		TRUNCATE TABLE #TmpNotification
 
-		INSERT INTO dbo.CustBotNotification (UserID, FunctionID, Message, Status, Description, CreatedDate, ReferenceId)
+		INSERT INTO dbo.CustBotNotification (UserID, BotId, FunctionID, Message, Status, Description, CreatedDate, UpdatedTime, ReferenceId)
 		OUTPUT inserted.NotificationID INTO #TmpNotification (NotificationId)
-		SELECT UserID, @FunctionId, Message, Status, '', GETDATE(), MessageID
+		SELECT UserID, BotId, @FunctionId, Message, Status, '', GETDATE(), GETDATE(), MessageID
 		FROM #ImportData
 		WHERE ID >= @ID AND ID < @ID + 20000
 		ORDER BY ID ASC

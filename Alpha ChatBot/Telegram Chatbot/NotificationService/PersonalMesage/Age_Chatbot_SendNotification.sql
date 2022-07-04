@@ -48,17 +48,18 @@ BEGIN
 		,FunctionKey	VARCHAR(50)
 		,[Message]		NVARCHAR(MAX)
 		,UserId			INT
+		,BotId			INT
 		,CustId			INT
 		,SubAccId		INT
 		,ErrCode		TINYINT
 	)
 
-	INSERT INTO @SendNotification (NotificationID, FunctionId, FunctionKey, Message, UserId, CustId, SubAccId, ErrCode)
-	SELECT TOP(@SendBatchSize) cbn.NotificationID, f.FunctionId, f.FunctionKey, cbn.Message, cbn.UserId, cba.CustId, cba.SubAccId, CASE WHEN b.Status = 0 THEN 1 ELSE 0 END AS ErrCode
+	INSERT INTO @SendNotification (NotificationID, BotId, FunctionId, FunctionKey, Message, UserId, CustId, SubAccId, ErrCode)
+	SELECT TOP(@SendBatchSize) cbn.NotificationID, cbn.BotId, f.FunctionId, f.FunctionKey, cbn.Message, cbn.UserId, cba.CustId, cba.SubAccId, CASE WHEN b.Status = 0 THEN 1 ELSE 0 END AS ErrCode
 	FROM @Function f
 		INNER LOOP JOIN dbo.CustBotNotification cbn WITH(NOLOCK) ON f.FunctionId = cbn.FunctionID 
 		INNER JOIN dbo.CustBotAccount cba WITH(NOLOCK) ON cba.UserId = cbn.UserID
-		INNER JOIN dbo.CustBotMessenger cbm  WITH(NOLOCK) ON cbm.UserId = cbn.UserID
+		INNER JOIN dbo.CustBotMessenger cbm  WITH(NOLOCK) ON cbm.UserId = cbn.UserID AND cbm.BotId = cbn.botId
 		INNER JOIN dbo.Bot b WITH(NOLOCK) ON b.BotId = cbm.BotId 
 	WHERE cbn.NotificationID > f.SendLastNotificationId AND cbn.NotificationID <= @MaxNotificationId AND cbn.Status = 'Initial'
 		AND b.IsTest = CASE WHEN @Environment = 'UAT' THEN 1 ELSE 0 END
@@ -70,7 +71,7 @@ BEGIN
 							 WHEN cbf.Status = 0 THEN 4 -- turn off Setting          
 		                ELSE 0 END
 	FROM @SendNotification s
-		INNER JOIN dbo.CustBotMessenger cbm WITH(NOLOCK) ON cbm.UserId = s.UserId
+		INNER JOIN dbo.CustBotMessenger cbm WITH(NOLOCK) ON cbm.UserId = s.UserId AND s.BotId = cbm.BotId
 		INNER JOIN dbo.Bot b WITH(NOLOCK) ON b.BotId = cbm.BotId
 		LEFT JOIN dbo.CustBotFunction cbf WITH(NOLOCK) ON cbf.UserID = s.UserId AND cbf.FunctionID = s.FunctionId
 	WHERE s.ErrCode = 0 AND b.IsTest = CASE WHEN @Environment = 'UAT' THEN 1 ELSE 0 END
@@ -117,7 +118,7 @@ BEGIN
 		,cbm.BotId
 		,cbm.ChatID
 	FROM @SendNotification s
-		INNER JOIN dbo.CustBotMessenger cbm WITH(NOLOCK) ON cbm.UserId = s.UserId
+		INNER JOIN dbo.CustBotMessenger cbm WITH(NOLOCK) ON cbm.UserId = s.UserId AND cbm.BotId = s.BotId
 		INNER JOIN dbo.Bot b WITH(NOLOCK) ON b.BotId = cbm.BotId 
 	WHERE s.ErrCode = 0 AND b.IsTest = CASE WHEN @Environment = 'UAT' THEN 1 ELSE 0 END
 
