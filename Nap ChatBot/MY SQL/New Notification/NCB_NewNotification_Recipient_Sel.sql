@@ -22,6 +22,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%'  PROCEDURE NCB_NewNotification_Recipient_Se
 				- 20200214@Percy: Special Delete - Integrate Abnormal Bets [RedmineID: #127944]
 				- 20210513@Malcolm: Integrate Telegram - RedmineID: #151807
 				- 20220218@Malcolm: Add Platform for licensee [RedmineID: #167946]
+				- 20220705@Malcolm: Get those integrating/Upcomming licensees [RedmineId: 174425]
         
     */
 )
@@ -30,6 +31,8 @@ BEGIN
 	DECLARE RECIPIENT_TYPE_LICENSEES 	SMALLINT DEFAULT 1;
     DECLARE RECIPIENT_TYPE_INTERNAL_CSD SMALLINT DEFAULT 3;
     DECLARE LICENSEE_STATUS_ACTIVE 		TINYINT UNSIGNED DEFAULT 3;
+	DECLARE LICENSEE_STATUS_UPCOMMING	TINYINT UNSIGNED DEFAULT 1;
+	DECLARE pNotificationTypeId 		SMALLINT;
     
     #Local variables
     DECLARE nowGMTMinus4 DATETIME;
@@ -115,14 +118,19 @@ BEGIN
 		)
 		AND con.ChannelId IN (SELECT tcl.ChannelId FROM tmp_ChannelIdLst tcl);
     
+	SELECT nt.NotificationTypeID INTO pNotificationTypeId FROM NotificationType nt WHERE nt.NotificationTypeName = 'Licensee Technical Group';
+	
     #Delete InActive Licensee and filter platform
+	
     DELETE main
 	FROM tmp_recipientLst main
-	INNER JOIN Licensee l
-			ON l.LicenseeId = main.SourceID
-				AND main.RecipientTypeID = RECIPIENT_TYPE_LICENSEES	
-	WHERE  l.LicenseeStatusId <> LICENSEE_STATUS_ACTIVE 
-		OR NOT EXISTS (SELECT 1 FROM tmp_Platforms p WHERE p.PlatformId = l.PlatformId);
+		INNER JOIN Licensee l ON l.LicenseeId = main.SourceID AND main.RecipientTypeID = RECIPIENT_TYPE_LICENSEES	
+	WHERE  
+	(
+		l.LicenseeStatusId NOT IN (LICENSEE_STATUS_ACTIVE, LICENSEE_STATUS_UPCOMMING) 
+	    OR (l.LicenseeStatusId = LICENSEE_STATUS_UPCOMMING AND pNotificationTypeId <> notificationTypeID)
+	)
+	OR (NOT EXISTS (SELECT 1 FROM tmp_Platforms p WHERE p.PlatformId = l.PlatformId) AND l.PlatformId IS NOT NULL);
     
     #Delete exception cases
 	DELETE main
@@ -139,18 +147,26 @@ BEGIN
         
 		DELETE main
         FROM tmp_recipientLst main
-        LEFT JOIN LicenseeProduct lp 
-				ON lp.LicenseeID = main.SourceID 
-					AND lp.ProductID = productID
-        WHERE main.RecipientTypeID = RECIPIENT_TYPE_LICENSEES AND lp.LaunchDate IS NULL
-					OR (
-								 lp.LaunchDate IS NOT NULL 
-								AND nowGMTMinus4 <  lp.LaunchDate
-							)
-					OR (
-								lp.TerminationDate IS NOT NULL 
-								AND nowGMTMinus4  > lp.TerminationDate
-							);
+			INNER JOIN LicenseeProduct lp ON lp.LicenseeID = main.SourceID AND lp.ProductId = productID
+        WHERE main.RecipientTypeID = RECIPIENT_TYPE_LICENSEES 
+			AND 
+			(
+				lp.LaunchDate IS NULL
+				OR (lp.LaunchDate IS NOT NULL AND nowGMTMinus4 <  lp.LaunchDate)
+				OR (lp.TerminationDate IS NOT NULL AND nowGMTMinus4  > lp.TerminationDate)
+			);
+			
+		DELETE main
+		FROM tmp_recipientLst main
+		WHERE main.RecipientTypeID = RECIPIENT_TYPE_LICENSEES  
+			AND NOT EXISTS (
+				SELECT 1 FROM LicenseeProduct lp 
+				WHERE lp.LicenseeID = main.SourceID AND lp.ProductId = productID
+			) AND EXISTS (
+				SELECT 1 FROM LicenseeProduct lp 
+				WHERE lp.LicenseeID = main.SourceID
+			);
+		
     END IF;
     
 	DROP TEMPORARY TABLE IF EXISTS tmp_Result;
@@ -184,7 +200,7 @@ BEGIN
         
 	SELECT RecipientTypeID, RecipientTypeName, LicenseeTypeId, LicenseeTypeName, RecipientID, RecipientName
     FROM tmp_Result
-    ORDER BY RecipientTypeID, LicenseeTypeName, RecipientName;
+    ORDER BY RecipientTypeID, CASE WHEN LicenseeTypeName = 'Unidentified' THEN 1 ELSE 0 END ASC, LicenseeTypeName, RecipientName;
     
     IF IFNULL(RecipientIds, '') <> ''
     THEN
