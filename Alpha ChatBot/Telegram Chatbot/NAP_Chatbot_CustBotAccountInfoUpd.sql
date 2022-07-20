@@ -1,0 +1,127 @@
+/*<info serverAlias="DBBOT-bodb_ChatBot" executers="bodbAdminNet" viewers="" selecters=""></info>*/
+ALTER PROCEDURE [dbo].[NAP_Chatbot_CustBotAccountInfoUpd] 
+	@userid INT,
+	@BotID INT,
+	@Status BIT = 1,
+	@IsVerifyOTP BIT = 1,		
+	@Creator INT,
+	@IP	VARCHAR(30)= '',
+	@ErrCode INT = 0 OUTPUT,
+	@ErrMsg  VARCHAR(1000) = '' OUTPUT
+AS
+/*
+	Created: 20220323@Johnson
+	Task: unlink chatbot from NAP
+	DB: DBBOT/bodb_ChatBot
+	
+	Revisions:
+		- 20220323@Johnson: initial sp [redmine: #167819]
+*/
+BEGIN
+	SET NOCOUNT ON;
+	
+	DECLARE @CustID INT,
+			@SubAccID INT = 0,	
+			@startRun DATETIME, 
+			@duration INT
+	
+	DECLARE @Language VARCHAR(10),			
+			@ChatID BIGINT,
+			@old_Status BIT,
+			@old_IsVerifyOTP BIT,
+			@BotName VARCHAR(200),
+			@IsTest BIT,
+			@IsUpdated BIT =0
+	
+	SELECT @startRun = GETDATE()	
+	
+	SELECT @custid = CustID,
+		@subAccID = SubAccID,
+		@Language = Language
+	FROM CustBotAccount WITH(NOLOCK)
+	WHERE userid = @userid
+	
+	IF @UserID IS NULL
+	BEGIN
+		SELECT @ErrCode = 101,
+			@ErrMsg = 'Invalid account'
+		RETURN;	
+	END
+	
+	SELECT @Old_Status = Status,
+		@Old_IsVerifyOTP = IsVerifyOTP,		
+		@ChatID = ChatID
+	FROM CustBotMessenger WITH(NOLOCK)
+	WHERE UserID = @UserID
+		AND BotID = @BotID
+	
+	SELECT @BotName = DisplayName, 
+		@IsTest = IsTest
+	FROM Bot WITH(NOLOCK) WHERE BotID = @BotID
+	
+	IF @Status = 1 AND @IsVerifyOTP = 1
+		AND NOT EXISTS(SELECT 1 FROM CustBotMessenger WITH(NOLOCK) 
+				WHERE userid = @userid AND botid = @botid
+					AND status = 1 AND IsVerifyOTP = 1)
+	BEGIN
+		SELECT @ErrCode = 102,
+			@ErrMsg = 'Your telegram has been unlinked with '+ @BotName +' .'
+		RETURN;	
+	END
+	
+	IF @Status = @old_Status AND @IsVerifyOTP = @Old_IsVerifyOTP
+		RETURN;
+		
+	UPDATE CustBotMessenger WITH(ROWLOCK)
+	SET Status = @Status,
+		IsVerifyOTP = @IsVerifyOTP,
+		UpdatedTime = GETDATE()
+	WHERE UserID = @UserID
+		AND BotID = @BotID
+		
+	MERGE CustBotFunction as Target
+	USING (SELECT @userid as userid, FunctionID FROM BotFunction WITH(NOLOCK) 
+			WHERE Status <= @IsTest
+			AND type = 2 --Notification settings
+		) as Source
+	ON Target.userid = Source.userid AND Target.FunctionID = Source.FunctionID
+	WHEN Matched AND @Status = 0 THEN DELETE
+	WHEN Matched AND @Status = 1 THEN
+		UPDATE SET Status = 1
+	WHEN NOT MATCHED AND @status = 1 THEN INSERT(UserID,FunctionID,Status) VALUES(Source.UserID,Source.FunctionID,1);
+	
+		
+	SELECT @Duration = DATEDIFF (MILLISECOND, @startRun, GETDATE())
+	
+	-- Write log
+	DECLARE @LogDataNew VARCHAR(MAX),
+			@LogDataOld VARCHAR(MAX)
+	
+	SELECT  @LogDataOld = '<R'						
+						+ ' BotName="' + COALESCE(@BotName, SPACE(1)) + '"'
+						+ ' ChatID="' + COALESCE(CAST(@ChatID as VARCHAR(10)), SPACE(1)) + '"'
+						+ ' Status="' + COALESCE(CAST(@Old_Status as VARCHAR(10)), SPACE(1)) + '"'
+						+ ' IsVerifyOTP="' + COALESCE(CAST(@IsVerifyOTP as VARCHAR(10)), SPACE(1)) + '"'
+						+ ' Language="' + COALESCE(@Language, SPACE(1)) + '"'
+						+ ' SubAccName="' + COALESCE(dbo.f_GetSubUsername(@SubAccID), SPACE(1)) + '"'					
+						+ ' IP="' + COALESCE(@IP, SPACE(1)) + '"'
+						+ ' />'
+						
+	SELECT  @LogDataNew = '<R'						
+						+ ' BotName="' + COALESCE(@BotName, SPACE(1)) + '"'
+						+ ' ChatID="' + COALESCE(CAST(@ChatID as VARCHAR(10)), SPACE(1)) + '"'						
+						+ ' Status="' + COALESCE(CAST(@Status as VARCHAR(10)), SPACE(1)) + '"'
+						+ ' IsVerifyOTP="' + COALESCE(CAST(@IsVerifyOTP as VARCHAR(10)), SPACE(1)) + '"'
+						+ ' Language="' + COALESCE(@Language, SPACE(1)) + '"'
+						+ ' SubAccName="' + COALESCE(dbo.f_GetSubUsername(@SubAccID), SPACE(1)) + '"'					
+						+ ' IP="' + COALESCE(@IP, SPACE(1)) + '"'
+						+ ' />'
+	
+	EXEC DBLOG.bodb_CustomerLog.dbo.WriteLog_UserLog_RunSP 
+			@UserID = @creator,
+			@CustID = @CustID,
+			@ActionID = 95068,
+			@TrackingValue = @LogDataNew,	
+			@TrackingValue2 = @LogDataOld,			
+			@Duration = @Duration			
+END	
