@@ -20,13 +20,6 @@ BEGIN
 
 	SET NOCOUNT ON
 
-	DECLARE @UpComingStatusId TINYINT, @TerminatedStatusId TINYINT
-
-	SELECT 
-		@UpComingStatusId = CASE WHEN LicenseeStatusName = 'Up Coming' THEN LicenseeStatusId ELSE @UpComingStatusId END
-		,@TerminatedStatusId = CASE WHEN LicenseeStatusName = 'Terminated' THEN LicenseeStatusId ELSE @TerminatedStatusId END
-	FROM LicenseeStatus WITH(NOLOCK) WHERE LicenseeStatusName IN ('Up Coming', 'Terminated')
-
 	CREATE TABLE #IntergatingLicensees (LicenseeId INT, LicenseeName NVARCHAR(50), IsActive BIT)
 
 	INSERT INTO #IntergatingLicensees (LicenseeId, LicenseeName, IsActive)
@@ -42,7 +35,7 @@ BEGIN
 			s.LicenseeId			AS LicenseeId
 			,s.LicenseeName			AS LicenseeName
 			,s.LicenseeName			AS RegisteredLicenseeName
-			,CASE WHEN IsActive = 0 THEN @TerminatedStatusId ELSE @UpComingStatusId END AS LicenseeStatusId
+			,CASE WHEN IsActive = 0 THEN 4 ELSE 1 END AS LicenseeStatusId -- 4 : Terminated, 1 : Up Coming
 			,100					AS LicenseeTypeId
 			,NULL					AS PlatformId
 		FROM #IntergatingLicensees s
