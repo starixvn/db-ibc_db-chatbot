@@ -22,9 +22,9 @@ AS
 	
 	Revisions:
 		- 20220330@Johnson: initial sp [redmine: #167819]
-		
+		- 20220720@Johnson: support filter unlinked status [redmine:#167819]
 	Paramter's Explantion:
-		- @LinkStatus : 0: All, 1: Linked, 2: Verifying
+		- @LinkStatus : 0: All, 1: Linked, 2: Verifying, 3: unlinked
 		- @Level: 0: All, 2,3,4 SMA
 		- @Status: 0: All, 1: Active, 2: Closed, 3: Suspended
 		- @Currency: '1,2,3'
@@ -60,7 +60,8 @@ BEGIN
 	INSERT INTO #Result(custid,SubAccID,username,SubAccount,ChatID,site,BotID,roleid,LinkStatus,Language,currency,Status,UpdatedTime,rn)
 	SELECT ca.custid, ca.SubAccID, c.username, cs.username as SubAccount,cm.ChatID,c.site,cm.BotID,c.roleid,
 		CASE WHEN cm.Status = 1 AND cm.IsVerifyOTP = 1 THEN 'Linked'
-			WHEN cm.Status = 1 AND cm.IsVerifyOTP = 0 THEN 'Verifying' END as LinkStatus,
+			WHEN cm.Status = 1 AND cm.IsVerifyOTP = 0 THEN 'Verifying'
+			WHEN cm.Status = 0 AND cm.IsVerifyOTP = 0 THEN 'Unlinked' END as LinkStatus,
 		ca.Language,
 		c.currency,
 		CASE WHEN (cs.custid IS NULL AND cps.closeInfo > 0) 
@@ -79,9 +80,10 @@ BEGIN
 					WHEN @username = '' THEN 1 ELSE 0 END
 		AND cm.Chatid = ISNULL(@ChatID,cm.ChatID)
 		AND cm.BotID IN (SELECT value FROM STRING_SPLIT(@BotIDs,','))
-		AND 1 = CASE WHEN @LinkStatus = 0 AND cm.Status = 1 THEN 1	
+		AND 1 = CASE WHEN @LinkStatus = 0 THEN 1	
 					WHEN @LinkStatus = 1 AND cm.Status = 1 AND cm.IsVerifyOTP = 1 THEN 1
 					WHEN @LinkStatus = 2 AND cm.Status = 1 AND cm.IsVerifyOTP = 0 THEN 1
+					WHEN @LinkStatus = 3 AND cm.Status = 0 AND cm.IsVerifyOTP = 0 THEN 1
 					ELSE 0 END 
 		AND 1 = CASE WHEN @IsSubAccOnly = 1 AND cs.custid IS NOT NULL THEN 1
 					WHEN @IsSubAccOnly = 0 THEN 1 
