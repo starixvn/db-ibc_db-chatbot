@@ -25,6 +25,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_OIC_SyncData(
                 - 20210928@Malcolm: Fix deadlock - Redmine: #162379
                 - 20211011@Malcolm: Fix deadlock - Redmine: #163037
                 - 20211021@Malcolm: add Product Status - Redmine: #161727
+				- 20211021@Malcolm: Integrate the change of Licensee type from OIC - Redmine: #163779
                 - 20220705@Malcolm: Get those integrating/Upcomming licensees [RedmineId: 174425]
     */
 )
