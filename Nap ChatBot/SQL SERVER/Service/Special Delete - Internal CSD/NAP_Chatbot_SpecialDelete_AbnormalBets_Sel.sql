@@ -1,6 +1,8 @@
 /*<info serverAlias="DBACC-bodb02" executers="bodbAdminNet" isFunction="0" isNested="0"></info>*/
 ALTER PROCEDURE [dbo].[NAP_Chatbot_SpecialDelete_AbnormalBets_Sel]
-	@MessageIDLst XML
+	@MessageIDLst   XML
+	,@TicketInfo    XML
+	,@UsernameLst   XML
 AS
 
 /*
@@ -18,11 +20,19 @@ AS
 		- 20211122@Malcolm: Voiding Abnormal bet for Mix Parlay [RedmineID: #163777]
 
 	Param's Explanation:
-		@MessageIDLst:
+		+ @MessageIDLst:
 			<root>
 				<r MessageID="1" RequestID="1"/>
 				<r MessageID="1" RequestID="2"/>
 				<r MessageID="3" RequestID="2"/>
+			</root>
+		+ @TicketInfo:
+			<root>
+				<r MessageId="1" Recommend="1" Bettype="2" Liveindicator="0" IsParlay="1"/>
+			</root>
+		+ @UsernameLst
+			<root>
+				<r MessageId="1" VoidingHistoryId="1" Usernames="Supertest01"/>
 			</root>
 */
 
@@ -37,6 +47,28 @@ BEGIN
 	FROM @MessageIDLst.nodes('root/r') AS t(c)
 	OPTION (OPTIMIZE FOR (@MessageIDLst = NULL))
 
+	-- Ticket Info
+	DECLARE @tblRecommendBettype TABLE (MessageId INT, recommend INT, bettype SMALLINT, liveindicator BIT, IsParlay BIT)
+	INSERT INTO @tblRecommendBettype (MessageId, recommend, bettype, liveindicator, IsParlay)
+	SELECT
+		t.c.value('@MessageId', 'INT') AS MessageId
+		,t.c.value('@Recommend', 'INT') AS Recommend
+		,t.c.value('@Bettype', 'SMALLINT') AS Bettype
+		,t.c.value('@Liveindicator', 'BIT') AS Liveindicator
+		,t.c.value('@IsParlay', 'BIT') AS IsParlay
+	FROM @TicketInfo.nodes('root/r') AS t(c)
+	OPTION (OPTIMIZE FOR (@TicketInfo = NULL)) 
+	
+	-- Username List for abnormal accounts 
+	CREATE TABLE #UsernameLst (VoidingHistoryId INT, MessageId INT, Usernames NVARCHAR(MAX))
+	INSERT INTO #UsernameLst (VoidingHistoryId, MessageId, Usernames)
+	SELECT
+		t.c.value('@VoidingHistoryId', 'INT') AS VoidingHistoryId
+		,t.c.value('@MessageId', 'INT') AS MessageId
+		,t.c.value('@Usernames', 'NVARCHAR(MAX)') AS Usernames
+	FROM @UsernameLst.nodes('root/r') AS t(c)
+	OPTION (OPTIMIZE FOR (@UsernameLst = NULL)) 
+
 	CREATE TABLE #VoidingHistory 
 	(
 		VoidingHistoryId	INT, 
@@ -47,7 +79,7 @@ BEGIN
 		TransId				BIGINT, 
 		MinWinlostdate		DATETIME, 
 		MaxWinlostdate		DATETIME, 
-		UsernameLst			NVARCHAR(MAX),
+		Usernames			NVARCHAR(MAX) DEFAULT NULL,
 		IssueTypeId			TINYINT,
 		FilterBy			TINYINT
 	)
@@ -63,14 +95,15 @@ BEGIN
 		AND vh.StatusId = 2
 
 	UPDATE vh
-		SET vh.IssueTypeId = r.IssueTypeId, vh.FilterBy = n.FilterBy, vh.UsernameLst = CASE WHEN r.IssueTypeId = 13 THEN n.UsernameLst ELSE NULL END
+		SET vh.IssueTypeId = r.IssueTypeId, vh.FilterBy = n.FilterBy, vh.Usernames = u.Usernames
 	FROM #VoidingHistory vh
 		INNER JOIN dbo.TicketVoiding_Request r WITH(NOLOCK) ON r.RequestId = vh.RequestId
+		LEFT JOIN #UsernameLst u ON u.VoidingHistoryId = vh.VoidingHistoryId
 		OUTER APPLY (
-			SELECT TOP(1) FilterBy, Usernames AS UsernameLst
+			SELECT TOP(1) FilterBy
 			FROM dbo.TicketVoiding_RequestDetail rd WITH(NOLOCK) 
 			WHERE rd.RequestId = vh.RequestId
-		) AS n(FilterBy, UsernameLst)
+		) AS n(FilterBy)
 
 	-- Request Info
 	BEGIN
@@ -135,27 +168,6 @@ BEGIN
 		WHERE vh.IssueTypeId IN (11, 15) -- Abnormal Bets, AB (real member)
 	END
 
-	-- Ticket Info
-	BEGIN
-		DECLARE @tblRecommendBettype TABLE (MessageId INT, recommend INT, bettype SMALLINT, liveindicator BIT, IsParlay BIT)
-		INSERT INTO @tblRecommendBettype (MessageId, recommend, bettype, liveindicator, IsParlay)
-		SELECT vh.MessageId, ISNULL(b.recommend, bt.recommend), ISNULL(b.bettype, bt.bettype), ISNULL(ISNULL(b.liveindicator, bt.liveindicator), 0)
-			   ,MAX(CASE WHEN ISNULL(vh.FilterBy, 0) = 1 AND vh.IssueTypeId = 11 THEN 1 ELSE 0 END) AS IsParlay
-		FROM #VoidingHistory vh
-			OUTER APPLY (
-				SELECT TOP 1 b.bettype, b.liveindicator, b.recommend
-				FROM dbo.bettrans b WITH (NOLOCK)
-				WHERE b.transid = vh.TransId
-			) b
-			OUTER APPLY (
-				SELECT TOP 1 b.bettype, b.liveindicator, b.recommend
-				FROM dbo.bettrans14 b WITH (NOLOCK)
-				WHERE b.transid = vh.TransId
-			) bt
-		WHERE vh.IssueTypeId IN (11, 15)-- Abnormal Bets, AB (real member)
-		GROUP BY vh.MessageId, ISNULL(b.recommend, bt.recommend), ISNULL(b.bettype, bt.bettype), ISNULL(ISNULL(b.liveindicator, bt.liveindicator), 0)
-	END
-
 	-- Return Data
 	BEGIN
 		-- Request Info
@@ -206,7 +218,7 @@ BEGIN
 		(
 			SELECT vh.MessageId, f.val AS Username ,CASE WHEN s.custid IS NULL AND c.site NOT IN ('CN88', '789y') THEN 'NV88' ELSE c.site END AS site, CASE WHEN s.custid IS NULL THEN 0 ELSE 1 END AS isDeposit, CASE WHEN c.currency = 20 THEN 1 ELSE 0 END AS IsTest
 			FROM #VoidingHistory vh
-			CROSS APPLY strSplit(vh.UsernameLst, ',') f
+			CROSS APPLY strSplit(vh.Usernames, ',') f
 				INNER JOIN dbo.Customer c WITH(NOLOCK) ON c.username = CONVERT(VARCHAR(30), f.val)
 				LEFT JOIN dbo.Dep_CustSuper s WITH(NOLOCK) ON s.custid = c.srecommend
 			WHERE vh.IssueTypeId = 13
@@ -263,13 +275,8 @@ BEGIN
 			LEFT JOIN CTE_TotalTickets t ON r.MessageId = t.MessageId
 			LEFT JOIN CTE_MsgBettype b ON r.MessageId = b.MessageId
 			LEFT JOIN CTE_MsgSite s ON r.MessageId = s.MessageId		
-		
-		-- Get MessageID and VoidingHistoryId of abnormal accounts
-		SELECT vh.MessageId, vh.VoidingHistoryId, vh.UsernameLst
-		FROM #VoidingHistory vh
-		WHERE vh.IssueTypeId = 13
+	
 	END
-
 	DROP TABLE #MessageLst
 	DROP TABLE #VoidingHistory
 END
