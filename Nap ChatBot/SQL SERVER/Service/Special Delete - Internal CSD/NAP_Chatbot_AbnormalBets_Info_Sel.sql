@@ -5,11 +5,12 @@ AS
 
 /*
 	Created: 20220727@Malcolm
-	Task: ChatBot - Get VoIding Abnormal Bets Info of special delete site
+	Task: ChatBot - Get Username and Transid 
 	DB: DBACC.bodb02  
 
 	Revisions:
-
+		- 20220728@Malcolm: Initialize SPs [RedmineID: #175878]
+		
 	Param's Explanation:
 		@MessageIdLst:
 			<root>
@@ -32,35 +33,35 @@ BEGIN
 	(
 		VoIdingHistoryId	INT
 		,MessageId			INT
-		,TransIdLst			NVARCHAR(MAX)
-		,UsernameLst		NVARCHAR(MAX)
+		,TransIds			NVARCHAR(MAX)
+		,Usernames			NVARCHAR(MAX)
 		,IssueTypeId		TINYINT
 		,FilterBy			TINYINT
 		,RequestId			INT
 	)
 
 	--Get data for Abnormal Bets
-	INSERT INTO #VoIdingHistory (VoIdingHistoryId, TransIdLst, MessageId)
-	SELECT vh.VoIdingHistoryId, vh.TransIds, vh.MessageId
+	INSERT INTO #VoIdingHistory (VoIdingHistoryId, TransIds, MessageId, RequestId)
+	SELECT vh.VoIdingHistoryId, vh.TransIds, vh.MessageId, vh.RequestId
 	FROM dbo.TicketVoIding_VoIdingHistory vh WITH (NOLOCK)
 	WHERE EXISTS (SELECT 1 FROM #MessageLst m WHERE vh.MessageId = m.MessageId AND vh.RequestId = m.RequestId) 
 		AND vh.StatusId = 2
 
 	UPDATE vh
-		SET vh.IssueTypeId = r.IssueTypeId, vh.FilterBy = n.FilterBy, vh.UsernameLst = CASE WHEN r.IssueTypeId = 13 THEN n.UsernameLst ELSE NULL END
+		SET vh.IssueTypeId = r.IssueTypeId, vh.FilterBy = n.FilterBy, vh.Usernames = CASE WHEN r.IssueTypeId = 13 THEN n.Usernames ELSE NULL END
 	FROM #VoIdingHistory vh
 		INNER JOIN dbo.TicketVoIding_Request r WITH(NOLOCK) ON r.RequestId = vh.RequestId
 		OUTER APPLY (
-			SELECT TOP(1) FilterBy, Usernames AS UsernameLst
+			SELECT TOP(1) FilterBy, Usernames 
 			FROM dbo.TicketVoIding_RequestDetail rd WITH(NOLOCK) 
 			WHERE rd.RequestId = vh.RequestId
-		) AS n(FilterBy, UsernameLst)
+		) AS n(FilterBy, Usernames)
 
-	SELECT MessageId, VoIdingHistoryId, TransIdLst, FilterBy, IssueTypeId
+	SELECT MessageId, VoIdingHistoryId, TransIds, ISNULL(FilterBy, 0) AS FilterBy, IssueTypeId
 	FROM #VoIdingHistory
 	WHERE IssueTypeId IN (11, 15) -- Abnormal Bets, AB (real member)
 
-	SELECT MessageId, VoIdingHistoryId, UsernameLst
+	SELECT MessageId, VoIdingHistoryId, Usernames
 	FROM #VoIdingHistory
 	WHERE IssueTypeId = 13 -- Abnormal Accounts
 

@@ -1,6 +1,6 @@
 /*<info serverAlias="DBMSG-bodb_Message" executers="bodbAdminNet" isFunction="0" isNested="0"></info>*/
 ALTER PROCEDURE [dbo].[NAP_Chatbot_SpecialDeleteMsg_AbnormalBets_Sel]
-	@MessageIDLst		XML,
+	@MessageIdLst		XML,
 	@BatchSize			INT,
 	@MsgContentsTypeLst VARCHAR(2000),
 	@Environment		VARCHAR(50) = 'UAT'
@@ -12,17 +12,18 @@ AS
 	DB: DBMSG.bodb_Message  
 
 	Revisions:
-		- 20200214@Percy: Initialize SP [RedmineID: #127944]
-		- 20200610@Percy: Exclude message void by BetId [RedmineID: #135686]
-		- 20200701@Percy: Enhance mechaism to get new MessageID - Phase 2 [RedmineID: #135686]
-		- 20200804@Percy: Add RequestId for Ticket Voiding Abnormal Bets - Phase 3 [RedmineID: #135686]
+		- 20200214@Percy: Initialize SP [RedmineId: #127944]
+		- 20200610@Percy: Exclude message void by BetId [RedmineId: #135686]
+		- 20200701@Percy: Enhance mechaism to get new MessageId - Phase 2 [RedmineId: #135686]
+		- 20200804@Percy: Add RequestId for Ticket Voiding Abnormal Bets - Phase 3 [RedmineId: #135686]
+		- 20220728@Malcolm: Scale out DBTRANS [RedmineId: #175878]
 
 	Param's Explanation:
-		@MessageIDLst:
+		@MessageIdLst:
 			<root>
-				<r MessageID=1 RequestID=1 />
-				<r MessageID=1 RequestID=2 />
-				<r MessageID=3 RequestID=2 />
+				<r MessageId="1" RequestId="1" />
+				<r MessageId="1" RequestId="2" />
+				<r MessageId="3" RequestId="2" />
 			</root>
 */
 
@@ -35,12 +36,12 @@ BEGIN
 	CREATE TABLE #Message (MessageId INT, TargetId INT, RequestId INT, JobIdentify TINYINT)
 	INSERT INTO  #Message (MessageId, TargetId, RequestId, JobIdentify)
 	SELECT
-		t.c.value('@MessageID', 'INT') AS MessageId
+		t.c.value('@MessageId', 'INT') AS MessageId
 		,0 AS TargetId
-		,t.c.value('@RequestID', 'INT') AS RequestId
+		,t.c.value('@RequestId', 'INT') AS RequestId
 		,2 AS JobIdentify
-	FROM @MessageIDLst.nodes('root/r') AS t(c)
-	OPTION (OPTIMIZE FOR (@MessageIDLst = NULL))
+	FROM @MessageIdLst.nodes('root/r') AS t(c)
+	OPTION (OPTIMIZE FOR (@MessageIdLst = NULL))
 
 	INSERT INTO dbo.MsgChatBot (MessageId, TargetId, RequestId, JobIdentify, Environment, IsFinished)
 	SELECT m.MessageId, m.TargetId, m.RequestId, m.JobIdentify, @Environment, 0
