@@ -25,7 +25,8 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_OIC_SyncData(
                 - 20210928@Malcolm: Fix deadlock - Redmine: #162379
                 - 20211011@Malcolm: Fix deadlock - Redmine: #163037
                 - 20211021@Malcolm: add Product Status - Redmine: #161727
-                - 20211021@Malcolm: Integrate the change of Licensee type from OIC - Redmine: #163779
+				- 20211021@Malcolm: Integrate the change of Licensee type from OIC - Redmine: #163779
+                - 20220705@Malcolm: Get those integrating/Upcomming licensees [RedmineId: 174425]
     */
 )
 SQL SECURITY DEFINER
@@ -38,6 +39,7 @@ BEGIN
     DECLARE RECIPIENT_TYPE_LICENSEE INT DEFAULT 1;
     DECLARE RECIPIENT_TYPE_PRODUCT INT DEFAULT 2;
     DECLARE LICENSEE_SOURCE_DESCRIPTION VARCHAR(50) DEFAULT 'bodb_OIC.dbo.Licensee';
+	DECLARE INTEGRATING_LICENSEE_SOURCE_DESCRIPTION VARCHAR(50) DEFAULT 'DBCust.CustDB.dbo.Site (SiteId + 100000)';
     DECLARE PRODUCT_SOURCE_DESCRIPTION VARCHAR(50) DEFAULT 'bodb_OIC.dbo.Product';
 
 ############################ Licensee ###########################################
@@ -101,15 +103,7 @@ BEGIN
         OR IFNULL(tl.LicenseeTypeId, 0) <> IFNULL(l.LicenseeTypeId, 0)
 		OR IFNULL(tl.PlatformId, 0) <> IFNULL(l.PlatformId, 0);
         
-	IF EXISTS (SELECT 1 FROM tmp_Data WHERE IsDeleted = -1) 
-	THEN	
-		DELETE l
-        FROM Licensee l
-			INNER JOIN tmp_Data td ON l.LicenseeId = td.LicenseeId 
-		WHERE td.IsDeleted = -1;
-    END IF;
-    
-    IF EXISTS (SELECT 1 FROM tmp_Data WHERE IsDeleted = 0) 
+	IF EXISTS (SELECT 1 FROM tmp_Data WHERE IsDeleted = 0) 
 	THEN	
 		UPDATE Licensee l
 		INNER JOIN tmp_Data td ON l.LicenseeId = td.LicenseeId 
@@ -119,16 +113,41 @@ BEGIN
                 l.LicenseeTypeId = td.LicenseeTypeId,
 				l.PlatformId = td.PlatformId
 		WHERE td.IsDeleted = 0;
+		
+		DELETE td FROM tmp_Data td WHERE td.IsDeleted = 0;
+		
     END IF;
-    
-    IF EXISTS (SELECT 1 FROM tmp_Data WHERE IsDeleted = 1) 
+	
+	IF EXISTS (SELECT 1 FROM tmp_Data WHERE IsDeleted = 1) 
 	THEN	
+		UPDATE Recipient r  
+			INNER JOIN Licensee l ON l.LicenseeId = r.SourceId 
+			INNER JOIN tmp_Data td ON l.RegisteredLicenseeName = td.RegisteredLicenseeName
+		SET r.SourceId = td.LicenseeId
+			,l.LicenseeId = td.LicenseeId
+			,l.LicenseeName = td.LicenseeName 
+			,l.LicenseeStatusId = td.LicenseeStatusId
+            ,l.LicenseeTypeId = td.LicenseeTypeId
+		    ,l.PlatformId = td.PlatformId
+			,td.IsDeleted = 0
+		WHERE r.RecipientTypeID = RECIPIENT_TYPE_LICENSEE AND td.IsDeleted = 1;
+			
 		INSERT INTO Licensee (LicenseeId, LicenseeName, RegisteredLicenseeName, LicenseeStatusId, LicenseeTypeId, PlatformId)
         SELECT td.LicenseeId, td.LicenseeName, td.RegisteredLicenseeName, td.LicenseeStatusId, td.LicenseeTypeId, td.PlatformId
         FROM tmp_Data td
         WHERE td.IsDeleted = 1;
+		
+		DELETE td FROM tmp_Data td WHERE td.IsDeleted IN (0, 1);
+		
     END IF;
-    
+	
+	IF EXISTS (SELECT 1 FROM tmp_Data WHERE IsDeleted = -1) 
+	THEN	
+		DELETE l
+        FROM Licensee l
+			INNER JOIN tmp_Data td ON l.LicenseeId = td.LicenseeId 
+		WHERE td.IsDeleted = -1;
+    END IF;
 
 ############################ Licensee Product ###########################################
 
@@ -448,7 +467,7 @@ BEGIN
     SELECT l.LicenseeName
           , RECIPIENT_TYPE_LICENSEE
           , l.LicenseeId
-          , LICENSEE_SOURCE_DESCRIPTION
+          , CASE WHEN l.LicenseeId > 100000 THEN INTEGRATING_LICENSEE_SOURCE_DESCRIPTION ELSE LICENSEE_SOURCE_DESCRIPTION END
     FROM Licensee l;
 
     INSERT INTO tmp_Recipient(RecipientName, RecipientTypeID, SourceID, SourceDescription)

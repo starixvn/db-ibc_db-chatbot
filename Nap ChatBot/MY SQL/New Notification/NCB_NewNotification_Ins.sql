@@ -30,6 +30,7 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_NewNotification_Ins`(
 				- 20210513@Malcolm: Integrate Telegram - RedmineID: #151807
                 - 20211201@Malcolm: Change Logs - RedmineID: #163777
 				- 20220218@Malcolm: Add Platform for licensee [RedmineID: #167946]
+                - 20220705@Malcolm: Get those integrating/Upcomming licensees [RedmineId: 174425]	
 		Param's Explanation:
 		- ContentLst:
 				[
@@ -53,6 +54,7 @@ NCB_NewNotification_Ins:BEGIN
 	DECLARE _recipientIDLst	TEXT;
 	DECLARE _NotificationID INT UNSIGNED;
 	DECLARE _notificationIDLst VARCHAR(2000) DEFAULT '';
+	DECLARE pNotificationTypeId SMALLINT;
     
     #constants
     DECLARE RECIPIENT_TYPE_LICENSEES 	SMALLINT DEFAULT 1;
@@ -61,6 +63,7 @@ NCB_NewNotification_Ins:BEGIN
     DECLARE NEW_NOTIFICATION_STATUS	VARCHAR(10) DEFAULT 'Planned';
     DECLARE CREATING_NOTIFICATION_STATUSID	TINYINT UNSIGNED DEFAULT 7;
     DECLARE CREATING_NOTIFICATION_STATUS	VARCHAR(10) DEFAULT 'Creating';
+	DECLARE LICENSEE_STATUS_UPCOMMING	TINYINT UNSIGNED DEFAULT 1;
     
      #Local variables
     DECLARE configSendTimeGMTPlus4 DATETIME;
@@ -159,7 +162,7 @@ NCB_NewNotification_Ins:BEGIN
 	INNER JOIN ConversationGroupExtraInfo bcri
 			ON bcri.ConversationGroupID = bcr.ConversationGroupID
 	INNER JOIN ConversationGroup con
-				ON con.ConversationGroupID = bcr.ConversationGroupID AND con.IsActive = 1
+			ON con.ConversationGroupID = bcr.ConversationGroupID AND con.IsActive = 1
 	INNER JOIN ConversationGroupBot cgb
 			ON cgb.ConversationGroupID = bcr.ConversationGroupID
 	WHERE bcri.ChatGroupTypeID IN (SELECT cgt.ChatGroupTypeID FROM NotificationChatGroupType  cgt WHERE cgt.NotificationTypeID = notificationTypeID) 
@@ -187,32 +190,37 @@ NCB_NewNotification_Ins:BEGIN
         LEAVE NCB_NewNotification_Ins;
     END IF;
 
+	SELECT nt.NotificationTypeID INTO pNotificationTypeId FROM NotificationType nt WHERE nt.NotificationTypeName = 'Licensee Technical Group';
+
     #Check InActive Licensees
      IF EXISTS(
-						SELECT 1 
-						FROM tmp_recipientIDLst main
-                        INNER JOIN Recipient re 
-							ON re.RecipientID = main.RecipientID 
-								AND re.RecipientTypeID = RECIPIENT_TYPE_LICENSEES
-                        INNER JOIN Licensee l
-							ON l.LicenseeId = re.SourceID
-						WHERE  l.LicenseeStatusId <> LICENSEE_STATUS_ACTIVE
+		SELECT 1 
+		FROM tmp_recipientIDLst main
+			INNER JOIN Recipient re ON re.RecipientID = main.RecipientID AND re.RecipientTypeID = RECIPIENT_TYPE_LICENSEES
+               INNER JOIN Licensee l ON l.LicenseeId = re.SourceID
+		WHERE  
+		(
+			l.LicenseeStatusId NOT IN (LICENSEE_STATUS_ACTIVE, LICENSEE_STATUS_UPCOMMING) 
+			OR (l.LicenseeStatusId = LICENSEE_STATUS_UPCOMMING AND pNotificationTypeId <> notificationTypeID)
+		)
 	) THEN
 		SET errCode=107;
         
         SELECT GROUP_CONCAT(re.RecipientName ORDER BY re.RecipientName  SEPARATOR ', ')  
         INTO errMsg
         FROM Recipient re
-        WHERE re.RecipientID IN (
-						SELECT main. RecipientID
-						FROM tmp_recipientIDLst main
-                        INNER JOIN Recipient re 
-							ON re.RecipientID = main.RecipientID 
-								AND re.RecipientTypeID = RECIPIENT_TYPE_LICENSEES
-                        INNER JOIN Licensee l
-							ON l.LicenseeId = re.SourceID
-						WHERE  l.LicenseeStatusId <> LICENSEE_STATUS_ACTIVE
-			);
+        WHERE re.RecipientID IN 
+		(
+			SELECT main. RecipientID
+			FROM tmp_recipientIDLst main
+				INNER JOIN Recipient re ON re.RecipientID = main.RecipientID AND re.RecipientTypeID = RECIPIENT_TYPE_LICENSEES
+                INNER JOIN Licensee l ON l.LicenseeId = re.SourceID
+			WHERE  
+			(
+				l.LicenseeStatusId NOT IN (LICENSEE_STATUS_ACTIVE, LICENSEE_STATUS_UPCOMMING) 
+				OR (l.LicenseeStatusId = LICENSEE_STATUS_UPCOMMING AND pNotificationTypeId <> notificationTypeID)
+			)
+		);
             
 		SET errMsg = CONCAT('Licensee is Inactive: ' , errMsg);
         LEAVE NCB_NewNotification_Ins;
@@ -220,83 +228,74 @@ NCB_NewNotification_Ins:BEGIN
 	
 	#Check Platform
      IF EXISTS(
-						SELECT 1 
-						FROM tmp_recipientIDLst main
-                        INNER JOIN Recipient re 
-							ON re.RecipientID = main.RecipientID 
-								AND re.RecipientTypeID = RECIPIENT_TYPE_LICENSEES
-                        INNER JOIN Licensee l
-							ON l.LicenseeId = re.SourceID
-						WHERE  l.LicenseeStatusId = LICENSEE_STATUS_ACTIVE
-							AND NOT EXISTS (SELECT 1 FROM tmp_Platform p WHERE p.PlatformId = l.PlatformId)
+		SELECT 1 
+		FROM tmp_recipientIDLst main
+			INNER JOIN Recipient re ON re.RecipientID = main.RecipientID AND re.RecipientTypeID = RECIPIENT_TYPE_LICENSEES
+			INNER JOIN Licensee l ON l.LicenseeId = re.SourceID
+		WHERE NOT EXISTS (SELECT 1 FROM tmp_Platform p WHERE p.PlatformId = l.PlatformId) AND l.PlatformId IS NOT NULL
 	) THEN
 		SET errCode=111;
         
         SELECT GROUP_CONCAT(re.RecipientName ORDER BY re.RecipientName  SEPARATOR ', ')  
         INTO errMsg
         FROM Recipient re
-        WHERE re.RecipientID IN (
-						SELECT main. RecipientID
-						FROM tmp_recipientIDLst main
-                        INNER JOIN Recipient re 
-							ON re.RecipientID = main.RecipientID 
-								AND re.RecipientTypeID = RECIPIENT_TYPE_LICENSEES
-                        INNER JOIN Licensee l
-							ON l.LicenseeId = re.SourceID
-						WHERE  l.LicenseeStatusId = LICENSEE_STATUS_ACTIVE
-							AND NOT EXISTS (SELECT 1 FROM tmp_Platform p WHERE p.PlatformId = l.PlatformId)
-			);
+        WHERE re.RecipientID IN 
+		(
+			SELECT main. RecipientID
+			FROM tmp_recipientIDLst main
+				INNER JOIN Recipient re ON re.RecipientID = main.RecipientID AND re.RecipientTypeID = RECIPIENT_TYPE_LICENSEES
+                INNER JOIN Licensee l ON l.LicenseeId = re.SourceID
+			WHERE NOT EXISTS (SELECT 1 FROM tmp_Platform p WHERE p.PlatformId = l.PlatformId) AND l.PlatformId IS NOT NULL
+		);
             
 		SET errMsg = CONCAT('Licensee does not belong to selected Platform: ' , errMsg);
         LEAVE NCB_NewNotification_Ins;
     END IF;
-    
+	
+    DROP TEMPORARY TABLE IF EXISTS tmp_recipientIDLst_Error;
+	
+	CREATE TEMPORARY TABLE tmp_recipientIDLst_Error 
+	(
+		RecipientID INT
+	);
+	
+	INSERT INTO tmp_recipientIDLst_Error
+	(
+		RecipientID
+	)
+	SELECT main.RecipientID
+	FROM tmp_recipientIDLst main
+		INNER JOIN Recipient re ON re.RecipientID = main.RecipientID AND re.RecipientTypeID = RECIPIENT_TYPE_LICENSEES
+        INNER JOIN LicenseeProduct lp ON lp.LicenseeID = re.SourceID AND lp.ProductID = productID
+	WHERE lp.LaunchDate IS NULL
+		OR (lp.LaunchDate IS NOT NULL AND configSendTimeGMTPlus4 <  lp.LaunchDate)
+		OR (lp.TerminationDate IS NOT NULL AND configSendTimeGMTPlus4 > lp.TerminationDate);
+									
+	INSERT INTO tmp_recipientIDLst_Error
+	(
+		RecipientId
+	)
+	SELECT main.RecipientId
+	FROM tmp_recipientIDLst main
+		INNER JOIN Recipient re ON re.RecipientID = main.RecipientID AND re.RecipientTypeID = RECIPIENT_TYPE_LICENSEES
+	WHERE NOT EXISTS (
+		SELECT 1 FROM LicenseeProduct lp 
+		WHERE lp.LicenseeID = re.SourceID AND lp.ProductId = productID
+	) AND EXISTS (
+		SELECT 1 FROM LicenseeProduct lp 
+		WHERE lp.LicenseeID = re.SourceID
+	);
+		
     #Check Licensees do not offered a product
     SET configSendTimeGMTPlus4 = CONVERT_TZ(configSendTime,'+00:00','-04:00');
-    IF productID IS NOT NULL 
-		AND EXISTS(
-						SELECT 1 
-						FROM tmp_recipientIDLst main
-						INNER JOIN Recipient re 
-							ON re.RecipientID = main.RecipientID 
-								AND re.RecipientTypeID = RECIPIENT_TYPE_LICENSEES
-						LEFT JOIN LicenseeProduct lp 
-							ON lp.LicenseeID = re.SourceID 
-								AND lp.ProductID = productID
-						WHERE  lp.LaunchDate IS NULL
-							OR (
-										 lp.LaunchDate IS NOT NULL 
-										AND configSendTimeGMTPlus4 <  lp.LaunchDate
-									)
-							OR (
-										lp.TerminationDate IS NOT NULL 
-										AND configSendTimeGMTPlus4 > lp.TerminationDate
-									)
-	) THEN
+    IF productID IS NOT NULL AND EXISTS(SELECT 1 FROM tmp_recipientIDLst_Error tm)
+	THEN
 		SET errCode=108;
         
 		SELECT GROUP_CONCAT(re.RecipientName ORDER BY re.RecipientName SEPARATOR ', ') 
         INTO errMsg
         FROM Recipient re
-        WHERE re.RecipientID IN (
-						SELECT main. RecipientID
-						FROM tmp_recipientIDLst main
-						INNER JOIN Recipient re 
-							ON re.RecipientID = main.RecipientID 
-								AND re.RecipientTypeID = RECIPIENT_TYPE_LICENSEES
-						LEFT JOIN LicenseeProduct lp 
-							ON lp.LicenseeID = re.SourceID 
-								AND lp.ProductID = productID
-						WHERE  lp.LaunchDate IS NULL
-							OR (
-										 lp.LaunchDate IS NOT NULL 
-										AND configSendTimeGMTPlus4 <  lp.LaunchDate
-									)
-							OR (
-										lp.TerminationDate IS NOT NULL 
-										AND configSendTimeGMTPlus4 > lp.TerminationDate
-									)
-			);
+        WHERE EXISTS (SELECT 1 FROM tmp_recipientIDLst_Error tr WHERE tr.RecipientId = re.RecipientId);
             
 		SET errMsg = CONCAT('Licensee is not offered: ' , errMsg);
         LEAVE NCB_NewNotification_Ins;
