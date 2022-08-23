@@ -1,4 +1,4 @@
-/*<info serverAlias="DBBOT-bodb_ChatBot" executers="bodbAdminNet" viewers="" selecters=""></info>*/
+/*<info serverAlias="DBBOT-bodb_ChatBot" executers="bodbAdminNet,bodbDownlineNet" viewers="" selecters=""></info>*/
 ALTER PROCEDURE [dbo].[Age_Chatbot_AnnouncementNotificationImport] 
 	@XmlData			XML	
 	,@Environment		VARCHAR(50) = ''
@@ -31,9 +31,9 @@ BEGIN
 	SELECT @SyncSettingPRO = Value FROM dbo.BotSystemSetting WITH(NOLOCK) WHERE ServiceName = 'SystemAnnouncement' AND SettingName = 'SyncSettingPRO'
 
 	CREATE TABLE #TmpNotification (NotificationId BIGINT, UserID INT)
-	CREATE CLUSTERED INDEX ix_Id ON #TmpNotification (Id)
+	CREATE CLUSTERED INDEX ix_UserID ON #TmpNotification (UserID)
 
-	CREATE TABLE #ImportData (ID INT PRIMARY KEY, UserID INT, BotId INT, Message NVARCHAR(MAX), Status VARCHAR(20))
+	CREATE TABLE #ImportData (ID INT , UserID INT, BotId INT, Message NVARCHAR(MAX), Status VARCHAR(20) PRIMARY KEY(ID,UserID))
 	
 	BEGIN TRY
 		INSERT INTO #ImportData (Id, BotId, UserID, Message, Status)

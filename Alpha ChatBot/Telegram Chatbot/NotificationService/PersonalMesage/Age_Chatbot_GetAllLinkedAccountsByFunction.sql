@@ -22,7 +22,7 @@ BEGIN
 	FROM dbo.BotSystemSetting WITH(NOLOCK) 
 	WHERE ServiceName = @FunctionKey AND SettingName = 'IncludeRealCurrencyUAT'
 	
-	CREATE TABLE #Result(custid INT, SubAccID INT, Language VARCHAR(10), CustomerLevel TINYINT, UserID INT, IsRealUser BIT, BotId SMALLINT PRIMARY KEY(custid,SubAccID))
+	CREATE TABLE #Result(custid INT, SubAccID INT, Language VARCHAR(10), CustomerLevel TINYINT, UserID INT, IsRealUser BIT, BotId INT PRIMARY KEY(custid,SubAccID))
 	
 	INSERT INTO #Result (custid , SubAccID, Language, CustomerLevel, UserID,  IsRealUser,  BotId)
 	SELECT ca.CustID, ca.SubAccID, ca.Language, ca.CustomerLevel, ca.UserId, CASE WHEN c.currency = 20 THEN 0 ELSE 1 END AS IsRealUser, cm.BotId
