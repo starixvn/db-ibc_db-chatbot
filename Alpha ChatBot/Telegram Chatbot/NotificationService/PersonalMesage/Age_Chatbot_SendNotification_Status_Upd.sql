@@ -14,6 +14,7 @@ AS
 	
 	Revisions:
 		- 20220512@Malcolm: Initial SP [redmine: #167819]
+		- 20221123@Malcolm: add Yesterday Non-Entered Matches [redmine: #179253]
 
 	Param's Explanation:
 		. @XmlData

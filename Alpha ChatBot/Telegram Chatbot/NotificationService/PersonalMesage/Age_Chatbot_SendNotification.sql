@@ -9,6 +9,7 @@ AS
 	
 	Revisions:
 		- 20220512@Malcolm: Initial SP [redmine: #167819]
+		- 20221123@Malcolm: add Yesterday Non-Entered Matches [redmine: #179253]
 	
 	Paramter's Explanations:
 
@@ -20,15 +21,15 @@ BEGIN
 	
 	DECLARE @FunctionID SMALLINT, @SendLastNotificationId BIGINT, @SendBatchSize INT, @MaxNotificationId BIGINT
 
-	DECLARE @Function TABLE (SendLastNotificationId BIGINT, FunctionId SMALLINT, FunctionKey VARCHAR(50), [Priority] SMALLINT, PRIMARY KEY (FunctionId))
+	DECLARE @Function TABLE (SendLastNotificationId BIGINT, FunctionId SMALLINT, ParentId SMALLINT, FunctionKey VARCHAR(50), [Priority] SMALLINT, PRIMARY KEY (FunctionId))
 
 	SELECT @MaxNotificationId = MAX(NotificationID) FROM dbo.CustBotNotification cbn WITH(NOLOCK)
 
 	WAITFOR DELAY '00:00:00.200'
 
 	;WITH CTE AS (SELECT DISTINCT ServiceName FROM dbo.BotSystemSetting WITH(NOLOCK))
-	INSERT INTO @Function (FunctionId, FunctionKey, Priority)
-	SELECT bf.FunctionID, bf.FunctionKey, bf.Priority
+	INSERT INTO @Function (FunctionId, ParentId, FunctionKey, Priority)
+	SELECT bf.FunctionID, bf.ParentID ,bf.FunctionKey, bf.Priority
 	FROM dbo.BotFunction bf WITH(NOLOCK)
 		INNER JOIN CTE e ON e.ServiceName = bf.FunctionKey
 	WHERE bf.Type = 2 AND bf.Status <= CASE WHEN @Environment <> 'UAT' THEN 0 ELSE 1 END AND bf.Priority IS NOT NULL
@@ -45,6 +46,7 @@ BEGIN
 	(
 		NotificationId	BIGINT
 		,FunctionId		SMALLINT
+		,ParentId		SMALLINT
 		,FunctionKey	VARCHAR(50)
 		,[Message]		NVARCHAR(MAX)
 		,UserId			INT
@@ -54,8 +56,8 @@ BEGIN
 		,ErrCode		TINYINT
 	)
 
-	INSERT INTO @SendNotification (NotificationID, BotId, FunctionId, FunctionKey, Message, UserId, CustId, SubAccId, ErrCode)
-	SELECT TOP(@SendBatchSize) cbn.NotificationID, cbn.BotId, f.FunctionId, f.FunctionKey, cbn.Message, cbn.UserId, cba.CustId, cba.SubAccId, CASE WHEN b.Status = 0 THEN 1 ELSE 0 END AS ErrCode
+	INSERT INTO @SendNotification (NotificationID, BotId, FunctionId, ParentId, FunctionKey, Message, UserId, CustId, SubAccId, ErrCode)
+	SELECT TOP(@SendBatchSize) cbn.NotificationID, cbn.BotId, f.FunctionId, ISNULL(f.ParentId, f.FunctionId), f.FunctionKey, cbn.Message, cbn.UserId, cba.CustId, cba.SubAccId, CASE WHEN b.Status = 0 THEN 1 ELSE 0 END AS ErrCode
 	FROM @Function f
 		INNER LOOP JOIN dbo.CustBotNotification cbn WITH(NOLOCK) ON f.FunctionId = cbn.FunctionID 
 		INNER JOIN dbo.CustBotAccount cba WITH(NOLOCK) ON cba.UserId = cbn.UserID
@@ -73,7 +75,7 @@ BEGIN
 	FROM @SendNotification s
 		INNER JOIN dbo.CustBotMessenger cbm WITH(NOLOCK) ON cbm.UserId = s.UserId AND s.BotId = cbm.BotId
 		INNER JOIN dbo.Bot b WITH(NOLOCK) ON b.BotId = cbm.BotId
-		LEFT JOIN dbo.CustBotFunction cbf WITH(NOLOCK) ON cbf.UserID = s.UserId AND cbf.FunctionID = s.FunctionId
+		LEFT JOIN dbo.CustBotFunction cbf WITH(NOLOCK) ON cbf.UserID = s.UserId AND cbf.FunctionID = s.ParentId
 	WHERE s.ErrCode = 0 AND b.IsTest = CASE WHEN @Environment = 'UAT' THEN 1 ELSE 0 END
 	
 	UPDATE cbn WITH(ROWLOCK)

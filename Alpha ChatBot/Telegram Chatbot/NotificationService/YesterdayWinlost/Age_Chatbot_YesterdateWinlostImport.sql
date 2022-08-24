@@ -2,6 +2,7 @@
 ALTER PROCEDURE [dbo].[Age_Chatbot_YesterdateWinlostImport] 
 	@XmlData		XML
 	,@WinlostDate	DATETIME
+	,@ServiceName	VARCHAR(100)
 	,@Environment	VARCHAR(50) = 'LIVE'
 	,@MaxUserId		INT
 	,@ErrCode		INT = 0 OUTPUT
@@ -14,6 +15,7 @@ AS
 	
 	Revisions:
 		- 20220512@Malcolm: Initial SP [redmine: #167819]
+		- 20221123@Malcolm: Add Yesterday Non-Entered Matches and Remove the user who received the notification [redmine: #179253]
 	
 	Paramter's Explanations:
 		 @XmlData = '<root>
@@ -26,9 +28,9 @@ BEGIN
 	
 	DECLARE @SettingXML NVARCHAR(300), @SyncSettingPRO BIT, @FunctionId INT, @ID INT 
 
-	SELECT @FunctionId = FunctionId FROM dbo.BotFunction WITH(NOLOCK) WHERE FunctionKey = 'YesterdayWinLoss' AND Type = 2
+	SELECT @FunctionId = FunctionId FROM dbo.BotFunction WITH(NOLOCK) WHERE FunctionKey = @ServiceName AND Type = 2
 
-	SELECT @SyncSettingPRO = Value FROM dbo.BotSystemSetting WITH(NOLOCK) WHERE ServiceName = 'YesterdayWinLoss' AND SettingName = 'SyncSettingPRO'
+	SELECT @SyncSettingPRO = Value FROM dbo.BotSystemSetting WITH(NOLOCK) WHERE ServiceName = @ServiceName AND SettingName = 'SyncSettingPRO'
 
 	CREATE TABLE #TmpNotification (NotificationId BIGINT, ID INT)
 	CREATE CLUSTERED INDEX cix_Id ON #TmpNotification(ID)
@@ -51,6 +53,14 @@ BEGIN
 		,t.c.value('@Status', 'VARCHAR(20)')		 AS Status
 	FROM @XmlData.nodes ('root/r') t(c)
 	OPTION (OPTIMIZE FOR (@XmlData = NULL))
+
+	DELETE i
+	FROM #ImportData i
+	WHERE EXISTS (
+		SELECT 1
+		FROM dbo.NotificationReferenceLog n WITH(NOLOCK)
+		WHERE n.CreatedDate = @WinlostDate AND n.FunctionID = @FunctionId AND n.ReferenceID = i.UserID AND n.Environment = @Environment
+	)
 
 	SET @ID = 1
 	
@@ -81,7 +91,7 @@ BEGIN
 			INNER JOIN #TmpNotification tn ON tn.Id = i.Id
 
 		INSERT INTO dbo.NotificationReferenceLog (NotificationId, ReferenceID, FunctionId, Environment, CreatedDate)
-		SELECT NotificationId, UserID, @FunctionId, @Environment, GETDATE()
+		SELECT NotificationId, UserID, @FunctionId, @Environment, @WinlostDate
 		FROM #ImportData
 		WHERE ID >= @ID AND ID < @ID + 2000
 		ORDER BY Id ASC
@@ -105,7 +115,7 @@ BEGIN
 	)
 
 	EXEC dbo.Age_Chatbot_BotSystemSetting_Upd 
-			@ServiceName = 'YesterdayWinLoss'
+			@ServiceName = @ServiceName
 			,@Setting = @SettingXML
 			,@IncludeEnvironment = 1
 			,@SyncSettingPro = @SyncSettingPRO
