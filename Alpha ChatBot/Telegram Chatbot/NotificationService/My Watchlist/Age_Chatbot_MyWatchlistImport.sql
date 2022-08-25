@@ -3,7 +3,7 @@ ALTER PROCEDURE [dbo].[Age_Chatbot_MyWatchlistImport]
 	@XmlData			XML
 	,@XmlDataLog		XML
 	,@Environment		VARCHAR(50) = 'LIVE'
-	,@LastDataRow		XML 
+	,@LastDataRow		NVARCHAR(MAX) 
 	,@ServerName		NVARCHAR(200) = '' 
 	,@MaxLogId			INT
 	,@ErrCode			INT = 0 OUTPUT

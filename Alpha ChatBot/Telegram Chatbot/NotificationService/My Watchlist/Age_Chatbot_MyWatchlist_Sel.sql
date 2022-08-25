@@ -1,10 +1,12 @@
 /*<info serverAlias="DBAGE-bodb02" executers="bodbDownlineNet" isFunction="0" isNested="0"></info>*/
 CREATE PROCEDURE [dbo].[Age_Chatbot_MyWatchlist_Sel]
-	@LastLogId		INT
-	,@BatchSize		INT = 1000
-	,@LastDataRow   XML OUTPUT
-	,@ServerName	NVARCHAR(200) OUTPUT
-	,@MaxLogId		INT  = 0 OUTPUT
+	@LastLogId		  INT
+	,@BatchSize		  INT = 1000
+	,@InLastDataRow   NVARCHAR(MAX) 
+	,@InServerName	  NVARCHAR(200) 
+	,@OutLastDataRow  NVARCHAR(MAX) = '' OUTPUT
+	,@OutServerName	  NVARCHAR(200) = '' OUTPUT
+	,@MaxLogId		  INT = 0 OUTPUT
 AS
 
 /*
@@ -21,16 +23,16 @@ BEGIN
 
 	DECLARE @CustId INT, @SportType SMALLINT, @AccumWL MONEY, @WinningThreshold MONEY, @LosingThreshold MONEY, @SettingType TINYINT, @ReachType TINYINT,@NotificationType TINYINT, @LogId INT, @CreatedDate DATETIME
 
+	SELECT @OutServerName = @@SERVERNAME
+
 	SELECT @MaxLogId = MAX(LogId) FROM dbo.Dep_WLMonitored_Player_History WITH(NOLOCK)
 
 	-- Switch Server
-	IF ISNULL(@ServerName, '') = ''
+	IF ISNULL(@InServerName, '') <> '' AND  ISNULL(@InServerName, '') <> @OutServerName
 	BEGIN
-		SET @ServerName = @@SERVERNAME
-	END
-	ELSE IF @ServerName <> @@SERVERNAME
-	BEGIN
-		SELECT @ServerName = @@SERVERNAME, @LastLogId = 0
+		DECLARE @LastDataRowXML XML = CONVERT(XML, @InLastDataRow)
+
+		SELECT @LastLogId = 0
 
 		SELECT
 			@LogId = t.c.value('@LogId', 'INT') 
@@ -43,8 +45,8 @@ BEGIN
 			,@ReachType = t.c.value('@ReachType', 'TINYINT') 
 			,@NotificationType = t.c.value('@NotificationType', 'TINYINT') 
 			,@CreatedDate = t.c.value('@CreatedDate', 'DATETIME')
-		FROM @LastDataRow.nodes('root/r') t(c)
-		OPTION (OPTIMIZE FOR (@LastDataRow = NULL))
+		FROM @LastDataRowXML.nodes('root/r') t(c)
+		OPTION (OPTIMIZE FOR (@LastDataRowXML = NULL))
 
 		SELECT @LastLogId = LogId
 		FROM dbo.WLMonitored_Player_History h WITH(NOLOCK)
@@ -95,11 +97,11 @@ BEGIN
 	WHERE h.LogId > @LastLogId AND h.LogId <= @MaxLogId
 	ORDER BY LogId ASC
 
-	SELECT @LastDataRow = NULL, @MaxLogId = NULL
+	SELECT @OutLastDataRow = NULL, @MaxLogId = NULL
 
 	SELECT @MaxLogId = LogId FROM @Result
 
-	SELECT @LastDataRow = 
+	SELECT @OutLastDataRow = CONVERT(NVARCHAR(MAX), 
 	(
 		SELECT 
 			CustId AS '@CustId'
@@ -115,7 +117,7 @@ BEGIN
 		FROM dbo.WLMonitored_Player_History
 		WHERE LogId = @MaxLogId
 		FOR XML PATH('r'), ROOT('root')
-	)
+	))
 	
 	SELECT r.LogId, r.CustId, r.username, r.AccumWL, r.WinningThreshold, r.LosingThreshold, r.SettingType, r.CreatedDate, c.recommend, c.mrecommend, c.srecommend
 	FROM @Result r
