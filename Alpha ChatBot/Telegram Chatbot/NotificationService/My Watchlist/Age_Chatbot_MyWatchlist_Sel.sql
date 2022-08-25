@@ -2,10 +2,8 @@
 CREATE PROCEDURE [dbo].[Age_Chatbot_MyWatchlist_Sel]
 	@LastLogId		  INT
 	,@BatchSize		  INT = 1000
-	,@InLastDataRow   NVARCHAR(MAX) 
-	,@InServerName	  NVARCHAR(200) 
-	,@OutLastDataRow  NVARCHAR(MAX) = '' OUTPUT
-	,@OutServerName	  NVARCHAR(200) = '' OUTPUT
+	,@LastDataRow  NVARCHAR(MAX) = '' OUTPUT
+	,@ServerName	  NVARCHAR(200) = '' OUTPUT
 	,@MaxLogId		  INT = 0 OUTPUT
 AS
 
@@ -23,14 +21,18 @@ BEGIN
 
 	DECLARE @CustId INT, @SportType SMALLINT, @AccumWL MONEY, @WinningThreshold MONEY, @LosingThreshold MONEY, @SettingType TINYINT, @ReachType TINYINT,@NotificationType TINYINT, @LogId INT, @CreatedDate DATETIME
 
-	SELECT @OutServerName = @@SERVERNAME
-
-	SELECT @MaxLogId = MAX(LogId) FROM dbo.Dep_WLMonitored_Player_History WITH(NOLOCK)
+	SELECT @MaxLogId = MAX(LogId) FROM dbo.WLMonitored_Player_History WITH(NOLOCK)
+	
+	WAITFOR DELAY '00:00:00.200'
 
 	-- Switch Server
-	IF ISNULL(@InServerName, '') <> '' AND  ISNULL(@InServerName, '') <> @OutServerName
+	IF ISNULL(@ServerName, '') = ''
 	BEGIN
-		DECLARE @LastDataRowXML XML = CONVERT(XML, @InLastDataRow)
+		SELECT @ServerName = @@SERVERNAME
+	END
+	ELSE IF ISNULL(@ServerName, '') <> @@SERVERNAME
+	BEGIN
+		DECLARE @LastDataRowXML XML = CONVERT(XML, @LastDataRow)
 
 		SELECT @LastLogId = 0
 
@@ -67,8 +69,6 @@ BEGIN
 		END
 	END
 
-	WAITFOR DELAY '00:00:00.200'
-
 	DECLARE @Result TABLE 
 	(
 		LogId INT
@@ -97,11 +97,16 @@ BEGIN
 	WHERE h.LogId > @LastLogId AND h.LogId <= @MaxLogId
 	ORDER BY LogId ASC
 
-	SELECT @OutLastDataRow = NULL, @MaxLogId = NULL
+	SELECT @LastDataRow = NULL, @MaxLogId = NULL
 
 	SELECT @MaxLogId = LogId FROM @Result
 
-	SELECT @OutLastDataRow = CONVERT(NVARCHAR(MAX), 
+	IF @MaxLogId IS NULL
+	BEGIN
+		SET @MaxLogId = @LastLogId
+	END
+
+	SELECT @LastDataRow = CONVERT(NVARCHAR(MAX), 
 	(
 		SELECT 
 			CustId AS '@CustId'
