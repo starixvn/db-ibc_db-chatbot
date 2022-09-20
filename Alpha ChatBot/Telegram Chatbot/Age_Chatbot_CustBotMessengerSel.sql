@@ -13,7 +13,7 @@ AS
 	
 	Revisions:
 		- 20220325@Johnson: initial sp [redmine: #167819]
-		
+		- 20220824@Johnson: add CustomerLevel [redmine: #176397]
 	Parameter's Explanation:
 		- @IsTest: 0: BOT in PRO/ 1 Bot in UAT
 */
@@ -21,15 +21,17 @@ BEGIN
 	SET NOCOUNT ON;
 	
 	DECLARE @userid INT,
-		@Language VARCHAR(10)
+		@Language VARCHAR(10),
+		@CustomerLevel TINYINT
 	
 	SELECT @userid = userid,
-		@Language = Language
+		@Language = Language,
+		@CustomerLevel = CustomerLevel
 	FROM CustBotAccount WITH(NOLOCK)
 	WHERE custid = @custid
 		AND SubAccID = @SubAccID
 	
-	SELECT userid, b.BotID, b.DisplayName as BotName, b.System, c.ChatID, c.Status, IsVerifyOTP,@Language as Language
+	SELECT userid, b.BotID, b.DisplayName as BotName, b.System, c.ChatID, c.Status, IsVerifyOTP,@Language as Language, @CustomerLevel as CustomerLevel
 	FROM CustBotMessenger c WITH(NOLOCK) 
 		INNER JOIN Bot b WITH(NOLOCK) ON c.BotID = b.BotID
 	WHERE userid = @userid
