@@ -20,6 +20,7 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_NotificationList_UpdatedNotifi
 				- 20201401@Oliver: First Commit
 				- 20200302@Oliver: get additional notificationTypeId - RedmineID: #129363
                 - 20200907@Oliver: change data type of NotificationId temporary table - RedmineID: #141015
+				- 20220728@Malcolm: Add ChannelID, ChannelName [RedmineId: #175878]
     */
 )
 BEGIN
@@ -56,6 +57,8 @@ BEGIN
                                                     , Status VARCHAR(10)
                                                     , StatusID TINYINT UNSIGNED
                                                     , RecipientSentStatusJSON TEXT
+                                                    , ChannelID TINYINT UNSIGNED
+                                                    , ChannelName VARCHAR(45)
 											);
     #Get data based on Page Index and Page Size
     INSERT INTO tmp_Notification (	
@@ -70,12 +73,15 @@ BEGIN
                                                     , Content
                                                     , Status
                                                     , StatusID
+                                                    , ChannelID
+                                                    , ChannelName
 												)
-    SELECT n.NotificationID, nsm.MessageID, nt.NotificationTypeID,nt.NotificationTypeName, n.CreatorID, c.username, n.ConfigSendTime, n.Title, n.Content, n.Status, n.StatusID
+    SELECT n.NotificationID, nsm.MessageID, nt.NotificationTypeID,nt.NotificationTypeName, n.CreatorID, c.username, n.ConfigSendTime, n.Title, n.Content, n.Status, n.StatusID, n.ChannelID, ch.ChannelName
     FROM Notification n
         INNER JOIN tmp_notificationIDs tmp_n ON n.NotificationID = tmp_n.NotificationId
 		INNER JOIN NotificationType nt ON n.NotificationTypeID = nt.NotificationTypeID
         INNER JOIN Customer c ON n.CreatorID = c.custid
+        INNER JOIN ConversationChannel ch ON ch.ChannelID = n.ChannelID
         LEFT JOIN NotificationSystemMsg nsm ON n.NotificationID = nsm.NotificationID;
     
     #Update RecipientSentStatus

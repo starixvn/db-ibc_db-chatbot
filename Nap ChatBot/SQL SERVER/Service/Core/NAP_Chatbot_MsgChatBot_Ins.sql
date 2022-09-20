@@ -1,6 +1,6 @@
 /*<info serverAlias="DBMSG-bodb_Message" executers="bodbAdminNet" isFunction="0" isNested="0"></info>*/
 ALTER PROCEDURE [dbo].[NAP_Chatbot_MsgChatBot_Ins]
-	@MessageIDLst	XML
+	@MessageIdLst	XML
 	,@Environment	VARCHAR(50)
 	,@JobIdentify	TINYINT = 0
 	,@ErrCode		INT = 0 OUTPUT
@@ -17,13 +17,14 @@ AS
 		- 20200701@Percy: Add update code for IsFinished=1 [RedmineID: #135686]
 		- 20200804@Percy: Add RequestId for Ticket Voiding Abnormal Bets - Phase 3 [RedmineID: #135686]
 		- 20201029@Percy: Add job for licensee (@JobIdentify = 1) [RedmineID: #144274]
+		- 20220728@Malcolm: Update MessageID to MessageId [RedmineId: #175878]
 
 	Param's Explanation:
-		@MessageIDLst:
+		@MessageIdLst:
 			<root>
-				<r MessageID=1 TargetID=1 />
-				<r MessageID=2 RequestID=1 />
-				<r MessageID=2 RequestID=2 />
+				<r MessageId=1 TargetId=1 />
+				<r MessageId=2 RequestId=1 />
+				<r MessageId=2 RequestId=2 />
 			</root>
 */
 
@@ -34,12 +35,12 @@ BEGIN
 		DECLARE @MsgChatBot TABLE (MessageId INT, TargetId INT, RequestId INT, IsInsert BIT)
 		INSERT INTO @MsgChatBot (MessageId, TargetId, RequestId, IsInsert)
 		SELECT
-			t.c.value('@MessageID', 'INT') AS MessageID
-			,t.c.value('@TargetID', 'INT') AS TargetID
-			,t.c.value('@RequestID', 'INT') AS RequestID
+			t.c.value('@MessageId', 'INT') AS MessageId
+			,t.c.value('@TargetId', 'INT') AS TargetId
+			,t.c.value('@RequestId', 'INT') AS RequestId
 			,1 AS IsInsert
-		FROM @MessageIDLst.nodes('root/r') AS t(c)
-		OPTION (OPTIMIZE FOR (@MessageIDLst = NULL))
+		FROM @MessageIdLst.nodes('root/r') AS t(c)
+		OPTION (OPTIMIZE FOR (@MessageIdLst = NULL))
 
 		UPDATE mc WITH (ROWLOCK)
 		SET mc.IsFinished = 1
