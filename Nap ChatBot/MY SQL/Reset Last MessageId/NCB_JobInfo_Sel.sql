@@ -9,28 +9,39 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_JobInfo_Sel`(
         Revisions:
 			- 20211010@Malcolm: Get information of Job [RedmineID: #162825]
 			- 20220414@Malcolm: Add Job [RedmineID: #170182]
+			- 20220414@Malcolm: Add Job Monitered Player [RedmineID: #174402]
     */
 )
 SQL SECURITY DEFINER
 BEGIN
-	DECLARE ListMsgContentsType JSON DEFAULT "[4,9,14,21]";
+	DECLARE ListMsgContentsType JSON;
     DECLARE MsgContentsTypeList JSON;
-    DECLARE iLoop INT DEFAULT 0;
-    DECLARE Job_Id INT DEFAULT 0;
-
+    DECLARE pId INT DEFAULT 0;
+	DECLARE Job_Id INT;
+	DECLARE Finished INT DEFAULT 0;
+    DECLARE CurId CURSOR FOR 
+    SELECT ID FROM SystemSetting
+	WHERE DESCRIPTION LIKE '%Notification Template ID / MsgContentsType / NotificationType%';
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET Finished = 1;
+    
     DROP TEMPORARY TABLE IF EXISTS tmp_MsgContentsType;
     CREATE TEMPORARY TABLE IF NOT EXISTS tmp_MsgContentsType
     (
 		JobIdentify		 INT
 		,MsgContentsType INT
     );
-
-	SET iLoop = 0;
-    WHILE (JSON_EXTRACT(ListMsgContentsType, CONCAT('$[', iLoop, ']')) IS NOT NULL) DO
-	   SELECT Value, JobIdentify INTO MsgContentsTypeList, Job_Id FROM SystemSetting WHERE Id = JSON_EXTRACT(ListMsgContentsType, CONCAT('$[', iLoop, ']'));
-	   INSERT INTO tmp_MsgContentsType (JobIdentify, MsgContentsType)
-	   SELECT DISTINCT Job_Id, t.MsgContentsType
-	   FROM 
+    
+    OPEN CurId;
+    GetId : LOOP
+		FETCH curId INTO pId;
+        IF Finished = 1 THEN
+			LEAVE getId;
+		END IF;
+        
+		SELECT Value, JobIdentify INTO MsgContentsTypeList, Job_Id FROM SystemSetting WHERE Id = pId;
+	    INSERT INTO tmp_MsgContentsType (JobIdentify, MsgContentsType)
+	    SELECT DISTINCT Job_Id, t.MsgContentsType
+	    FROM 
 			JSON_TABLE
 			(
 				MsgContentsTypeList,
@@ -41,11 +52,16 @@ BEGIN
 				)
 			) t
             ORDER BY t.MsgContentsType;
-		SET iLoop := iLoop + 1;
-	END WHILE;
+	END LOOP GetId;
+    CLOSE CurId;
 	
-    SELECT JobIdentify, Value AS ReferenceId FROM SystemSetting WHERE ID IN (3, 8, 13, 20) ORDER BY JobIdentify;
-	SELECT JobIdentify, MsgContentsType FROM tmp_MsgContentsType;
+    SELECT JobIdentify, Value AS ReferenceId 
+    FROM SystemSetting 
+    WHERE Description LIKE '%Previous MaxMessageID%' OR Description LIKE '%LastLogId%' 
+    ORDER BY JobIdentify;
+    
+	SELECT JobIdentify, MsgContentsType 
+    FROM tmp_MsgContentsType;
 END;
 //
 DELIMITER ;
