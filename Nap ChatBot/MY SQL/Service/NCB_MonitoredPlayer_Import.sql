@@ -375,17 +375,40 @@ NCB_MonitoredPlayer_Import:BEGIN
 		,INDEX Index_LogId  (ID)
 	);
   
+	DROP TEMPORARY TABLE IF EXISTS tmp_Info;
+	CREATE TEMPORARY TABLE tmp_Info
+	(
+		ID 			INT
+		,ChannelId 	TINYINT
+		,StatusID 	TINYINT UNSIGNED
+		,Status 	VARCHAR(20)
+		,INDEX Index_LogId  (ID)
+	);
+	
+	INSERT INTO tmp_Info (ID, ChannelId, StatusID, Status)
+	SELECT 
+		ID
+		,MAX(ChannelId) 	AS ChannelId
+		,MIN(StatusID) 		AS StatusID
+		,MIN(Status) 		AS Status
+	FROM tmp_Result
+	GROUP BY ID;
+	
 	INSERT INTO tmp_Notification (ID, ChannelId, Content, StatusID, Status)
 	WITH CTE AS
 	(
 		SELECT 
-			ID
-			,MAX(ChannelId) 	AS ChannelId
-			,MIN(StatusID) 		AS StatusID
-			,MIN(Status) 		AS Status
-			,GROUP_CONCAT(CONCAT(OrderId, ' | ', Username2,' (', Username, ')', ' | ', CurrencyName, 0xA, 0x7F, REPEAT(' ',LENGTH(OrderId)),'   ', REPLACE(FORMAT(AccumWL, 2), '.00', ''), ' | ', REPLACE(FORMAT(WinningThreshold, 2), '.00', '')) ORDER BY OrderId ASC SEPARATOR 0xA) AS Content
-		  FROM tmp_Result
-		  GROUP BY ID
+			i.Id
+			,i.ChannelId
+			,i.StatusID
+			,i.Status
+			,(
+				SELECT GROUP_CONCAT(CONCAT(OrderId, ' | ', Username2,' (', Username, ')', ' | ', CurrencyName, 0xA, 0x7F, CASE WHEN t.ChannelId = 2 THEN '  ' ELSE '' END, REPEAT(' ',IF(LENGTH(OrderId) <> 1, LENGTH(OrderId) + 1, 1)),'    ', REPLACE(FORMAT(AccumWL, 2), '.00', ''), ' | ', REPLACE(FORMAT(WinningThreshold, 2), '.00', '')) ORDER BY OrderId ASC SEPARATOR 0xA)
+                FROM tmp_Result t 
+                WHERE t.ID = i.ID
+				LIMIT 1
+			) AS Content
+        FROM tmp_Info i
 	)
 	SELECT 
 		ID
@@ -404,7 +427,7 @@ NCB_MonitoredPlayer_Import:BEGIN
 		SELECT DISTINCT
 			ct.NotificationTypeID
 			,ct.TemplateTitle
-			,REPLACE(ct.TemplateContent, '{General Info}', h.Content)
+			,REPLACE(REPLACE(ct.TemplateContent, 0x7F, CASE WHEN h.ChannelID = 2 THEN concat(0x7F, '    ') ELSE concat(0x7F, ' ') END), '{General Info}', h.Content)
 			,startTime, 0 SendImmediately, STARIXIT_CUSTID, pCreatedDate, CREATING_NOTIFICATION_STATUS, CREATING_NOTIFICATION_STATUSID, h.ChannelID
 	    FROM tmp_Notification h
 	  	INNER JOIN tmp_MsgContentTypeTemplate ct ON ct.MsgContentsType = pMsgContentsType

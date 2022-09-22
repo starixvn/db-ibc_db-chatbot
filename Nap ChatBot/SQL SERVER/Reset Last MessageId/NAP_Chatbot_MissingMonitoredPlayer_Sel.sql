@@ -1,11 +1,11 @@
-/*<info serverAlias="DBAGE-bodb02" executers="bodbAdminNet" isFunction="0" isNested="0"></info>*/
+/*<info serverAlias="DBEXT-bodb02" executers="bodbAdminNet" isFunction="0" isNested="0"></info>*/
 ALTER PROCEDURE [dbo].[NAP_Chatbot_MissingMonitoredPlayer_Sel]
 	@FromLogId 	 INT
 AS
 
 /*
 	Created: 20220823@Malcolm
-	DB: DBAGE-bodb02
+	DB: DBEXT-bodb02
 	Task: ChatBot - Monitored Player - Get Missing Monitored Player
 
 	Revisions:
@@ -57,8 +57,8 @@ BEGIN
 	SELECT t.LogID,  DATEADD(HOUR, 12, t.CreatedDate) AS CreatedDate
 		, '<p>Monitored Player: ' + ISNULL(username2, '') + '('+ ISNULL(t.Username, '') + ')'  
 		+ '<br>' + 'Currency : ' + t.CurrencyName
-		+ '<br>' + 'Total Winning Amount: ' + CONVERT(VARCHAR(40), t.AccumWL)
-		+ '<br>' + 'Daily Winning Threshold:' + CONVERT(VARCHAR(40), t.WinningThreshold)+ '</p>'AS Content_en
+		+ '<br>' + 'Total Winning Amount: ' + REPLACE(FORMAT(t.AccumWL, '###,###.00'), '.00', '')
+		+ '<br>' + 'Daily Winning Threshold:' + REPLACE(FORMAT(t.WinningThreshold, '###,###.00'), '.00', '')+ '</p>'AS Content_en
  	FROM @Tmp t
 	ORDER BY t.LogID DESC
 

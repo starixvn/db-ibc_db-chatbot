@@ -11,7 +11,7 @@ VALUES
     ,(25, 'Monitored Player - LastLogId', 0, 5, 'Monitored Player')
     ,(26, 'Monitored Player - Notification Template ID / MsgContentsType / NotificationType', '', 5, 'Monitored Player')
     ,(27, 'Monitored Player - Chat group ID which receives carbon copies of all imported messages', '427,496', 5, 'Monitored Player')
-	,(28, 'Monitored Player - ServerName', 'DB052', 5, 'Monitored Player')
+	,(28, 'Monitored Player - ServerName', '', 5, 'Monitored Player')
 	,(29, 'Monitored Player - LastDataRow', '', 5, 'Monitored Player');
 	
 UPDATE SystemSetting
