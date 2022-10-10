@@ -403,7 +403,7 @@ NCB_MonitoredPlayer_Import:BEGIN
 			,i.StatusID
 			,i.Status
 			,(
-				SELECT GROUP_CONCAT(CONCAT(OrderId, ' | ', Username2,' (', Username, ')', ' | ', CurrencyName, 0xA, 0x7F, CASE WHEN t.ChannelId = 2 THEN '  ' ELSE '' END, REPEAT(' ',IF(LENGTH(OrderId) <> 1, LENGTH(OrderId) + 1, 1)),'    ', REPLACE(FORMAT(AccumWL, 2), '.00', ''), ' | ', REPLACE(FORMAT(WinningThreshold, 2), '.00', '')) ORDER BY OrderId ASC SEPARATOR 0xA)
+				SELECT GROUP_CONCAT(CONCAT('#', OrderId, '  ', Username2,' (', Username, ')', ' | ', CurrencyName, 0xA, 0x7F, CASE WHEN t.ChannelId = 2 THEN '  ' ELSE ' ' END, REPEAT(' ',IF(LENGTH(OrderId) <> 1, LENGTH(OrderId) + 1, 1)),'    ', REPLACE(FORMAT(AccumWL, 2), '.00', ''), ' | ', REPLACE(FORMAT(WinningThreshold, 2), '.00', '')) ORDER BY OrderId ASC SEPARATOR 0xA)
                 FROM tmp_Result t 
                 WHERE t.ID = i.ID
 				LIMIT 1
@@ -427,7 +427,7 @@ NCB_MonitoredPlayer_Import:BEGIN
 		SELECT DISTINCT
 			ct.NotificationTypeID
 			,ct.TemplateTitle
-			,REPLACE(REPLACE(ct.TemplateContent, 0x7F, CASE WHEN h.ChannelID = 2 THEN concat(0x7F, '    ') ELSE concat(0x7F, ' ') END), '{General Info}', h.Content)
+			,REPLACE(REPLACE(ct.TemplateContent, 0x7F, CASE WHEN h.ChannelID = 2 THEN concat(0x7F, '  ') ELSE concat(0x7F, ' ') END), '{General Info}', h.Content)
 			,startTime, 0 SendImmediately, STARIXIT_CUSTID, pCreatedDate, CREATING_NOTIFICATION_STATUS, CREATING_NOTIFICATION_STATUSID, h.ChannelID
 	    FROM tmp_Notification h
 	  	INNER JOIN tmp_MsgContentTypeTemplate ct ON ct.MsgContentsType = pMsgContentsType

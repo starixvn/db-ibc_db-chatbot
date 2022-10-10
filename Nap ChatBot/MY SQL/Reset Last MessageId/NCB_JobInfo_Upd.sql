@@ -48,7 +48,7 @@ BEGIN
     UPDATE SystemSetting AS s
 	INNER JOIN tmp_JobInfo AS j ON j.JobIdentify = s.JobIdentify
 		SET s.Value = j.ReferenceId
-    WHERE s.Description LIKE '%Previous MaxMessageID%' OR Description LIKE '%LastLogId%';
+    WHERE s.ID IN (3, 8, 13, 20, 25);
 
     UPDATE SystemSetting AS s
 	INNER JOIN tmp_JobInfo AS j ON j.JobIdentify = s.JobIdentify

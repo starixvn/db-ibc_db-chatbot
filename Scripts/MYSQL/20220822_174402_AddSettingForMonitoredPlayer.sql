@@ -8,7 +8,7 @@ INSERT INTO SystemSetting (ID, Description, Value, JobIdentify, JobDescription)
 VALUES 
 	(23, 'Monitored Player - Job Sync Status (Running/Done)', 'Done', 5, 'Monitored Player')
 	,(24, 'Monitored Player - Batch Size', 1000, 5, 'Monitored Player')
-    ,(25, 'Monitored Player - LastLogId', 0, 5, 'Monitored Player')
+    ,(25, 'Monitored Player - LastLogId', '542', 5, 'Monitored Player')
     ,(26, 'Monitored Player - Notification Template ID / MsgContentsType / NotificationType', '', 5, 'Monitored Player')
     ,(27, 'Monitored Player - Chat group ID which receives carbon copies of all imported messages', '427,496', 5, 'Monitored Player')
 	,(28, 'Monitored Player - ServerName', '', 5, 'Monitored Player')

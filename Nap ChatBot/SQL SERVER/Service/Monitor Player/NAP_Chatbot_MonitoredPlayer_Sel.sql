@@ -96,6 +96,7 @@ BEGIN
 			,SportType AS '@SportType'
 			,AccumWL AS '@AccumWL'
 			,WinningThreshold AS '@WinningThreshold'
+			,NotificationType AS '@NotificationType'
 			,CreatedDate AS '@CreatedDate'
 			,LogId AS '@LogId'
 		FROM dbo.Dep_WLMonitored_Player_History
