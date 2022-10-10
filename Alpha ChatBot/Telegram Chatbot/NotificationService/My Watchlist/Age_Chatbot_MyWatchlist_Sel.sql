@@ -2,7 +2,7 @@
 CREATE PROCEDURE [dbo].[Age_Chatbot_MyWatchlist_Sel]
 	@LastLogId		  INT
 	,@BatchSize		  INT = 1000
-	,@LastDataRow  NVARCHAR(MAX) = '' OUTPUT
+	,@LastDataRow	  NVARCHAR(MAX) = '' OUTPUT
 	,@ServerName	  NVARCHAR(200) = '' OUTPUT
 	,@MaxLogId		  INT = 0 OUTPUT
 AS
@@ -14,6 +14,7 @@ AS
 
 	Revisions:
 		- 20220821@Malcolm: Initialize SP [RedmineId: #175800]
+		- 20221006@Malcolm: fix sending notifications multiple times [RedmineId: #178824]
 */
 
 BEGIN
@@ -21,53 +22,11 @@ BEGIN
 
 	DECLARE @CustId INT, @SportType SMALLINT, @AccumWL MONEY, @WinningThreshold MONEY, @LosingThreshold MONEY, @SettingType TINYINT, @ReachType TINYINT,@NotificationType TINYINT, @LogId INT, @CreatedDate DATETIME
 
+	SET @ServerName = @@SERVERNAME
+
 	SELECT @MaxLogId = MAX(LogId) FROM dbo.WLMonitored_Player_History WITH(NOLOCK)
 	
 	WAITFOR DELAY '00:00:00.200'
-
-	-- Switch Server
-	IF ISNULL(@ServerName, '') = ''
-	BEGIN
-		SELECT @ServerName = @@SERVERNAME
-	END
-	ELSE IF ISNULL(@ServerName, '') <> @@SERVERNAME
-	BEGIN
-		DECLARE @LastDataRowXML XML = CONVERT(XML, @LastDataRow)
-
-		SELECT @LastLogId = 0
-
-		SELECT
-			@LogId = t.c.value('@LogId', 'INT') 
-			,@CustId = t.c.value('@CustId', 'INT') 
-			,@SportType = t.c.value('@SportType', 'SMALLINT') 
-			,@AccumWL = t.c.value('@AccumWL', 'MONEY') 
-			,@WinningThreshold = t.c.value('@WinningThreshold', 'MONEY') 
-			,@LosingThreshold = t.c.value('@LosingThreshold', 'MONEY') 
-			,@SettingType = t.c.value('@SettingType', 'TINYINT') 
-			,@ReachType = t.c.value('@ReachType', 'TINYINT') 
-			,@NotificationType = t.c.value('@NotificationType', 'TINYINT') 
-			,@CreatedDate = t.c.value('@CreatedDate', 'DATETIME')
-		FROM @LastDataRowXML.nodes('root/r') t(c)
-		OPTION (OPTIMIZE FOR (@LastDataRowXML = NULL))
-
-		SELECT @LastLogId = LogId
-		FROM dbo.WLMonitored_Player_History h WITH(NOLOCK)
-		WHERE h.CreatedDate >= DATEADD(DAY, -2, @CreatedDate)
-			AND h.CustId = @CustId
-			AND h.SportType = @SportType
-			AND h.AccumWL = @AccumWL
-			AND h.WinningThreshold = @WinningThreshold
-			AND h.LosingThreshold = @LosingThreshold
-			AND h.SettingType = @SettingType
-			AND h.ReachType = @ReachType
-			AND h.NotificationType = @NotificationType
-			AND h.LogId <= @MaxLogId
-
-		IF @LastLogId = 0
-		BEGIN
-			SET @LastLogId = @MaxLogId - 1
-		END
-	END
 
 	DECLARE @Result TABLE 
 	(
