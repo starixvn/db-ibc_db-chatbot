@@ -14,6 +14,7 @@ AS
 
 	Revisions:
 		- 20220509@Malcolm: Initialize SP [RedmineID: #167819]
+		- 20221011@Malcolm: Enhance Sps [RedmineID: #176397]
 
 	Param's Explanation:
 		. @Setting = '<root>
@@ -50,9 +51,9 @@ BEGIN
 		WHERE SettingName NOT IN ('JobStatus', 'LastRuntime', 'ServiceFlag')
 	END
 
-	UPDATE b WITH(ROWLOCK)
+	UPDATE b 
 		SET b.Value = t.Value
-	FROM dbo.BotSystemSetting b 
+	FROM dbo.BotSystemSetting b WITH(ROWLOCK, INDEX = IX_ServiceNameSettingName)
 		INNER JOIN @TmpSetting t ON t.SettingName = b.SettingName 
 	WHERE b.ServiceName = @ServiceName AND b.Value <> t.Value
 
