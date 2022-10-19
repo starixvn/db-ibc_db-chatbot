@@ -31,6 +31,7 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_NewNotification_Ins`(
                 - 20211201@Malcolm: Change Logs - RedmineID: #163777
 				- 20220218@Malcolm: Add Platform for licensee [RedmineID: #167946]
                 - 20220705@Malcolm: Get those integrating/Upcomming licensees [RedmineId: 174425]	
+                - 20220907@Malcolm: Update content [RedmineId: 174402]	
 		Param's Explanation:
 		- ContentLst:
 				[
@@ -124,6 +125,11 @@ NCB_NewNotification_Ins:BEGIN
 		SET errCode=111, errMsg = 'Invalid ChannelId';
 		LEAVE NCB_NewNotification_Ins;
 	END IF;
+	
+    /*Update content*/
+    UPDATE tmpContent
+		SET Content = CASE WHEN ChannelId = 1 THEN REPLACE(Content, '\n ', CONCAT('\n', 0x7F))
+					  ELSE REPLACE(Content, '\n ', CONCAT('\n', 0x7F, ' ')) END;
 
     #Insert comma seperated list RecipientIDLst to temporary tables
     DROP TEMPORARY TABLE IF EXISTS tmp_recipientIDLst;
