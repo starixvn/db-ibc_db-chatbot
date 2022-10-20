@@ -11,8 +11,13 @@ AS
 	
 	Revisions:
 		- 20220510@Malcolm: Initial SP [redmine: #167819]
-	
+		- 20221020@Malcolm: Hide problem accounts (group betting) [redmine: #178796]
+
 	Parameter's Explanation:
+		- HiddenSite=0 [default]
+		- HiddenSite=1 [credit]
+		- HiddenSite=2 [deposit]
+		- HiddenSite=3 [all]
 	
 */
 BEGIN
@@ -22,10 +27,10 @@ BEGIN
 
 	WAITFOR DELAY '00:00:00.200'
 
-	CREATE TABLE #CategoryConfig (CustomerClass SMALLINT PRIMARY KEY)
+	CREATE TABLE #CategoryConfig (CustomerClass SMALLINT PRIMARY KEY, HiddenSite TINYINT)
 
-	INSERT INTO #CategoryConfig (CustomerClass)
-	SELECT DISTINCT CustomerClass
+	INSERT INTO #CategoryConfig (CustomerClass, HiddenSite)
+	SELECT DISTINCT CustomerClass, HiddenSite
 	FROM dbo.CategoryConfig WITH(NOLOCK)
 	WHERE CustomerClass IS NOT NULL
 
@@ -34,7 +39,7 @@ BEGIN
 	INSERT INTO @Tmp (LogID, custid, CreatedDate)
 	SELECT TOP(@BatchSize) LogID, custid, d.CreatedDate
 	FROM dbo.CustCategoryHistory d WITH(NOLOCK)
-	WHERE EXISTS (SELECT 1 FROM #CategoryConfig c WHERE c.CustomerClass = d.CustomerClass)
+	WHERE EXISTS (SELECT 1 FROM #CategoryConfig c WHERE c.CustomerClass = d.CustomerClass AND HiddenSite IN (0, 2))
 		AND NOT EXISTS (SELECT 1 FROM #CategoryConfig c WHERE c.CustomerClass = d.OldCustomerClass)
 		AND d.LogID > @LastLogId 
 		AND d.LogID <= @MaxLogId
