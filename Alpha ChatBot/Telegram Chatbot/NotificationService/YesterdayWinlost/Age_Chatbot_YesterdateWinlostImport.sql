@@ -15,7 +15,7 @@ AS
 	
 	Revisions:
 		- 20220512@Malcolm: Initial SP [redmine: #167819]
-		- 20221123@Malcolm: Add Yesterday Non-Entered Matches and Remove the user who received the notification [redmine: #179253]
+		- 20221123@Malcolm: Get data by ServiceName [redmine: #179253]
 	
 	Paramter's Explanations:
 		 @XmlData = '<root>

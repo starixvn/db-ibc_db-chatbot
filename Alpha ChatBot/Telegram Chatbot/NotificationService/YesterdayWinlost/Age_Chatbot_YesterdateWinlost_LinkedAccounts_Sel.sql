@@ -12,7 +12,7 @@ AS
 	
 	Revisions:
 		- 20220428@Malcolm: Initial SP [redmine: #167819]
-		- 20221123@Malcolm: Add Yesterday Non-Entered Matches [redmine: #179253]
+		- 20221123@Malcolm: Get data by ServiceName [redmine: #179253]
 */
 BEGIN
 	SET NOCOUNT ON;
