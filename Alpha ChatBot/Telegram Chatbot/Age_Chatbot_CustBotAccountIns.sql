@@ -17,6 +17,7 @@ AS
 	
 	Revisions:
 		- 20220323@Johnson: initial sp [redmine: #167819]
+		- 20221124@Johnson: dont insert botfunction has parentid is NULL into CustBotFunction [redmine:#179253]
 */
 BEGIN
 	SET NOCOUNT ON;
@@ -102,6 +103,7 @@ BEGIN
 	USING (SELECT @userid as userid, FunctionID FROM BotFunction WITH(NOLOCK) 
 			WHERE Status <= @IsTest
 			AND type = 2 --Notification settings
+			AND ISNULL(ParentID,0) = 0 
 		) as Source
 	ON Target.userid = Source.userid AND Target.FunctionID = Source.FunctionID
 	WHEN Matched THEN 
