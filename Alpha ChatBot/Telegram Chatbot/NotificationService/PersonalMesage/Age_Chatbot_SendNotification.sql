@@ -9,7 +9,7 @@ AS
 	
 	Revisions:
 		- 20220512@Malcolm: Initial SP [redmine: #167819]
-		- 20221123@Malcolm: add Yesterday Non-Entered Matches [redmine: #179253]
+		- 20221123@Malcolm: Get CustBotFunction from ParentId [redmine: #179253]
 	
 	Paramter's Explanations:
 
