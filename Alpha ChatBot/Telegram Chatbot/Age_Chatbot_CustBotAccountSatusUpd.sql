@@ -16,7 +16,9 @@ AS
 	
 	Revisions:
 		- 20220323@Johnson: initial sp [redmine: #167819]
-		- 20221124@Johnson: dont insert botfunction has parentid is NULL into CustBotFunction [redmine:#179253]
+		- 20221110@Johnson: Support OTP via Telegram chatbot [redmine:#178790]
+		- 20221124@Johnson: dont insert botfunction has parentid is NULL into CustBotFunction [redmine:#179253]		
+
 */
 BEGIN
 	SET NOCOUNT ON;
@@ -74,7 +76,9 @@ BEGIN
 		AND BotID = @BotID
 			
 	MERGE CustBotFunction as Target
-	USING (SELECT @userid as userid, FunctionID FROM BotFunction WITH(NOLOCK) 
+	USING (SELECT @userid as userid, FunctionID,
+			CASE WHEN FunctionName = 'OTP' THEN 0 ELSE 1 END status --disabled for OTP 
+			FROM BotFunction WITH(NOLOCK) 
 			WHERE Status <= @IsTest
 			AND type = 2 --Notification settings
 			AND ISNULL(ParentID,0) = 0 
@@ -82,8 +86,8 @@ BEGIN
 	ON Target.userid = Source.userid AND Target.FunctionID = Source.FunctionID
 	WHEN Matched AND @Status = 0 THEN DELETE
 	WHEN Matched AND @Status = 1 THEN
-		UPDATE SET Status = 1
-	WHEN NOT MATCHED AND @status = 1 THEN INSERT(UserID,FunctionID,Status) VALUES(Source.UserID,Source.FunctionID,1);
+		UPDATE SET Target.Status = Source.Status
+	WHEN NOT MATCHED AND @status = 1 THEN INSERT(UserID,FunctionID,Status) VALUES(Source.UserID,Source.FunctionID,Source.Status);
 		
 	SELECT @Duration = DATEDIFF (MILLISECOND, @startRun, GETDATE())
 	
