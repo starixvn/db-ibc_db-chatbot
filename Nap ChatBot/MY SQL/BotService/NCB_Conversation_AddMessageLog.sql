@@ -8,7 +8,7 @@ CREATE DEFINER=`ChatBotSystem` PROCEDURE `NCB_Conversation_AddMessageLog`(
     , IN toConversationId VARCHAR(200)  
     , IN content TEXT CHARACTER SET utf8mb4
 	, IN isSuccessfull BIT
-    , IN errorMessage VARCHAR(1000) CHARACTER SET utf8mb4
+    , IN errorMessage VARCHAR(4000) CHARACTER SET utf8mb4
 	, OUT errCode SMALLINT
 	, OUT errMsg VARCHAR(100)
     /*
@@ -24,6 +24,7 @@ CREATE DEFINER=`ChatBotSystem` PROCEDURE `NCB_Conversation_AddMessageLog`(
         Revisions:
 				- 20190814@Quinn: First Commit
                 - 20191224@Oliver: Add ReferenceID Column -- RedmineID: #124743
+				- 20221212@Malcolm: Change data type [Redminid: #181498]
         
     */
 )
