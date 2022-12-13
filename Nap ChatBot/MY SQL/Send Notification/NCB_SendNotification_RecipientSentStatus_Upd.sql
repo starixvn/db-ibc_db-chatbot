@@ -40,6 +40,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_SendNotification_RecipientSe
                 - 20191008@Dominic: Not update RetryTime
 				- 20200113@Oliver: showing MessageID, RedmineID: #126986
 				- 20200302@Oliver: get additional notificationTypeId - RedmineID: #129339
+				- 20221212@Malcolm: Change data type [RedmineId : #181498]
         
     */
 )
@@ -79,7 +80,7 @@ NCB_SendNotification_RecipientSentStatus_Upd:BEGIN
                                                                     , SentTime DATETIME
                                                                     , IsSuccess TINYINT
 																	, Retry TINYINT
-                                                                    , ErrMsg VARCHAR(1000) CHARACTER SET utf8mb4
+                                                                    , ErrMsg VARCHAR(4000) CHARACTER SET utf8mb4
                                                                     , INDEX INDEX_ChatGroupID USING BTREE (NotificationID, RecipientID, ConversationGroupID)
 																);
 
