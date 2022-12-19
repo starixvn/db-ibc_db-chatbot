@@ -77,7 +77,7 @@ BEGIN
 			
 	MERGE CustBotFunction as Target
 	USING (SELECT @userid as userid, FunctionID,
-			CASE WHEN FunctionName = 'OTP' THEN 0 ELSE 1 END status --disabled for OTP 
+			CASE WHEN FunctionID = 15 THEN 0 ELSE 1 END status --disabled for OTP 
 			FROM BotFunction WITH(NOLOCK) 
 			WHERE Status <= @IsTest
 			AND type = 2 --Notification settings
