@@ -2,6 +2,7 @@
 ALTER PROCEDURE [dbo].[Age_Chatbot_YesterdateWinlost_LinkedAccounts_Sel] 	
 	@WinlostDate	DATETIME
 	,@Environment   VARCHAR(20) = 'LIVE'
+	,@ServiceName	VARCHAR(100)
 	,@MaxUserId		INT OUTPUT
 AS
 /*
@@ -11,6 +12,7 @@ AS
 	
 	Revisions:
 		- 20220428@Malcolm: Initial SP [redmine: #167819]
+		- 20221123@Malcolm: Get data by ServiceName [redmine: #179253]
 */
 BEGIN
 	SET NOCOUNT ON;
@@ -25,11 +27,11 @@ BEGIN
 		,@SWinlostDate = CASE WHEN SettingName = 'WinlostDate' + @Environment THEN CONVERT(DATETIME, Value) ELSE @SWinlostDate END
 		,@IncludeRealCurrencyUAT = CASE WHEN SettingName = 'IncludeRealCurrencyUAT' THEN CONVERT(BIT, Value) ELSE @IncludeRealCurrencyUAT END
 	FROM dbo.BotSystemSetting WITH(NOLOCK) 
-	WHERE ServiceName = 'YesterdayWinLoss' AND SettingName IN ('BatchSize', 'WinlostDate' + @Environment, 'IncludeRealCurrencyUAT')
+	WHERE ServiceName = @ServiceName AND SettingName IN ('BatchSize', 'WinlostDate' + @Environment, 'IncludeRealCurrencyUAT')
 
 	IF @WinlostDate = @SWinlostDate
 	BEGIN
-		SELECT @LastUserId = CONVERT(INT, Value) FROM dbo.BotSystemSetting WITH(NOLOCK) WHERE SettingName = 'MaxUserId' + @Environment AND ServiceName = 'YesterdayWinLoss'
+		SELECT @LastUserId = CONVERT(INT, Value) FROM dbo.BotSystemSetting WITH(NOLOCK) WHERE SettingName = 'MaxUserId' + @Environment AND ServiceName = @ServiceName
 	END
 	ELSE
 	BEGIN
@@ -37,12 +39,12 @@ BEGIN
 		
 		UPDATE dbo.BotSystemSetting WITH(ROWLOCK)
 			SET Value = CASE WHEN SettingName = 'MaxUserId' + @Environment THEN '0' ELSE CONVERT(VARCHAR(30), @WinlostDate, 120) END
-		WHERE ServiceName = 'YesterdayWinLoss' AND SettingName IN ('MaxUserId' + @Environment, 'WinlostDate' + @Environment)
+		WHERE ServiceName = @ServiceName AND SettingName IN ('MaxUserId' + @Environment, 'WinlostDate' + @Environment)
 	END
 	
 	SELECT @__UserId = MAX(UserId) FROM dbo.CustBotAccount WITH(NOLOCK)
 
-	SELECT @FunctionID = FunctionID FROM dbo.BotFunction WITH(NOLOCK) WHERE FunctionKey = 'YesterdayWinLoss' AND Type = 2
+	SELECT @FunctionID = ISNULL(ParentId, FunctionID) FROM dbo.BotFunction WITH(NOLOCK) WHERE FunctionKey = @ServiceName AND Type = 2
 	
 	DECLARE @Tmp TABLE (CustId INT, SubAccID INT, Language VARCHAR(10), CustomerLevel TINYINT, UserId INT, BotId INT, IsRealUser BIT)
 
