@@ -1,7 +1,6 @@
 /*<info serverAlias="DBACC-bodb02" executers="bodbAdminNet" isFunction="0" isNested="0"></info>*/
 ALTER PROCEDURE [dbo].[NAP_Chatbot_SpecialDelete_AbnormalBets_Sel]
-	@MessageIdLst   XML
-	,@TicketInfo    XML
+	@TicketInfo    XML
 	,@UsernameLst   XML
 AS
 
@@ -19,6 +18,7 @@ AS
 		- 20210405@Malcolm: Add RequestId for Ticket VoIding Abnormal Accounts [RedmineId: #152175]
 		- 20211122@Malcolm: VoIding Abnormal bet for Mix Parlay [RedmineId: #163777]
 		- 20220728@Malcolm: Get tickets and username form all SiteDB [RedmineId: #175878]
+		- 20220728@Malcolm: Scale out ChatBot [RedmineId: #175878]
 
 	Param's Explanation:
 		+ @MessageIdLst:
@@ -27,30 +27,22 @@ AS
 			</root>
 		+ @TicketInfo:
 			<root>
-				<r MessageId="1" Recommend="1" Bettype="2" LiveIndicator="0" IsParlay="1"/>
+				<r VoidingHistoryCollectionId="1" Recommend="1" Bettype="2" LiveIndicator="0" IsParlay="1"/>
 			</root>
 		+ @UsernameLst
 			<root>
-				<r MessageId="1" VoIdingHistoryId="1" Usernames="Supertest01"/>
+				<r VoidingHistoryCollectionId="1" VoIdingHistoryId="1" Usernames="Supertest01"/>
 			</root>
 */
 
 BEGIN
 	SET NOCOUNT ON
 
-	CREATE TABLE #MessageLst (MessageId INT, RequestId INT)
-	INSERT INTO  #MessageLst (MessageId, RequestId)
-	SELECT
-		t.c.value('@MessageId', 'INT') AS MessageId
-		,t.c.value('@RequestId', 'INT') AS RequestId
-	FROM @MessageIdLst.nodes('root/r') AS t(c)
-	OPTION (OPTIMIZE FOR (@MessageIdLst = NULL))
-
 	-- Ticket Info
-	DECLARE @tblRecommendBettype TABLE (MessageId INT, recommend INT, bettype SMALLINT, liveindicator BIT, IsParlay BIT)
-	INSERT INTO @tblRecommendBettype (MessageId, recommend, bettype, liveindicator, IsParlay)
+	DECLARE @tblRecommendBettype TABLE (VoidingHistoryCollectionId INT, recommend INT, bettype SMALLINT, liveindicator BIT, IsParlay BIT)
+	INSERT INTO @tblRecommendBettype (VoidingHistoryCollectionId, recommend, bettype, liveindicator, IsParlay)
 	SELECT
-		t.c.value('@MessageId', 'INT') AS MessageId
+		t.c.value('@VoidingHistoryCollectionId', 'INT') AS VoidingHistoryCollectionId
 		,t.c.value('@Recommend', 'INT') AS Recommend
 		,t.c.value('@Bettype', 'SMALLINT') AS Bettype
 		,t.c.value('@LiveIndicator', 'BIT') AS Liveindicator
@@ -59,39 +51,29 @@ BEGIN
 	OPTION (OPTIMIZE FOR (@TicketInfo = NULL)) 
 	
 	-- Username List for abnormal accounts 
-	CREATE TABLE #UsernameLst (VoidingHistoryId INT, MessageId INT, Usernames NVARCHAR(MAX))
-	INSERT INTO #UsernameLst (VoidingHistoryId, MessageId, Usernames)
+	CREATE TABLE #UsernameLst (VoidingHistoryCollectionId INT, VoidingHistoryId INT, Usernames NVARCHAR(MAX))
+	INSERT INTO #UsernameLst (VoidingHistoryCollectionId, VoidingHistoryId, Usernames)
 	SELECT
-		t.c.value('@VoidingHistoryId', 'INT') AS VoidingHistoryId
-		,t.c.value('@MessageId', 'INT') AS MessageId
+		t.c.value('@VoidingHistoryCollectionId', 'INT') AS VoidingHistoryCollectionId
+		,t.c.value('@VoidingHistoryId', 'INT') AS VoidingHistoryId
 		,t.c.value('@Usernames', 'NVARCHAR(MAX)') AS Usernames
 	FROM @UsernameLst.nodes('root/r') AS t(c)
 	OPTION (OPTIMIZE FOR (@UsernameLst = NULL)) 
 
-	CREATE TABLE #VoIdingHistory 
-	(
-		VoidingHistoryId	INT, 
-		RequestId			INT, 
-		MessageId			INT, 
-		ReasonId			INT, 
-		VoIdById			INT, 
-		TotalTicket			INT, 
-		MinWinlostdate		DATETIME, 
-		MaxWinlostdate		DATETIME, 
-		Usernames			NVARCHAR(MAX) DEFAULT NULL,
-		IssueTypeId			TINYINT,
-		FilterBy			TINYINT DEFAULT(0)
+	CREATE TABLE #VoIdingHistory (
+		VoidingHistoryCollectionId INT, VoidingHistoryId INT, RequestId INT, MessageId INT, ReasonId INT, VoIdById INT, TotalTicket INT, MinWinlostdate DATETIME, 
+		MaxWinlostdate DATETIME, Usernames NVARCHAR(MAX) DEFAULT NULL, IssueTypeId TINYINT, FilterBy TINYINT DEFAULT(0)
 	)
 
 	--Get data for Abnormal Bets
-	INSERT INTO #VoIdingHistory (VoidingHistoryId, RequestId, MessageId, ReasonId, VoIdById, TotalTicket, MinWinlostdate, MaxWinlostdate)
-	SELECT vh.VoidingHistoryId, vh.RequestId, vh.MessageId, vh.ReasonId, vh.UserId AS VoIdById, t.TotalTicket, vh.MinWinlostdate, vh.MaxWinlostdate
-	FROM dbo.TicketVoIding_VoIdingHistory vh WITH (NOLOCK)
+	INSERT INTO #VoIdingHistory (VoidingHistoryCollectionId, VoidingHistoryId, RequestId, MessageId, ReasonId, VoIdById, TotalTicket, MinWinlostdate, MaxWinlostdate)
+	SELECT vcd.VoidingHistoryCollectionId, vh.VoidingHistoryId, vh.RequestId, vh.MessageId, vh.ReasonId, vh.UserId AS VoIdById, t.TotalTicket, vh.MinWinlostdate, vh.MaxWinlostdate
+	FROM dbo.VoidingHistoryCollectionDetail vcd WITH(NOLOCK)
+		INNER JOIN dbo.TicketVoIding_VoIdingHistory vh WITH (NOLOCK) ON vh.VoidingHistoryId = vcd.VoidingHistoryId
 		OUTER APPLY (
-			SELECT COUNT(DISTINCT val) AS TotalTicket FROM dbo.strSplit(vh.TransIds, ',') WHERE val <> ''
+			SELECT COUNT(DISTINCT value) AS TotalTicket FROM STRING_SPLIT(vh.TransIds, ',') f WHERE f.value <> ''
 		) t
-	WHERE EXISTS (SELECT 1 FROM #MessageLst m WHERE vh.MessageId = m.MessageId AND vh.RequestId = m.RequestId) 
-		AND vh.StatusId = 2
+	WHERE EXISTS (SELECT 1 FROM #UsernameLst u WHERE u.VoidingHistoryCollectionId = vcd.VoidingHistoryCollectionId)
 
 	UPDATE vh
 		SET vh.IssueTypeId = r.IssueTypeId, vh.FilterBy = ISNULL(n.FilterBy, 0), vh.Usernames = u.Usernames
