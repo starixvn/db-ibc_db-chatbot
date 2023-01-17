@@ -1,7 +1,6 @@
 /*<info serverAlias="DBMSG-bodb_Message" executers="bodbAdminNet" isFunction="0" isNested="0"></info>*/
 ALTER PROCEDURE [dbo].[NAP_Chatbot_MissingMesssage_Ins]
 	@MessageList	XML
-	,@RequestList	XML
 	,@Environment	VARCHAR(20)
 	,@ErrCode		INT = 0 OUTPUT
 	,@ErrMsg		NVARCHAR(4000) = '' OUTPUT
@@ -13,16 +12,12 @@ AS
 
 	Revisions:
 		- 20211007@Malcolm: Initialize SP [RedmineID: #162825]
+		- 20230118@Malcolm: Scale out for ChatBot [RedmineID: #181907]
 
 	. @MessageList
 			<root>
 				<r JobIdentify="1" MessageId="1" />
 				<r JobIdentify="3" MessageId="12" />
-			</root>
-	. @RequestList
-			<root>
-				<r MessageId="1" RequestId="2"/>
-				<r MessageId="12" RequestId="3"/>
 			</root>
 */
 BEGIN
@@ -39,26 +34,7 @@ BEGIN
 	WHERE t.c.value ('@JobIdentify', 'TINYINT') <> 0
 	OPTION (OPTIMIZE FOR (@MessageList = NULL))
 
-	DECLARE @RequestInfo TABLE (RequestId INT, MessageId INT)
-	INSERT INTO @RequestInfo (RequestId, MessageId)
-	SELECT 
-		t.c.value ('@RequestId', 'INT') AS RequestId
-		,t.c.value ('@MessageId', 'INT') AS MessageId
-	FROM @RequestList.nodes('root/r') t(c)
-	WHERE t.c.value ('@RequestId', 'INT') <> 0
-	OPTION (OPTIMIZE FOR (@RequestList = NULL))
-
 	BEGIN TRY 
-		UPDATE mc
-			SET mc.IsFinished = 1
-		FROM MsgChatBot mc WITH(ROWLOCK)
-			INNER JOIN @RequestInfo r 
-				ON r.MessageId = mc.MessageId 
-				  AND mc.JobIdentify = 2 
-				  AND mc.Environment = @Environment 
-				  AND r.RequestId = mc.RequestId
-				  AND mc.TargetId = 0
-
 		IF EXISTS (SELECT 1 FROM @Message WHERE JobIdentify = 1)
 		BEGIN
 			DECLARE @DepositSuper TABLE (CustId INT, site VARCHAR(50))
@@ -104,22 +80,6 @@ BEGIN
 						AND mc.RequestId = 0
 				) AND m.JobIdentify = 3
 		END
-
-		IF EXISTS (SELECT 1 FROM @RequestInfo)
-		BEGIN
-			INSERT INTO dbo.MsgChatBot (MessageId, TargetId, JobIdentify, CheckInTime, Environment, IsFinished, RequestId)
-			SELECT r.MessageId, 0, 2, GETDATE(), @Environment, 1, r.RequestId
-			FROM @RequestInfo r
-			WHERE NOT EXISTS (
-				SELECT 1
-				FROM dbo.MsgChatBot mc WITH(NOLOCK) 
-				WHERE mc.MessageId = r.MessageId 
-					AND mc.RequestId = r.RequestId 
-					AND mc.JobIdentify = 2 
-					AND mc.Environment = @Environment
-					AND mc.TargetId = 0
-			)
-		END	
 	END TRY
 	BEGIN CATCH 
 		SELECT @ErrCode	= 100, @ErrMsg	= 'Failed to reset Last MessageId'

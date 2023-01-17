@@ -21,6 +21,7 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_NotificationList_UpdatedNotifi
 				- 20200302@Oliver: get additional notificationTypeId - RedmineID: #129363
                 - 20200907@Oliver: change data type of NotificationId temporary table - RedmineID: #141015
 				- 20220728@Malcolm: Add ChannelID, ChannelName [RedmineId: #175878]
+                - 20220118@Malcolm: Scale out for ChatBot [RedmineID: #181907]
     */
 )
 BEGIN
@@ -46,7 +47,7 @@ BEGIN
     DROP TEMPORARY TABLE IF EXISTS tmp_Notification;
 	CREATE TEMPORARY TABLE tmp_Notification(
 													NotificationID INT
-                                                    ,MessageID INT
+                                                    ,MessageIdList MEDIUMTEXT
 													,NotificationTypeID INT
                                                     ,NotificationTypeName VARCHAR(200)
                                                     ,CreatorID INT
@@ -63,7 +64,7 @@ BEGIN
     #Get data based on Page Index and Page Size
     INSERT INTO tmp_Notification (	
 													NotificationID
-                                                    , MessageID
+                                                    , MessageIdList
 													, NotificationTypeID
                                                     , NotificationTypeName
                                                     , CreatorID
@@ -76,13 +77,17 @@ BEGIN
                                                     , ChannelID
                                                     , ChannelName
 												)
-    SELECT n.NotificationID, nsm.MessageID, nt.NotificationTypeID,nt.NotificationTypeName, n.CreatorID, c.username, n.ConfigSendTime, n.Title, n.Content, n.Status, n.StatusID, n.ChannelID, ch.ChannelName
+    SELECT n.NotificationID, msg.MessageIdList, nt.NotificationTypeID,nt.NotificationTypeName, n.CreatorID, c.username, n.ConfigSendTime, n.Title, n.Content, n.Status, n.StatusID, n.ChannelID, ch.ChannelName
     FROM Notification n
         INNER JOIN tmp_notificationIDs tmp_n ON n.NotificationID = tmp_n.NotificationId
 		INNER JOIN NotificationType nt ON n.NotificationTypeID = nt.NotificationTypeID
         INNER JOIN Customer c ON n.CreatorID = c.custid
         INNER JOIN ConversationChannel ch ON ch.ChannelID = n.ChannelID
-        LEFT JOIN NotificationSystemMsg nsm ON n.NotificationID = nsm.NotificationID;
+        LEFT JOIN LATERAL (
+			SELECT GROUP_CONCAT(nsm.MessageID ORDER BY nsm.MessageID ASC) AS MessageIdList
+			FROM NotificationSystemMsg nsm 
+            WHERE nsm.NotificationID = n.NotificationID
+		) AS msg ON 1 = 1;
     
     #Update RecipientSentStatus
     UPDATE tmp_Notification n

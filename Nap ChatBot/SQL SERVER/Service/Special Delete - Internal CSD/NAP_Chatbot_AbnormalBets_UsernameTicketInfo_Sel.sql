@@ -30,13 +30,10 @@ BEGIN
 
 	/*Get Data*/
 	BEGIN
-		CREATE TABLE #Site (SiteID INT PRIMARY KEY, SiteName NVARCHAR(50))
-		CREATE NONCLUSTERED INDEX Ix_SiteName ON #Site (SiteName)
-
-		CREATE TABLE #MessageLst (VoidingHistoryCollectionId INT, VoidingHistoryId INT, Username VARCHAR(30), CustId INT, IsValid BIT DEFAULT(0), SiteName NVARCHAR(50))
+		CREATE TABLE #AbnormalAccountsInfoTmp (VoidingHistoryCollectionId INT, VoidingHistoryId INT, Username VARCHAR(30), CustId INT, IsValid BIT DEFAULT(0), SiteName NVARCHAR(50))
 
 		--Abnormal Accounts
-		INSERT INTO  #MessageLst (VoidingHistoryCollectionId, VoidingHistoryId, Username)
+		INSERT INTO #AbnormalAccountsInfoTmp (VoidingHistoryCollectionId, VoidingHistoryId, Username)
 		SELECT
 			t.c.value('@VoidingHistoryCollectionId', 'INT') AS VoidingHistoryCollectionId
 			,t.c.value('@VoidingHistoryId', 'INT') AS VoidingHistoryId
@@ -50,14 +47,14 @@ BEGIN
 		OPTION (OPTIMIZE FOR (@AbnormalAccountsInfo = NULL))
 
 		--Abnormal Bets
-		CREATE TABLE #VoidingHistoryAB (VoidingHistoryCollectionId INT, VoidingHistoryId INT, TransId BIGINT, IssueTypeId TINYINT,FilterBy TINYINT)
+		CREATE TABLE #AbnormalBetsInfoTmp (VoidingHistoryCollectionId INT, VoidingHistoryId INT, TransId BIGINT, IssueTypeId TINYINT,FilterBy TINYINT)
 
-		INSERT INTO #VoidingHistoryAB (VoidingHistoryCollectionId, VoidingHistoryId, IssueTypeId, FilterBy, TransId)
+		INSERT INTO #AbnormalBetsInfoTmp (VoidingHistoryCollectionId, VoidingHistoryId, IssueTypeId, FilterBy, TransId)
 		SELECT
 			t.c.value('@VoidingHistoryCollectionId', 'INT') AS VoidingHistoryCollectionId
 			,t.c.value('@VoidingHistoryId', 'INT') AS VoidingHistoryId		
-			,t.c.value('@IssueTypeId', 'TINYINT') AS MessageId
-			,t.c.value('@FilterBy', 'TINYINT') AS MessageId
+			,t.c.value('@IssueTypeId', 'TINYINT') AS IssueTypeId
+			,t.c.value('@FilterBy', 'TINYINT') AS FilterBy
 			,u.TransId
 		FROM @AbnormalBetsInfo.nodes('root/r') AS t(c)
 		CROSS APPLY
@@ -67,42 +64,42 @@ BEGIN
 		) AS u(TransId)
 		OPTION (OPTIMIZE FOR (@AbnormalBetsInfo = NULL))
 
-		CREATE CLUSTERED INDEX Ix_VoidingHistory ON #MessageLst (VoidingHistoryId, VoidingHistoryCollectionId)
+		CREATE CLUSTERED INDEX Ix_VoidingHistory ON #AbnormalAccountsInfoTmp (VoidingHistoryId, VoidingHistoryCollectionId)
 	END
 
 	/*Get Username list for Abnormal Accounts*/
 	BEGIN
 		UPDATE m
 			SET m.CustId = c.custid, m.SiteName = c.Site
-		FROM #MessageLst m
+		FROM #AbnormalAccountsInfoTmp m
 			INNER JOIN CustDB.dbo.Customer c WITH(NOLOCK) ON c.username = m.Username
 
 		DELETE m
-		FROM #MessageLst m
+		FROM #AbnormalAccountsInfoTmp m
 		WHERE EXISTS (
 			SELECT 1 FROM CustDB.dbo.Site s WITH(NOLOCK) 
 			WHERE s.site = m.SiteName AND s.SiteDBGroupID <> @SiteDBGroupID
 		)
 
-		CREATE TABLE #Result (VoidingHistoryId INT,CustId INT)
-		CREATE CLUSTERED INDEX Ix_Result ON #Result (VoidingHistoryId)
+		CREATE TABLE #VoidedMember (VoidingHistoryId INT,CustId INT)
+		CREATE CLUSTERED INDEX Ix_Result ON #VoidedMember (VoidingHistoryId)
 
-		INSERT INTO #Result (VoidingHistoryId, CustId)
+		INSERT INTO #VoidedMember (VoidingHistoryId, CustId)
 		SELECT DISTINCT VoidingHistoryId, CustId
 		FROM dbo.zzzbettrans b WITH(NOLOCK)
-		WHERE EXISTS(SELECT 1 FROM #MessageLst m WHERE b.VoidingHistoryId = m.VoidingHistoryId AND b.SiteDBGroupID = @SiteDBGroupID)
+		WHERE EXISTS(SELECT 1 FROM #AbnormalAccountsInfoTmp m WHERE b.VoidingHistoryId = m.VoidingHistoryId AND b.SiteDBGroupID = @SiteDBGroupID)
 
 		UPDATE m
 			SET m.IsValid = 1
-		FROM #MessageLst m
+		FROM #AbnormalAccountsInfoTmp m
 		WHERE EXISTS (
-			SELECT 1 FROM #Result r 
+			SELECT 1 FROM #VoidedMember r 
 				INNER JOIN CustDB.dbo.Customer c WITH(ROWLOCK) ON c.custid = r.CustId
 			WHERE m.VoidingHistoryId = r.VoidingHistoryId	
 				AND m.CustId IN (c.custid, c.recommend, c.mrecommend, c.srecommend)
 		)
 
-		DELETE #MessageLst WHERE IsValid = 0
+		DELETE #AbnormalAccountsInfoTmp WHERE IsValid = 0
 	END
 
 	/*Get bettype for Abnormal Bets*/
@@ -112,7 +109,7 @@ BEGIN
 		INSERT INTO @tblRecommendBettype (VoidingHistoryCollectionId, recommend, bettype, liveindicator, IsParlay)
 		SELECT vh.VoidingHistoryCollectionId, ISNULL(b.recommend, bt.recommend), ISNULL(b.bettype, bt.bettype), ISNULL(ISNULL(b.liveindicator, bt.liveindicator), 0)
 			   ,MAX(CASE WHEN vh.FilterBy = 1 AND vh.IssueTypeId = 11 THEN 1 ELSE 0 END) AS IsParlay
-		FROM #VoidingHistoryAB vh
+		FROM #AbnormalBetsInfoTmp vh
 			OUTER APPLY (
 				SELECT TOP 1 b.bettype, b.liveindicator, b.recommend
 				FROM dbo.bettrans b WITH (NOLOCK)
@@ -131,20 +128,21 @@ BEGIN
 	BEGIN
 		SELECT VoidingHistoryCollectionId, Recommend, Bettype, Liveindicator, IsParlay 
 		FROM @tblRecommendBettype
+		ORDER BY VoidingHistoryCollectionId ASC
 
 		;WITH CTE_Message AS
 		(
 			SELECT DISTINCT m.VoidingHistoryCollectionId, m.VoidingHistoryId, m.Username
-			FROM #MessageLst m
+			FROM #AbnormalAccountsInfoTmp m
 		)
 		SELECT VoidingHistoryCollectionId, VoidingHistoryId, STRING_AGG(Username, ',') WITHIN GROUP (ORDER BY Username ASC) AS Usernames
 		FROM CTE_Message m
 		GROUP BY VoidingHistoryCollectionId, VoidingHistoryId
+		ORDER BY VoidingHistoryCollectionId ASC, VoidingHistoryId ASC
 	END
 	
-	DROP TABLE #MessageLst
-	DROP TABLE #Result
-	DROP TABLE #VoidingHistoryAB
-	DROP TABLE #Site
+	DROP TABLE #AbnormalAccountsInfoTmp
+	DROP TABLE #AbnormalBetsInfoTmp
+	DROP TABLE #VoidedMember
 END
 GO

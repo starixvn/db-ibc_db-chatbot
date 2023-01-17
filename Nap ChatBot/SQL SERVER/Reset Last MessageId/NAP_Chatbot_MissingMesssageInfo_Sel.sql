@@ -11,10 +11,11 @@ AS
 
 	Revisions:
 		- 20211007@Malcolm: Initialize SP [RedmineID: #162825]
+		- 20220116@Malcolm: Scale out for ChatBot [RedmineId: #181907]
 	. @MessageList
 			<root>
-				<r JobIdentify="1" FromMessageId="1" ToMessageId="2" PostTime="2021-01-01"/>
-				<r JobIdentify="3" FromMessageId="1" ToMessageId="2" PostTime="2021-06-01"/>
+				<r JobIdentify="1" ReferenceId="1"/>
+				<r JobIdentify="3" ReferenceId="1"/>
 			</root>
 
 	. @MsgContentsTypeList
@@ -25,16 +26,18 @@ AS
 
 	. @RequestList
 			<root>
-				<r MessageId="1" RequestId="1"/>
-				<r MessageId="12" RequestId="2"/>
+				<r VoidingHistoryCollectionId="1" MessageId="1" RequestId="1"/>
+				<r VoidingHistoryCollectionId="2" MessageId="12" RequestId="2"/>
 			</root>
 */
 BEGIN
 	SET NOCOUNT ON
 	
-	DECLARE @FromMessageId INT, @ToMessageId INT, @PostTime DATETIME
+	DECLARE @FromMessageId INT, @ToMessageId INT
 
-	DECLARE @Msg TABLE (MessageId INT, Content_en NVARCHAR(4000), Posttime DATETIME, JobIdentify TINYINT)
+	SELECT @ToMessageId = MAX(MessageId) FROM dbo.Msg WITH(NOLOCK)
+
+	DECLARE @Msg TABLE (VoidingHistoryCollectionId INT, MessageId INT, MessageIds VARCHAR(MAX), Content_en NVARCHAR(4000), Posttime DATETIME, JobIdentify TINYINT)
 
 	DECLARE @MsgContentType TABLE (JobIdentify INT, MsgContentType TINYINT)
 	INSERT INTO @MsgContentType (JobIdentify, MsgContentType)
@@ -45,21 +48,20 @@ BEGIN
 	WHERE t.c.value ('@JobIdentify', 'TINYINT') <> 0
 	OPTION (OPTIMIZE FOR (@MsgContentsTypeList = NULL))
 
-	DECLARE @Message TABLE (JobIdentify TINYINT, FromMessageId INT, ToMessageId INT, PostTime DATETIME)
-	INSERT INTO @Message (JobIdentify, FromMessageId, ToMessageId, PostTime)
+	DECLARE @Message TABLE (JobIdentify TINYINT, FromMessageId INT)
+	INSERT INTO @Message (JobIdentify, FromMessageId)
 	SELECT 
 		t.c.value ('@JobIdentify', 'TINYINT') AS JobIdentify
-		,t.c.value ('@FromMessageId', 'INT') AS FromMessageId
-		,t.c.value ('@ToMessageId', 'INT') AS ToMessageId
-		,t.c.value ('@PostTime', 'DATETIME') AS PostTime
+		,t.c.value ('@ReferenceId', 'INT') AS FromMessageId
 	FROM @MessageList.nodes('root/r') t(c)
 	WHERE t.c.value ('@JobIdentify', 'TINYINT') <> 0
 	OPTION (OPTIMIZE FOR (@MessageList = NULL))
 
-	DECLARE @Request TABLE (MessageId INT, RequestId INT)
-	INSERT INTO @Request (MessageId, RequestId)
-	SELECT 
-		t.c.value ('@MessageId', 'INT') AS MessageId
+	DECLARE @Request TABLE (VoidingHistoryCollectionId INT, MessageId INT, RequestId INT)
+	INSERT INTO @Request (VoidingHistoryCollectionId, MessageId, RequestId)
+	SELECT
+		t.c.value ('@VoidingHistoryCollectionId', 'INT') AS VoidingHistoryCollectionId
+		,t.c.value ('@MessageId', 'INT') AS MessageId
 		,t.c.value ('@RequestId', 'INT') AS RequestId
 	FROM @RequestList.nodes('root/r') t(c)
 	WHERE t.c.value ('@RequestId', 'INT') <> 0
@@ -67,22 +69,21 @@ BEGIN
 
 	IF EXISTS (SELECT 1 FROM @Message WHERE JobIdentify = 1)
 	BEGIN
-		SELECT @FromMessageId = NULL, @ToMessageId = NULL, @PostTime = NULL
-		SELECT TOP(1) @FromMessageId = FromMessageId, @ToMessageId = ToMessageId, @PostTime = PostTime FROM @Message WHERE JobIdentify = 1
+		SELECT @FromMessageId = NULL
+		SELECT TOP(1) @FromMessageId = FromMessageId FROM @Message WHERE JobIdentify = 1
 
 		DECLARE @DepositSuper TABLE (CustId INT PRIMARY KEY, Site VARCHAR(50))
 		INSERT INTO @DepositSuper (CustId, Site)
 		SELECT CustId, site FROM DBACC.bodb02.dbo.Dep_CustSuper WITH (NOLOCK) WHERE site IN ('spondemo' ,'Athena000') OR Currency NOT IN (20, 27, 28)
 
-		INSERT INTO @Msg (MessageId, Content_en, JobIdentify, Posttime)
-		SELECT m.MessageId, m.Content_en, 1 AS JobIdentify, m.PostTime
+		INSERT INTO @Msg (VoidingHistoryCollectionId, MessageId, Content_en, JobIdentify, Posttime)
+		SELECT MessageId, m.MessageId, m.Content_en, 1 AS JobIdentify, m.PostTime
 		FROM dbo.Msg m WITH(NOLOCK)
 		WHERE m.MessageId > @FromMessageId AND m.MessageId <= @ToMessageId
 			AND m.MsgType = 1
 			AND EXISTS (SELECT 1 FROM @MsgContentType mt WHERE mt.MsgContentType = m.MsgContentsType AND mt.JobIdentify = 1)
 			AND m.IsBatch = 1
 			AND m.Content_en LIKE '%@@%'
-			AND m.PostTime >= DATEADD(HOUR, - 1, @PostTime)
 			AND EXISTS (
 				SELECT 1 
 				FROM dbo.MsgTarget mt WITH(NOLOCK)
@@ -97,23 +98,32 @@ BEGIN
 	
 	IF EXISTS (SELECT 1 FROM @Request)
 	BEGIN
-		INSERT INTO @Msg (MessageId, Content_en, JobIdentify, Posttime)
-		SELECT m.MessageId, m.Content_en, 2 AS JobIdentify, PostTime
-		FROM dbo.Msg m WITH(NOLOCK)
-		WHERE EXISTS (SELECT 1 FROM @Request r WHERE r.MessageId = m.MessageId)
+		;WITH CTE_Session AS
+		(	
+			SELECT 
+				r.VoidingHistoryCollectionId
+				,MIN(MessageId) AS MessageId
+				,STRING_AGG(CONVERT(VARCHAR(50), r.MessageId), ',') WITHIN GROUP(ORDER BY r.MessageId) AS MessageIds
+			FROM @Request r
+			GROUP BY r.VoidingHistoryCollectionId
+		)
+		INSERT INTO @Msg (VoidingHistoryCollectionId, MessageIds, Content_en, JobIdentify, Posttime)
+		SELECT c.VoidingHistoryCollectionId, c.MessageIds, m.Content_en, 2 AS JobIdentify, m.PostTime
+		FROM CTE_Session c
+			INNER JOIN dbo.Msg m WITH(NOLOCK) ON m.MessageId = c.MessageId
 	END
 
 	IF EXISTS (SELECT 1 FROM @Message WHERE JobIdentify = 3)
 	BEGIN
-		SELECT @FromMessageId = NULL, @ToMessageId = NULL, @PostTime = NULL
-		SELECT TOP(1) @FromMessageId = FromMessageId, @ToMessageId = ToMessageId, @PostTime = PostTime FROM @Message WHERE JobIdentify = 3
+		SELECT @FromMessageId = NULL
+		SELECT TOP(1) @FromMessageId = FromMessageId FROM @Message WHERE JobIdentify = 3
 
 		DECLARE @DepositSite TABLE (SiteName VARCHAR(50), PRIMARY KEY (SiteName))
 		INSERT INTO @DepositSite (SiteName)
 		SELECT Site FROM DBACC.bodb02.dbo.Site WITH(NOLOCK) WHERE isDeposit = 1;
 
-		INSERT INTO @Msg (MessageId, Content_en, JobIdentify, Posttime)
-		SELECT m.MessageId, m.Content_en, 3 AS JobIdentify, PostTime
+		INSERT INTO @Msg (VoidingHistoryCollectionId, MessageId, Content_en, JobIdentify, Posttime)
+		SELECT MessageId, m.MessageId, m.Content_en, 3 AS JobIdentify, PostTime
 		FROM dbo.Msg m WITH(NOLOCK)
 		WHERE m.MessageId > @FromMessageId AND m.MessageId <= @ToMessageId
 			AND m.msgtype = 3
@@ -126,11 +136,18 @@ BEGIN
 						INNER JOIN @DepositSite ds ON ms.SiteName = ds.SiteName
 					WHERE mt.MessageId = m.MessageId 
 			)
-		    AND m.PostTime >= DATEADD(HOUR, - 1, @PostTime)
-		ORDER BY MessageId
+		ORDER BY m.MessageId
 		OPTION(RECOMPILE)
 	END
 
-	SELECT MessageId, Content_en, DATEADD(HOUR, 12, Posttime) AS Posttime, JobIdentify FROM @Msg ORDER BY JobIdentify ASC, MessageId DESC
+	SELECT 
+		CASE WHEN JobIdentify = 2 THEN VoidingHistoryCollectionId ELSE NULL END AS VoidingHistoryCollectionId
+		,MessageId
+		,MessageIds
+		,Content_en
+		,DATEADD(HOUR, 12, Posttime) AS Posttime
+		,JobIdentify 
+	FROM @Msg
+	ORDER BY JobIdentify ASC, VoidingHistoryCollectionId DESC, MessageId DESC
 END
 GO

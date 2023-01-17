@@ -12,49 +12,44 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_MsgSetting_SpecialDelete_Abno
     Revisions :
       - 20200214@Percy: Initiliaze SP [RedmineID: #127944]
 	  - 20210722@Malcolm: Change msg content type for abnormal accounts [RedmineId : #158723] 
+	  - 20230128@Malcolm: Scale for ChatBot [RedmineId : #181907] 
   */
 )
 SQL SECURITY DEFINER
 BEGIN
   # Variables
   DECLARE iLoop INT;
-  DECLARE batchSize INT;
-  DECLARE previousMaxMsgID INT;
+  DECLARE BatchSize INT;
+  DECLARE LastLogId INT;
   DECLARE templateContentType JSON;
-  DECLARE msgContentTypeLst TEXT;
+  DECLARE MsgContentsTypeLst TEXT;
   
   # Get setting  
-  SELECT Value INTO batchSize
-    FROM SystemSetting
-    WHERE ID = 7;
+  SELECT Value INTO BatchSize FROM SystemSetting WHERE ID = 7;
 
-  SELECT Value INTO previousMaxMsgID
-    FROM SystemSetting
-    WHERE ID = 8;
+  SELECT Value INTO LastLogId FROM SystemSetting WHERE ID = 8;
 
-	SELECT ss.Value INTO templateContentType
-    FROM SystemSetting ss
-    WHERE ss.ID = 9;
+  SELECT ss.Value INTO templateContentType FROM SystemSetting ss WHERE ss.ID = 9;
 
   DROP TEMPORARY TABLE IF EXISTS tmp_MsgContentType;
-  CREATE TEMPORARY TABLE IF NOT EXISTS tmp_MsgContentType(
+  CREATE TEMPORARY TABLE IF NOT EXISTS tmp_MsgContentType
+  (
     MsgContentType INT
-    );
+  );
+  
+  SELECT GROUP_CONCAT(DISTINCT t.MsgContentsType ORDER BY t.MsgContentsType SEPARATOR ',') INTO MsgContentsTypeLst
+  FROM 
+ 	JSON_TABLE
+ 	(
+ 		templateContentType,
+ 		"$[*]"
+ 		COLUMNS
+ 		(
+ 				MsgContentsType INT PATH "$.MsgContentsType"
+ 		)
+  	 ) AS t;
 
-  SET iLoop = 0;
-  WHILE (JSON_EXTRACT(templateContentType, CONCAT('$[',iLoop, '].MsgContentsType'))  IS NOT NULL) DO
-    INSERT INTO tmp_MsgContentType(MsgContentType)
-      VALUES (
-      JSON_UNQUOTE(JSON_EXTRACT(templateContentType, CONCAT('$[', iLoop, '].MsgContentsType')))
-      );
-
-    SET iLoop := iLoop + 1;
-  END WHILE;
-
-  SELECT GROUP_CONCAT(DISTINCT MsgContentType ORDER BY MsgContentType SEPARATOR ',') INTO msgContentTypeLst
-    FROM tmp_MsgContentType;
-
-  SELECT previousMaxMsgID AS MaxMessageID, batchSize AS BatchSize, msgContentTypeLst AS MsgContentsTypeLst;
+  SELECT LastLogId, BatchSize, MsgContentsTypeLst;
 END;
 
 //
