@@ -14,6 +14,7 @@ AS
 	Revisions:
 		- 20220325@Johnson: initial sp [redmine: #167819]
 		- 20220824@Johnson: add CustomerLevel [redmine: #176397]
+		- 20230220@Johnson: get FunctionKey for clone account [redmine:#183697]
 	Parameter's Explanation:
 		- @IsTest: 0: BOT in PRO/ 1 Bot in UAT
 */
@@ -39,7 +40,7 @@ BEGIN
 		AND c.Status = @Status
 		AND c.IsVerifyOTP = @IsVerifyOTP
 		
-	SELECT f.FunctionID, f.FunctionName, f.Type, cf.Status
+	SELECT f.FunctionID, f.FunctionName, f.FunctionKey, f.Type, cf.Status
 	FROM CustBotFunction cf WITH(NOLOCK) 
 		INNER JOIN BotFunction f WITH(NOLOCK) ON cf.FunctionID = f.FunctionID
 	WHERE cf.userid = @userid

@@ -12,6 +12,7 @@ AS
 	
 	Revisions:
 		- 20220420@Johnson: initial sp [redmine: #167819]
+		- 20230220@Johnson: get FunctionKey for clone account [redmine:#183697]
 		
 	Parameter's Explanation:
 		- @IsTest: 0: BOT in PRO/ 1 Bot in UAT	
@@ -32,7 +33,7 @@ BEGIN
 	
 	SELECT * FROM #Result	
 	
-	SELECT cf.userid,f.FunctionID, f.FunctionName, f.Type, cf.Status
+	SELECT cf.userid,f.FunctionID, f.FunctionName, f.FunctionKey, f.Type, cf.Status
 	FROM CustBotFunction cf WITH(NOLOCK) 
 		INNER JOIN BotFunction f WITH(NOLOCK) ON cf.FunctionID = f.FunctionID
 	WHERE cf.userid IN (SELECT userid FROM #Result)
