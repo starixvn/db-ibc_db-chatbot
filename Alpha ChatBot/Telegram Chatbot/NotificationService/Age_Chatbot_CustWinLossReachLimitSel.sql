@@ -11,7 +11,7 @@ AS
 	
 	Revisions:
 		- 20220513@Johnson: initial sp [redmine: #167819]
-		
+		- 20230221@Johnson: get product from ProductSettingDetail with settingstatus <> 2 [redmine:#184137]
 	-Parameter's Explanation:			
 */
 BEGIN
@@ -38,7 +38,7 @@ BEGIN
 	
 	SELECT rs.*, su.username as super, m.username as master, a.username as agent, s.RealProductId ProductID
 	FROM #Result rs
-		INNER JOIN ProductSettingDetail s WITH(NOLOCK) ON rs.bettype = s.bettype and SettingType = 6
+		INNER JOIN ProductSettingDetail s WITH(NOLOCK) ON rs.bettype = s.bettype and SettingType = 6 AND SettingStatus <> 2
 		INNER JOIN customer su WITH(NOLOCK) ON rs.srecommend = su.custid
 		INNER JOIN customer m WITH(NOLOCK) ON rs.mrecommend = m.custid
 		INNER JOIN customer a WITH(NOLOCK) ON rs.recommend = a.custid	
