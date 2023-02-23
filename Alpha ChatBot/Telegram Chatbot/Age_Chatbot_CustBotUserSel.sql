@@ -2,7 +2,7 @@
 
 ALTER PROCEDURE [dbo].[Age_Chatbot_CustBotUserSel] 	
 	@ChatID BIGINT,
-	@BotID INT,
+	@BotID INT = 0,
 	@IsTest BIT = 0
 AS
 /*
@@ -20,13 +20,16 @@ AS
 BEGIN
 	SET NOCOUNT ON;
 	
-	CREATE TABLE #Result(UserID INT,CustID INT,SubAccID INT,CustomerLevel TINYINT,Language VARCHAR(10))
+	CREATE TABLE #Result(UserID INT,CustID INT,SubAccID INT,CustomerLevel TINYINT,Language VARCHAR(10), BotID INT)
 	
-	INSERT INTO #Result(UserID,CustID,SubAccID,CustomerLevel,Language)
-	SELECT ca.UserID, ca.custid, ca.SubAccID, ca.CustomerLevel, ca.Language	
+	IF @BotID = 0
+		SELECT @BotID = NULL
+		
+	INSERT INTO #Result(UserID,CustID,SubAccID,CustomerLevel,Language,BotID)
+	SELECT ca.UserID, ca.custid, ca.SubAccID, ca.CustomerLevel, ca.Language,cm.BotID	
 	FROM CustBotMessenger cm WITH(NOLOCK)
 		INNER JOIN CustBotAccount ca WITH(NOLOCK) ON cm.userid = ca.userid
-	WHERE BotID = @BotID
+	WHERE BotID = ISNULL(@BotID,BotID)
 		AND ChatID = @ChatID
 		AND Status = 1
 		AND IsVerifyOTP = 1
