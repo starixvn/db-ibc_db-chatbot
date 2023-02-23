@@ -8,7 +8,7 @@ AS
 	
 	Revisions:
 		- 20220510@Johnson: initial sp [redmine: #167819]
-		
+		- 20230221@Johnson: get product from ProductSettingDetail with settingstatus = 0 [redmine:#184137]	
 	-Parameter's Explanation:
 		
 */
@@ -48,6 +48,7 @@ BEGIN
 	FROM #tmpData t
 		INNER JOIN custinfo ci WITH(NOLOCK) ON t.custid = ci.custid
 		INNER JOIN CustWinLossLimit_Member cm WITH(NOLOCK) ON t.custid = cm.custid AND t.bettype = cm.bettype
+		INNER JOIN ProductSettingDetail ps WITH(NOLOCK) ON cm.bettype = ps.bettype AND ps.SettingType = 6 AND ps.SettingStatus = 0
 	)
 	INSERT INTO #CustWinLossLimitReach(custid,bettype,winlostdate,winlost,credit,MaxLossLimit,MaxWinLimit,WinPercent,LossPercent)
 	SELECT custid,bettype,winlostdate,winlost,credit,MaxLossLimit,MaxWinLimit,WinPercent,LossPercent
