@@ -2,7 +2,8 @@
 ALTER PROCEDURE [dbo].[Age_Chatbot_CustWinLossReachLimitSel] 
 	@batchSize 		INT,	
 	@LastLogID 		BIGINT,
-	@MaxLogID 		BIGINT = 0 OUTPUT
+	@MaxLogID 		BIGINT = 0 OUTPUT,
+	@SettingStatus TINYINT = 0
 AS
 /*
 	Created: 20220510@Johnson
@@ -12,6 +13,8 @@ AS
 	Revisions:
 		- 20220513@Johnson: initial sp [redmine: #167819]
 		- 20230221@Johnson: get product from ProductSettingDetail with settingstatus <> 2 [redmine:#184137]
+		- 20221121@Eden: Unify RNG Lottery Customer Settings [RedmineID: #180640]
+		
 	-Parameter's Explanation:			
 */
 BEGIN
@@ -30,6 +33,25 @@ BEGIN
 		INNER JOIN custinfo ci WITH(NOLOCK) ON wl.custid = ci.custid
 	WHERE LogID > @LastLogID		
 	ORDER BY LogID ASC
+
+	CREATE TABLE #ProductSettingDetail(
+		[SportType] [smallint],
+		[BetType] [smallint],
+		[RealProductID] [tinyint]
+	)
+
+	INSERT INTO #ProductSettingDetail(SportType,BetType,RealProductID)
+	SELECT SportType,bettype,RealProductId 
+	FROM dbo.f_CustSetting_ProductSettingDetailSel(@SettingStatus) d 
+	WHERE SettingType = 6
+	UNION
+	SELECT mt.SportType,mt.bettype,mt.RealProductId 
+	FROM dbo.f_CustSetting_ProductSettingDetailSel(@SettingStatus) d 
+		INNER JOIN SportBettypeSettingMatrix mt WITH(NOLOCK)
+			ON d.SportType = mt.SporttypeRefWinlossLimit
+			AND d.BetType = mt.BettypeRefWinlossLimit
+			AND mt.isLicensee = 0 and mt.Site = 'ALL'
+	WHERE SettingType = 22
 	
 	SELECT @MaxLogID = MAX(LogID) FROM #Result
 	
@@ -38,10 +60,11 @@ BEGIN
 	
 	SELECT rs.*, su.username as super, m.username as master, a.username as agent, s.RealProductId ProductID
 	FROM #Result rs
-		INNER JOIN ProductSettingDetail s WITH(NOLOCK) ON rs.bettype = s.bettype and SettingType = 6 AND SettingStatus <> 2
+		INNER JOIN #ProductSettingDetail s WITH(NOLOCK) ON rs.bettype = s.bettype
 		INNER JOIN customer su WITH(NOLOCK) ON rs.srecommend = su.custid
 		INNER JOIN customer m WITH(NOLOCK) ON rs.mrecommend = m.custid
 		INNER JOIN customer a WITH(NOLOCK) ON rs.recommend = a.custid	
 	
 	DROP TABLE #Result
+	DROP TABLE #ProductSettingDetail
 END	
