@@ -1,6 +1,6 @@
 /*<info serverAlias="DBACC-bodb02" executers="bodbAdminNet" isFunction="0" isNested="0"></info>*/
 ALTER PROCEDURE [dbo].[NAP_Chatbot_SpecialDelete_AbnormalBets_GetMessage]
-	@LastLogId	INT
+	@LastVoidingHistoryCollectionId	INT
 	,@BatchSize INT = 10
 AS
 
@@ -20,13 +20,13 @@ AS
 BEGIN
 	SET NOCOUNT ON
 
-	DECLARE @MaxLogId INT = 0
+	DECLARE @MaxVoidingHistoryCollectionId INT = 0
 
-	SELECT @MaxLogId = MAX(VoidingHistoryCollectionId) FROM dbo.VoidingHistoryCollection WITH(NOLOCK)
+	SELECT @MaxVoidingHistoryCollectionId = MAX(VoidingHistoryCollectionId) FROM dbo.VoidingHistoryCollection WITH(NOLOCK)
 
-	SELECT TOP(1) @MaxLogId = VoidingHistoryCollectionId - 1
+	SELECT TOP(1) @MaxVoidingHistoryCollectionId = VoidingHistoryCollectionId - 1
 	FROM dbo.VoidingHistoryCollection WITH(NOLOCK) 
-	WHERE VoidingHistoryCollectionId <= @MaxLogId AND IsProcessing = 1
+	WHERE VoidingHistoryCollectionId <= @MaxVoidingHistoryCollectionId AND IsProcessing = 1
 	ORDER BY VoidingHistoryCollectionId ASC
 
 	CREATE TABLE #Result 
@@ -43,7 +43,7 @@ BEGIN
 	(
 		SELECT TOP(@BatchSize) VoidingHistoryCollectionId
 		FROM dbo.VoidingHistoryCollection WITH(NOLOCK)
-		WHERE VoidingHistoryCollectionId > @LastLogId AND VoidingHistoryCollectionId <= @MaxLogId
+		WHERE VoidingHistoryCollectionId > @LastVoidingHistoryCollectionId AND VoidingHistoryCollectionId <= @MaxVoidingHistoryCollectionId
 		ORDER BY VoidingHistoryCollectionId ASC
 	)
 	INSERT INTO #Result (VoidingHistoryCollectionId, VoidingHistoryId)

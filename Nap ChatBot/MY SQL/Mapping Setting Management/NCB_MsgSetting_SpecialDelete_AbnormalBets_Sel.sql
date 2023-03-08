@@ -20,14 +20,14 @@ BEGIN
   # Variables
   DECLARE iLoop INT;
   DECLARE BatchSize INT;
-  DECLARE LastLogId INT;
+  DECLARE LastVoidingHistoryCollectionId INT;
   DECLARE templateContentType JSON;
   DECLARE MsgContentsTypeLst TEXT;
   
   # Get setting  
   SELECT Value INTO BatchSize FROM SystemSetting WHERE ID = 7;
 
-  SELECT Value INTO LastLogId FROM SystemSetting WHERE ID = 8;
+  SELECT Value INTO LastVoidingHistoryCollectionId FROM SystemSetting WHERE ID = 8;
 
   SELECT ss.Value INTO templateContentType FROM SystemSetting ss WHERE ss.ID = 9;
 
@@ -49,7 +49,7 @@ BEGIN
  		)
   	 ) AS t;
 
-  SELECT LastLogId, BatchSize, MsgContentsTypeLst;
+  SELECT LastVoidingHistoryCollectionId, BatchSize, MsgContentsTypeLst;
 END;
 
 //
