@@ -13,6 +13,7 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_NotificationList_ErrorNotifica
             - 20200204@Oliver: init SP
             - 20200302@Oliver: get additional notificationTypeId - RedmineID: #129339
 			- 20210513@Malcolm: Integrate Telegram - RedmineID: #151807
+			- 20220118@Malcolm: Scale out for ChatBot [RedmineID: #181907]
     */
 )
 BEGIN
@@ -21,6 +22,7 @@ BEGIN
     
 	SELECT DISTINCT
         n.NotificationID
+        ,msg.MessageIdList
         ,n.NotificationTypeID
         ,n.ConfigSendTime
         ,n.Title
@@ -35,6 +37,11 @@ BEGIN
     FROM Notification n
     INNER JOIN NotificationType nt ON n.NotificationTypeID = nt.NotificationTypeID
     INNER JOIN Customer c on n.CreatorID = c.custid   
+     LEFT JOIN LATERAL (
+			SELECT GROUP_CONCAT(nms.MessageID ORDER BY nms.MessageID ASC) AS MessageIdList
+			FROM NotificationSystemMsg nms 
+            WHERE nms.NotificationID = n.NotificationID
+		) AS msg ON 1 = 1
     WHERE n.StatusID = SENT_STATUSID_ERROR
 	AND n.ConfigSendTime >= DATE_ADD(UTC_TIMESTAMP(), INTERVAL -7 DAY)
     AND EXISTS (

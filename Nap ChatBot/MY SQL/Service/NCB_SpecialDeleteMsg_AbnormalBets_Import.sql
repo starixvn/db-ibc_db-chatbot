@@ -3,21 +3,26 @@ DROP PROCEDURE IF EXISTS NCB_SpecialDeleteMsg_AbnormalBets_Import;
 DELIMITER //
 
 CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_SpecialDeleteMsg_AbnormalBets_Import(
-  IN messageHeader JSON,
-  IN maxMessageID INT,
-  OUT errCode INT,
-  OUT errMsg VARCHAR(200)
+  IN messageHeader 	JSON
+  ,IN messageDetail JSON
+  ,OUT errCode 		INT
+  ,OUT errMsg 		VARCHAR(200)
 
   /*
     Creator   : 20200214@Percy
     Task      : NAP ChatBot - Get Setting for Abnormal Bets
 	DB: DBCB-ChatBot
     Params    :
-      - @MessageHeader
+      - @MessageHeader:
 							[  
-								{ "MessageID":885128, "MsgContentsType":103, "RequestIDLst":"101,102", "DecidedByLst":"Patrick,Starix", "RequestByLst":"Patrick,Starix", "VoidByLst":"Starix", "ReasonLst":"Group Betting,Others", "KickOffTime":"2020-02-12 03:00:00", "LeagueName":"ENG", "HomeName":"MC", "AwayName":"MU", "HalfTimeHomeScore":1, "HalfTimeAwayScore":0, "FullTimeHomeScore":1, "FullTimeAwayScore":1, "TypeNameLst":"Handicap,Over/Under", "TotalTickets": 1, "CreditSiteLst":"CN88,NV88", "DepositSiteLst":"12BET,Haifa", "MinWinlostDate" : "2021-01-01", "MaxWinlostDate" : "2021-04-02", "UsernameLst" : "Malcoln1", "Type" : "1", "Content_en":"", "Content_cs":"", "IsTest":0}
-								, { "MessageID":885131, "MsgContentsType":103, "RequestIDLst":"103,104", "DecidedByLst":"Patrick,Starix", "RequestByLst":"Patrick,Starix", "VoidByLst":"Starix", "ReasonLst":"Group Betting,Others", "KickOffTime":"2020-02-12 03:00:00", "LeagueName":"ENG", "HomeName":"MC", "AwayName":"MU", "HalfTimeHomeScore":1, "HalfTimeAwayScore":0, "FullTimeHomeScore":1, "FullTimeAwayScore":1, "TypeNameLst":"Moneyline", "TotalTickets": 10, "CreditSiteLst":"CN88,NV88", "DepositSiteLst":"12BET,Haifa", "MinWinlostDate" : "2021-01-01", "MaxWinlostDate" : "2021-04-02", "UsernameLst" : "Malcoln1", "Type" : "2", "Content_en":"", "Content_cs":"", "IsTest":0}
+								{ "VoidingHistoryCollectionId":885128, "RequestIDLst":"101102", "DecidedByLst":"PatrickStarix", "RequestByLst":"PatrickStarix", "VoidByLst":"Starix", "ReasonLst":"Group BettingOthers", "KickOffTime":"2020-02-12 03:00:00", "LeagueName":"ENG", "HomeName":"MC", "AwayName":"MU", "HalfTimeHomeScore":1, "HalfTimeAwayScore":0, "FullTimeHomeScore":1, "FullTimeAwayScore":1, "TypeNameLst":"HandicapOver/Under", "TotalTickets": 1, "CreditSiteLst":"CN88NV88", "DepositSiteLst":"12BETHaifa", "MinWinlostDate" : "2021-01-01", "MaxWinlostDate" : "2021-04-02", "UsernameLst" : "Malcolm1", "Type" : "1", "Content_en":"", "Content_cs":"", "IsTest":0}
+								 ,{ "VoidingHistoryCollectionId":885131, "RequestIDLst":"103104", "DecidedByLst":"PatrickStarix", "RequestByLst":"PatrickStarix", "VoidByLst":"Starix", "ReasonLst":"Group BettingOthers", "KickOffTime":"2020-02-12 03:00:00", "LeagueName":"ENG", "HomeName":"MC", "AwayName":"MU", "HalfTimeHomeScore":1, "HalfTimeAwayScore":0, "FullTimeHomeScore":1, "FullTimeAwayScore":1, "TypeNameLst":"Moneyline", "TotalTickets": 10, "CreditSiteLst":"CN88NV88", "DepositSiteLst":"12BETHaifa", "MinWinlostDate" : "2021-01-01", "MaxWinlostDate" : "2021-04-02", "UsernameLst" : "Malcoln1", "Type" : "2", "Content_en":"", "Content_cs":"", "IsTest":0}
 							]
+							
+	- @messageDetail: 		[{ "VoidingHistoryCollectionId":885128, "MessageId": 1}
+							,{ "VoidingHistoryCollectionId":885129, "MessageId": 2}
+							,{ "VoidingHistoryCollectionId":885130, "MessageId": 3}
+							,{ "VoidingHistoryCollectionId":885131, "MessageId": 4}]
 
     Revisions :
       - 20200214@Percy: Initiliaze SP [RedmineID: #127944]
@@ -27,159 +32,203 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_SpecialDeleteMsg_AbnormalBets
       - 20210722@Malcolm: Change msg content type for abnormal accounts [RedmineId : #158723] 
 	  - 20210513@Malcolm: Integrate Telegram [RedmineID: #151807]
       - 20211123@Malcolm: Voiding abnormalbet for Mix parlay [RedmineID: #163777]
+	  - 20230117@Malcolm: Scale out for ChatBot [RedmineID: #181907]
 	Param's Explanation:
-		- Type = 1: for message of abnormal bets (issue type = 11, 15)
+		- Type = 1: for message of abnormal bets (issue type = 11 15)
 		- Type = 2: for message of abnormal accounts (issue type = 13)
         - Type = 3: for message of abnormal bets (mix parlay (Filterby = 1))
   */
 )
 SQL SECURITY DEFINER
 NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
-  # Variables
-  DECLARE iLoop INT;
-  DECLARE jLoop INT;
-  DECLARE startTime DATETIME(3);
-  DECLARE finishTime DATETIME(3);
-  DECLARE duration INT;
-  DECLARE logContent TEXT CHARACTER SET utf8mb4;
-  DECLARE templateNotifcationType JSON;
-  DECLARE ccConversationGroupID TEXT;
+	# Variables
+	DECLARE iLoop INT;
+	DECLARE jLoop INT;
+	DECLARE startTime DATETIME(3);
+	DECLARE finishTime DATETIME(3);
+	DECLARE duration INT;
+	DECLARE logContent TEXT CHARACTER SET utf8mb4;
+	DECLARE templateNotifcationType JSON;
+	DECLARE ccConversationGroupID TEXT;
 
-  DECLARE createdDate DATETIME(3);
-  DECLARE ccMessageID INT;
-  DECLARE ccNotificationID INT UNSIGNED;
-  DECLARE ccIsTest TINYINT;
-  DECLARE ccChannelId TINYINT UNSIGNED;
+	DECLARE createdDate DATETIME(3);
+	DECLARE ccVoidingHistoryCollectionId INT;
+	DECLARE ccNotificationID INT UNSIGNED;
+	DECLARE ccIsTest TINYINT;
+	DECLARE ccChannelId TINYINT UNSIGNED;
 
-  # Constants
-  DECLARE ACTION_ID INT DEFAULT 18;
-  DECLARE VALUE_RUNNING TEXT DEFAULT 'Running';
-  DECLARE VALUE_DONE TEXT DEFAULT 'Done';
-  DECLARE RECIPIENT_TYPE_INTERNAL_CSD INT DEFAULT 3;
-  DECLARE STARIXIT_CUSTID INT DEFAULT 10278938;
-    
-  DECLARE CREATING_NOTIFICATION_STATUSID TINYINT UNSIGNED DEFAULT 7;
-  DECLARE CREATING_NOTIFICATION_STATUS VARCHAR(10) DEFAULT 'Creating';
-    
-  DECLARE DRAFT_NOTIFICATION_STATUSID	TINYINT UNSIGNED DEFAULT 9;
-  DECLARE DRAFT_NOTIFICATION_STATUS	VARCHAR(10) DEFAULT 'Draft';
-    
-  DECLARE PLANNED_NOTIFICATION_STATUSID	TINYINT UNSIGNED DEFAULT 0;
-  DECLARE PLANNED_NOTIFICATION_STATUS	VARCHAR(10) DEFAULT 'Planned';
-  
-  SET startTime = UTC_TIMESTAMP();
-  SET errCode = 0, errMsg = '';
+	# Constants
+	DECLARE ACTION_ID INT DEFAULT 18;
+	DECLARE VALUE_RUNNING TEXT DEFAULT 'Running';
+	DECLARE VALUE_DONE TEXT DEFAULT 'Done';
+	DECLARE RECIPIENT_TYPE_INTERNAL_CSD INT DEFAULT 3;
+	DECLARE STARIXIT_CUSTID INT DEFAULT 10278938;
+	
+	DECLARE CREATING_NOTIFICATION_STATUSID TINYINT UNSIGNED DEFAULT 7;
+	DECLARE CREATING_NOTIFICATION_STATUS VARCHAR(10) DEFAULT 'Creating';
+	
+	DECLARE DRAFT_NOTIFICATION_STATUSID	TINYINT UNSIGNED DEFAULT 9;
+	DECLARE DRAFT_NOTIFICATION_STATUS	VARCHAR(10) DEFAULT 'Draft';
+	
+	DECLARE PLANNED_NOTIFICATION_STATUSID	TINYINT UNSIGNED DEFAULT 0;
+	DECLARE PLANNED_NOTIFICATION_STATUS	VARCHAR(10) DEFAULT 'Planned';
+	
+	SET startTime = UTC_TIMESTAMP();
+	SET errCode = 0, errMsg = '';
 
-  DROP TEMPORARY TABLE IF EXISTS tmp_Notification;
-  CREATE TEMPORARY TABLE IF NOT EXISTS tmp_Notification(
-      NotificationID INT,
-      UNIQUE INDEX Index_NotificationID(NotificationID)
-    );
-    
+	DROP TEMPORARY TABLE IF EXISTS tmp_Notification;
+	CREATE TEMPORARY TABLE IF NOT EXISTS tmp_Notification(
+	  NotificationID INT
+	  ,UNIQUE INDEX Index_NotificationID(NotificationID)
+	);
+	
 	/*Step 1: Parse JSON data for message header*/
-  DROP TEMPORARY TABLE IF EXISTS tmp_MsgHeader;
-  CREATE TEMPORARY TABLE IF NOT EXISTS tmp_MsgHeader(
-    Id INT NOT NULL AUTO_INCREMENT,
-    MessageID INT,
-    IsTest TINYINT,
-    MsgContentsType INT,
-    RequestIDLst TEXT,
-    DecidedByLst TEXT,
-    RequestByLst TEXT,
-    VoidByLst TEXT,
-    ReasonLst TEXT,
-    KickOffTime TEXT,
-    LeagueName TEXT,
-    HomeName TEXT,
-    AwayName TEXT,
-    HalfTimeHomeScore TEXT,
-    HalfTimeAwayScore TEXT,
-    FullTimeHomeScore TEXT,
-    FullTimeAwayScore TEXT,
-    TypeNameLst TEXT,
-    TotalTickets INT,
-    CreditSiteLst TEXT,
-    DepositSiteLst TEXT,
-    Content_en TEXT,
-    Content_cs TEXT,
-    Content_Detail TEXT,
-    CheckMsg TEXT,
-    CheckMsgDetail TEXT,
-	MinWinlostDate DATETIME(3),
-	MaxWinlostDate DATETIME(3),
-	UsernameLst TEXT,
-	Type	INT,
-    PRIMARY KEY (Id),
-    UNIQUE INDEX Index_MessageID(MessageID)
-    );
+	DROP TEMPORARY TABLE IF EXISTS tmp_MsgHeader;
+	CREATE TEMPORARY TABLE IF NOT EXISTS tmp_MsgHeader
+	(
+		Id							INT NOT NULL AUTO_INCREMENT
+		,VoidingHistoryCollectionId INT
+		,IsTest 					TINYINT
+		,RequestIDLst 				TEXT
+		,DecidedByLst 				TEXT
+		,RequestByLst 				TEXT
+		,VoidByLst 					TEXT
+		,ReasonLst 					TEXT
+		,KickOffTime 				TEXT
+		,LeagueName 				TEXT
+		,HomeName 					TEXT
+		,AwayName 					TEXT
+		,HalfTimeHomeScore 			TEXT
+		,HalfTimeAwayScore 			TEXT
+		,FullTimeHomeScore 			TEXT
+		,FullTimeAwayScore 			TEXT
+		,TypeNameLst 				TEXT
+		,TotalTickets 				INT
+		,CreditSiteLst 				TEXT
+		,DepositSiteLst 			TEXT
+		,Content_en 				TEXT
+		,Content_cs 				TEXT
+		,Content_Detail 			TEXT
+		,CheckMsg 					TEXT
+		,CheckMsgDetail 			TEXT
+		,MinWinlostDate 			DATETIME(3)
+		,MaxWinlostDate 			DATETIME(3)
+		,UsernameLst 				TEXT
+		,Type						INT
+		,PRIMARY KEY (Id)
+		,UNIQUE INDEX Index_VoidingHistoryCollectionId(VoidingHistoryCollectionId)
+	);
 
-  SET iLoop = 0;
-  WHILE (JSON_EXTRACT(messageHeader, CONCAT('$[',iLoop, '].MessageID')) IS NOT NULL) DO
-		INSERT INTO tmp_MsgHeader
+	INSERT INTO tmp_MsgHeader
+	(
+		VoidingHistoryCollectionId 
+		,IsTest 
+		,RequestIDLst 
+		,DecidedByLst 
+		,RequestByLst 
+		,VoidByLst 
+		,ReasonLst 
+		,KickOffTime 
+		,LeagueName
+		,HomeName 
+		,AwayName 
+		,HalfTimeHomeScore 
+		,HalfTimeAwayScore 
+		,FullTimeHomeScore 
+		,FullTimeAwayScore 
+		,TypeNameLst 
+		,TotalTickets 
+		,CreditSiteLst 
+		,DepositSiteLst 
+		,Content_en 
+		,Content_cs
+		,MinWinlostDate 
+		,MaxWinlostDate 
+		,UsernameLst
+		,Type 
+		,CheckMsg
+	)
+	SELECT 
+		VoidingHistoryCollectionId 
+		,IsTest 
+		,RequestIDLst 
+		,DecidedByLst 
+		,RequestByLst 
+		,VoidByLst 
+		,ReasonLst 
+		,KickOffTime 
+		,LeagueName
+		,HomeName 
+		,AwayName 
+		,HalfTimeHomeScore 
+		,HalfTimeAwayScore 
+		,FullTimeHomeScore 
+		,FullTimeAwayScore 
+		,TypeNameLst 
+		,TotalTickets 
+		,CreditSiteLst 
+		,DepositSiteLst 
+		,Content_en 
+		,Content_cs
+		,MinWinlostDate 
+		,MaxWinlostDate 
+		,UsernameLst
+		,Type 
+		,'' AS CheckMsg
+	FROM 
+		JSON_TABLE
 		(
-				MessageID, 
-				IsTest, 
-				MsgContentsType, 
-				RequestIDLst, 
-				DecidedByLst, 
-				RequestByLst, 
-				VoidByLst, 
-				ReasonLst, 
-				KickOffTime, 
-				LeagueName,
-				HomeName, 
-				AwayName, 
-				HalfTimeHomeScore, 
-				HalfTimeAwayScore, 
-				FullTimeHomeScore, 
-				FullTimeAwayScore, 
-				TypeNameLst, 
-				TotalTickets, 
-				CreditSiteLst, 
-				DepositSiteLst, 
-				Content_en, 
-				Content_cs,
-				MinWinlostDate, 
-				MaxWinlostDate, 
-				UsernameLst,
-				Type, 
-				CheckMsg
-		)
-        VALUES (
-			JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].MessageID'))),
-			JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].IsTest')),
-			JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].MsgContentsType'))),
-			JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].RequestIDLst'))),
-			JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].DecidedByLst'))),
-			JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].RequestByLst'))),
-			JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].VoidByLst'))),
-			JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].ReasonLst'))),
-			JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].KickOffTime'))),
-			JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].LeagueName'))),
-			JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].HomeName'))),
-			JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].AwayName'))),
-			JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].HalfTimeHomeScore'))),
-			JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].HalfTimeAwayScore'))),
-			JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].FullTimeHomeScore'))),
-			JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].FullTimeAwayScore'))),
-			JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].TypeNameLst'))),
-			JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].TotalTickets'))),
-			JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].CreditSiteLst'))),
-			JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].DepositSiteLst'))),
-			JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].Content_en'))),
-			JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].Content_cs'))),
-			NULLIF(JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].MinWinlostDate'))), 'null'),
-			NULLIF(JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].MaxWinlostDate'))), 'null'),
-			JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].UsernameLst'))),
-			JSON_UNQUOTE(JSON_EXTRACT(messageHeader, CONCAT('$[', iLoop, '].Type'))),
-			''	
-		  );
+			messageHeader
+			,"$[*]"
+			COLUMNS
+			(
+				VoidingHistoryCollectionId 	INT				PATH "$.VoidingHistoryCollectionId"
+				,IsTest 					TINYINT         PATH "$.IsTest"
+				,RequestIDLst 				TEXT            PATH "$.RequestIDLst"
+				,DecidedByLst 				TEXT            PATH "$.DecidedByLst"
+				,RequestByLst 				TEXT            PATH "$.RequestByLst"
+				,VoidByLst					TEXT            PATH "$.VoidByLst"
+				,ReasonLst 					TEXT            PATH "$.ReasonLst"
+				,KickOffTime 				TEXT            PATH "$.KickOffTime"
+				,LeagueName 				TEXT            PATH "$.LeagueName"
+				,HomeName 					TEXT            PATH "$.HomeName"
+				,AwayName 					TEXT            PATH "$.AwayName"
+				,HalfTimeHomeScore 			TEXT            PATH "$.HalfTimeHomeScore"
+				,HalfTimeAwayScore 			TEXT            PATH "$.HalfTimeAwayScore"
+				,FullTimeHomeScore 			TEXT            PATH "$.FullTimeHomeScore"
+				,FullTimeAwayScore 			TEXT            PATH "$.FullTimeAwayScore"
+				,TypeNameLst 				TEXT            PATH "$.TypeNameLst"
+				,TotalTickets 				INT             PATH "$.TotalTickets"
+				,CreditSiteLst 				TEXT            PATH "$.CreditSiteLst"
+				,DepositSiteLst 			TEXT            PATH "$.DepositSiteLst"
+				,Content_en 				TEXT            PATH "$.Content_en"
+				,Content_cs 				TEXT            PATH "$.Content_cs"
+				,MinWinlostDate 			DATETIME(3)     PATH "$.MinWinlostDate"
+				,MaxWinlostDate 			DATETIME(3)     PATH "$.MaxWinlostDate"
+				,UsernameLst 				TEXT            PATH "$.UsernameLst"
+				,Type 						INT             PATH "$.Type"
+			)
+		) AS t;
     
-    SET iLoop := iLoop + 1;
-    END WHILE;
+	DROP TEMPORARY TABLE IF EXISTS tmp_MsgDetail;
+	CREATE TEMPORARY TABLE IF NOT EXISTS tmp_MsgDetail (VoidingHistoryCollectionId INT, MessageId INT);
+	
+	INSERT INTO tmp_MsgDetail (VoidingHistoryCollectionId, MessageId)
+	SELECT VoidingHistoryCollectionId, MessageId
+	FROM 
+		JSON_TABLE
+		(
+			messageDetail
+			,"$[*]"
+			COLUMNS
+			(
+				VoidingHistoryCollectionId 	INT PATH "$.VoidingHistoryCollectionId"
+				,MessageId					INT PATH "$.MessageId"
+			)
+		) AS t;
     
-  #Update Content_Detail
-  UPDATE tmp_MsgHeader
+    #Update Content_Detail
+	UPDATE tmp_MsgHeader
     SET Content_Detail = CONCAT(
         'Request No.: ', RequestIDLst
         , '\r\n', '\r\n'
@@ -260,63 +309,59 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
         , IFNULL(Content_cs, '')
         )
 	WHERE Type = 3;
-
-  /*Step 2: Parse JSON data for message template, notification type*/
-  DROP TEMPORARY TABLE IF EXISTS Tmp_templateNotifcationType;
-  CREATE TEMPORARY TABLE Tmp_templateNotifcationType (ID INT AUTO_INCREMENT ,templateNotifcationTypeValue JSON, PRIMARY KEY (ID));
-  INSERT INTO Tmp_templateNotifcationType (templateNotifcationTypeValue)
-  SELECT Value 
+	
+	/*Step 2: Parse JSON data for message template notification type*/
+	SELECT Value INTO templateNotifcationType
     FROM SystemSetting
     WHERE ID = 9;
 
-  DROP TEMPORARY TABLE IF EXISTS tmp_MsgContentTypeTemplate;
-  CREATE TEMPORARY TABLE IF NOT EXISTS tmp_MsgContentTypeTemplate(
-    NotificationTypeID INT,
-    NotificationTemplateID INT,
-    TemplateTitle VARCHAR(300),
-	TemplateContent MEDIUMTEXT,
-    IsTest TINYINT,
-    StatusID TINYINT UNSIGNED,
-    Status VARCHAR(10),
-	Type TINYINT UNSIGNED PRIMARY KEY
-  );
- 
-  SET jLoop = 1;
-  WHILE (EXISTS(SELECT 1 FROM Tmp_templateNotifcationType WHERE ID = jLoop)) DO
-	 SET iLoop = 0;
-     SELECT templateNotifcationTypeValue INTO templateNotifcationType FROM Tmp_templateNotifcationType WHERE ID = jLoop;
-	 WHILE (JSON_EXTRACT(templateNotifcationType, CONCAT('$[',iLoop, '].MsgContentsType')) IS NOT NULL) DO
-		 INSERT INTO tmp_MsgContentTypeTemplate(Type, NotificationTypeID, NotificationTemplateID, IsTest)
-		   VALUES (
-				 JSON_UNQUOTE(JSON_EXTRACT(templateNotifcationType, CONCAT('$[', iLoop, '].Type'))),
-				 JSON_UNQUOTE(JSON_EXTRACT(templateNotifcationType, CONCAT('$[', iLoop, '].NotificationTypeID'))),
-				 JSON_UNQUOTE(JSON_EXTRACT(templateNotifcationType, CONCAT('$[', iLoop, '].NotificationTemplateID'))),
-				 JSON_UNQUOTE(JSON_EXTRACT(templateNotifcationType, CONCAT('$[', iLoop, '].IsTest')))
+	DROP TEMPORARY TABLE IF EXISTS tmp_MsgContentTypeTemplate;
+	CREATE TEMPORARY TABLE tmp_MsgContentTypeTemplate
+	(
+		NotificationTypeID 		INT
+		,NotificationTemplateID INT
+		,TemplateTitle 			VARCHAR(300)
+		,TemplateContent 		MEDIUMTEXT
+		,IsTest 				TINYINT
+		,StatusID 				TINYINT UNSIGNED
+		,Status 				VARCHAR(10)
+		,Type 					TINYINT UNSIGNED PRIMARY KEY
+	);
+  
+	INSERT INTO tmp_MsgContentTypeTemplate (Type, NotificationTypeID, NotificationTemplateID, IsTest)
+	SELECT t.Type, t.NotificationTypeID, t.NotificationTemplateID, t.IsTest
+	FROM 
+		JSON_TABLE
+		(
+			templateNotifcationType
+			,"$[*]"
+			COLUMNS
+			(
+  				Type 					TINYINT  PATH "$.Type" 
+  				,NotificationTypeID 	INT 	 PATH "$.NotificationTypeID" 
+  				,NotificationTemplateID INT      PATH "$.NotificationTemplateID" 
+  				,IsTest     			TINYINT  PATH "$.IsTest"
 			)
-		 ON DUPLICATE KEY UPDATE Type = Type;
-		 SET iLoop := iLoop + 1;
-      END WHILE;
-	SET jLoop := jLoop + 1;
-  END WHILE;
+		) AS t;
  
-  # Update Default status: if IsTest=1 then 'Draft', else 'Planned'
-  UPDATE tmp_MsgContentTypeTemplate
-    SET StatusID = CASE WHEN IsTest = 1 THEN DRAFT_NOTIFICATION_STATUSID ELSE PLANNED_NOTIFICATION_STATUSID END,
-        Status = CASE WHEN IsTest = 1 THEN DRAFT_NOTIFICATION_STATUS ELSE PLANNED_NOTIFICATION_STATUS END;
+	# Update Default status: if IsTest=1 then 'Draft' else 'Planned'
+	UPDATE tmp_MsgContentTypeTemplate
+    SET StatusID = CASE WHEN IsTest = 1 THEN DRAFT_NOTIFICATION_STATUSID ELSE PLANNED_NOTIFICATION_STATUSID END
+        ,Status = CASE WHEN IsTest = 1 THEN DRAFT_NOTIFICATION_STATUS ELSE PLANNED_NOTIFICATION_STATUS END;
 
   /*Step 3: Validate templates*/
-  # Get template content
-  UPDATE tmp_MsgContentTypeTemplate tmp
-    INNER JOIN NotificationTemplate nt ON tmp.NotificationTemplateID = nt.NotificationTemplateID
-    SET tmp.TemplateContent = nt.Content,
-        tmp.TemplateTitle = nt.Title;
+	# Get template content
+	UPDATE tmp_MsgContentTypeTemplate tmp
+		INNER JOIN NotificationTemplate nt ON tmp.NotificationTemplateID = nt.NotificationTemplateID
+		SET tmp.TemplateContent = nt.Content
+			,tmp.TemplateTitle = nt.Title;
 
-  # Check if there are any templates are not existing
-  IF EXISTS (
-    SELECT 1
-      FROM tmp_MsgContentTypeTemplate
-      WHERE TemplateContent IS NULL
-    ) THEN
+	# Check if there are any templates are not existing
+	IF EXISTS (
+		SELECT 1
+		FROM tmp_MsgContentTypeTemplate
+		WHERE TemplateContent IS NULL
+		) THEN
 
     SET errCode = 1801;
 
@@ -330,66 +375,65 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
     LEAVE NCB_SpecialDeleteMsg_AbnormalBets_Import;
     END IF;
 
-  # Check if there are any templates which do not have required params
-  IF EXISTS (
-    SELECT 1
-      FROM tmp_MsgContentTypeTemplate
-      WHERE TemplateContent NOT LIKE '%{General Info}%'
-    ) THEN
+	# Check if there are any templates which do not have required params
+	IF EXISTS (
+		SELECT 1
+		FROM tmp_MsgContentTypeTemplate
+		WHERE TemplateContent NOT LIKE '%{General Info}%'
+	) THEN
 
     SET errCode = 1802;
 
     SELECT GROUP_CONCAT(DISTINCT NotificationTemplateID ORDER BY NotificationTemplateID SEPARATOR ', ')
-      INTO errMsg
-      FROM tmp_MsgContentTypeTemplate
-      WHERE TemplateContent NOT LIKE '%{General Info}%';
+    INTO errMsg
+    FROM tmp_MsgContentTypeTemplate
+    WHERE TemplateContent NOT LIKE '%{General Info}%';
 
     SET errMsg = CONCAT('Notification template is not existing (IDs): ', errMsg);
 
     LEAVE NCB_SpecialDeleteMsg_AbnormalBets_Import;
     END IF;
 
-  /*Step 4: Update flag to running*/
-  UPDATE SystemSetting
+	/*Step 4: Update flag to running*/
+	UPDATE SystemSetting
     SET Value = VALUE_RUNNING
     WHERE ID = 6 AND Value = VALUE_DONE;
 
-  IF ROW_COUNT() = 0 THEN
-    LEAVE NCB_SpecialDeleteMsg_AbnormalBets_Import;
+	IF ROW_COUNT() = 0 THEN
+		LEAVE NCB_SpecialDeleteMsg_AbnormalBets_Import;
     END IF;
 
-  /*Step 5: Check if not exists Internal CSD recipients*/
-  DROP TEMPORARY TABLE IF EXISTS tmp_RecipientList;
-  CREATE TEMPORARY TABLE IF NOT EXISTS tmp_RecipientList(
-    RecipientID INT
-    );
+	/*Step 5: Check if not exists Internal CSD recipients*/
+	DROP TEMPORARY TABLE IF EXISTS tmp_RecipientList;
+	CREATE TEMPORARY TABLE IF NOT EXISTS tmp_RecipientList (RecipientID INT);
 
-  INSERT INTO tmp_RecipientList(RecipientID)
-    SELECT RecipientID
-      FROM Recipient
-      WHERE RecipientTypeID = RECIPIENT_TYPE_INTERNAL_CSD;
+	INSERT INTO tmp_RecipientList(RecipientID)
+	SELECT RecipientID
+	FROM Recipient
+	WHERE RecipientTypeID = RECIPIENT_TYPE_INTERNAL_CSD;
 
-  IF ROW_COUNT() = 0 THEN
+	IF ROW_COUNT() = 0 THEN
     UPDATE tmp_MsgHeader
       SET CheckMsg = CONCAT(CheckMsg, '- Can not map to Internal CSD Recipient(s)');
     END IF;
 
   /*Step 6: Check if Internal CSD recipients do not have any suitable chat groups*/
-  # Prepare data for Notification List
-  DROP TEMPORARY TABLE IF EXISTS tmp_NotificationRecipientList;
-  CREATE TEMPORARY TABLE IF NOT EXISTS tmp_NotificationRecipientList(
-    MessageID INT,
-    RecipientID INT,
-    ConversationGroupID INT,
-    ChatGroupTypeID SMALLINT,
-    StatusID TINYINT UNSIGNED,
-    Status VARCHAR(10),
-	ChannelId TINYINT UNSIGNED,
-    INDEX Index_MessageID(MessageID)
-    );
+	# Prepare data for Notification List
+	DROP TEMPORARY TABLE IF EXISTS tmp_NotificationRecipientList;
+	CREATE TEMPORARY TABLE IF NOT EXISTS tmp_NotificationRecipientList
+	(
+		VoidingHistoryCollectionId 	INT
+		,RecipientID 				INT
+		,ConversationGroupID 		INT
+		,ChatGroupTypeID 			SMALLINT
+		,StatusID 					TINYINT UNSIGNED
+		,Status 					VARCHAR(10)
+		,ChannelId 					TINYINT UNSIGNED
+		,INDEX Index_VoidingHistoryCollectionId(VoidingHistoryCollectionId)
+	);
 
-  INSERT INTO tmp_NotificationRecipientList(MessageID, RecipientID, ConversationGroupID, ChatGroupTypeID, StatusID, Status, ChannelId)
-    SELECT h.MessageID, r.RecipientID, gr.ConversationGroupID, ngt.ChatGroupTypeID, tpl.StatusID, tpl.Status, g.ChannelId
+	INSERT INTO tmp_NotificationRecipientList(VoidingHistoryCollectionId, RecipientID, ConversationGroupID, ChatGroupTypeID, StatusID, Status, ChannelId)
+    SELECT h.VoidingHistoryCollectionId, r.RecipientID, gr.ConversationGroupID, ngt.ChatGroupTypeID, tpl.StatusID, tpl.Status, g.ChannelId
       FROM tmp_MsgHeader h
         INNER JOIN tmp_MsgContentTypeTemplate tpl ON h.Type = tpl.Type
         INNER JOIN NotificationChatGroupType ngt ON tpl.NotificationTypeID = ngt.NotificationTypeID
@@ -399,94 +443,93 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
         INNER JOIN tmp_RecipientList r ON gr.RecipientID = r.RecipientID
       WHERE g.IsActive = 1;
 
-  UPDATE tmp_MsgHeader h
+	UPDATE tmp_MsgHeader h
     SET h.CheckMsg = CONCAT(h.CheckMsg, '- Internal CSD recipients do not have any suitable chat groups')
-    WHERE h.MessageID NOT IN (SELECT MessageID FROM tmp_NotificationRecipientList);
+    WHERE h.VoidingHistoryCollectionId NOT IN (SELECT VoidingHistoryCollectionId FROM tmp_NotificationRecipientList);
 	
-  /*Step 7: Insert Notification and NotificationSystemMsg*/
-  DROP TEMPORARY TABLE IF EXISTS tmpMessageChannel;
-  CREATE TEMPORARY TABLE tmpMessageChannel (MessageID INT, ChannelID TINYINT, INDEX Index_PK (MessageID, ChannelID));
+	/*Step 7: Insert Notification and NotificationSystemMsg*/
+	DROP TEMPORARY TABLE IF EXISTS tmpMessageChannel;
+	CREATE TEMPORARY TABLE tmpMessageChannel (VoidingHistoryCollectionId INT, ChannelID TINYINT, INDEX Index_PK (VoidingHistoryCollectionId, ChannelID));
   
-  INSERT INTO tmpMessageChannel (MessageID, ChannelId)
-  SELECT DISTINCT MessageId, ChannelId
-  FROM tmp_NotificationRecipientList r;
+	INSERT INTO tmpMessageChannel (VoidingHistoryCollectionId, ChannelId)
+	SELECT DISTINCT VoidingHistoryCollectionId, ChannelId
+	FROM tmp_NotificationRecipientList r;
 
-  SET iLoop = 1;
-  SET createdDate = UTC_TIMESTAMP();
-  WHILE (EXISTS (SELECT 1 FROM tmp_MsgHeader WHERE Id = iLoop)) DO
-    SELECT MessageID, IsTest INTO ccMessageID, ccIsTest FROM tmp_MsgHeader WHERE Id = iLoop;
+	SET iLoop = 1;
+	SET createdDate = UTC_TIMESTAMP();
+	WHILE (EXISTS (SELECT 1 FROM tmp_MsgHeader WHERE Id = iLoop)) DO
+		SELECT VoidingHistoryCollectionId, IsTest INTO ccVoidingHistoryCollectionId, ccIsTest FROM tmp_MsgHeader WHERE Id = iLoop;
 
-    WHILE EXISTS(SELECT 1 FROM tmpMessageChannel m WHERE m.MessageId = ccMessageID) DO
-	  SELECT ChannelId INTO ccChannelId FROM tmpMessageChannel m WHERE m.MessageId = ccMessageID LIMIT 1; 
+		WHILE EXISTS(SELECT 1 FROM tmpMessageChannel m WHERE m.VoidingHistoryCollectionId = ccVoidingHistoryCollectionId) DO
+			SELECT ChannelId INTO ccChannelId FROM tmpMessageChannel m WHERE m.VoidingHistoryCollectionId = ccVoidingHistoryCollectionId LIMIT 1; 
 
-      # Insert Notification
-      INSERT INTO Notification(NotificationTypeID, Title, Content, ConfigSendTime, SendImmediately, CreatorID, CreatedDate, Status, StatusID, ChannelId)
-        SELECT DISTINCT ct.NotificationTypeID, ct.TemplateTitle, REPLACE(REPLACE(ct.TemplateContent, '{General Info}', h.Content_Detail), '@@', '') Content, startTime, 0 SendImmediately, STARIXIT_CUSTID, CreatedDate, CREATING_NOTIFICATION_STATUS, CREATING_NOTIFICATION_STATUSID, ccChannelId
-          FROM tmp_MsgHeader h
-          INNER JOIN tmp_MsgContentTypeTemplate ct ON ct.Type = h.Type 
-          WHERE h.MessageID = ccMessageID;
+			# Insert Notification
+			INSERT INTO Notification(NotificationTypeID, Title, Content, ConfigSendTime, SendImmediately, CreatorID, CreatedDate, Status, StatusID, ChannelId)
+			SELECT DISTINCT ct.NotificationTypeID, ct.TemplateTitle, REPLACE(REPLACE(ct.TemplateContent, '{General Info}', h.Content_Detail), '@@', '') AS Content, startTime, 0 AS SendImmediately, STARIXIT_CUSTID, CreatedDate, CREATING_NOTIFICATION_STATUS, CREATING_NOTIFICATION_STATUSID, ccChannelId
+			FROM tmp_MsgHeader h
+			INNER JOIN tmp_MsgContentTypeTemplate ct ON ct.Type = h.Type 
+			WHERE h.VoidingHistoryCollectionId = ccVoidingHistoryCollectionId;
 
-      SELECT LAST_INSERT_ID() INTO ccNotificationID;
+			SELECT LAST_INSERT_ID() INTO ccNotificationID;
 
-      INSERT INTO tmp_Notification(NotificationID)
-        VALUES (ccNotificationID);
+			INSERT INTO tmp_Notification(NotificationID)
+			VALUES (ccNotificationID);
       
-      # Insert NotificationSystemMsg
-      INSERT INTO NotificationSystemMsg(MessageID, NotificationID, CheckMsg, CreatedDate)
-        SELECT h.MessageID, ccNotificationID, h.CheckMsg, startTime
-          FROM tmp_MsgHeader h
-          WHERE h.MessageID = ccMessageID;
+			# Insert NotificationSystemMsg
+			INSERT INTO NotificationSystemMsg(MessageID, NotificationID, CheckMsg, CreatedDate)
+			SELECT h.MessageID, ccNotificationID, NULL, startTime
+			FROM tmp_MsgDetail h
+			WHERE h.VoidingHistoryCollectionId = ccVoidingHistoryCollectionId;
 
-      #Insert recipient list
-      INSERT INTO NotificationRecipientList(NotificationID, ConversationGroupID, ChatGroupTypeID, RecipientID, Status, StatusID)
-        SELECT ccNotificationID, d.ConversationGroupID, d.ChatGroupTypeID, d.RecipientID, d.Status, d.StatusID
-        FROM tmp_NotificationRecipientList d
-        WHERE d.MessageID = ccMessageID AND d.ChannelId = ccChannelId;
+			#Insert recipient list
+			INSERT INTO NotificationRecipientList(NotificationID, ConversationGroupID, ChatGroupTypeID, RecipientID, Status, StatusID)
+			SELECT ccNotificationID, d.ConversationGroupID, d.ChatGroupTypeID, d.RecipientID, d.Status, d.StatusID
+			FROM tmp_NotificationRecipientList d
+			WHERE d.VoidingHistoryCollectionId = ccVoidingHistoryCollectionId AND d.ChannelId = ccChannelId;
 
-      #Update Status for Notification
-      IF ccIsTest = 1 THEN
-        UPDATE Notification
-          SET Status = DRAFT_NOTIFICATION_STATUS,
-              StatusID = DRAFT_NOTIFICATION_STATUSID
-          WHERE NotificationID = ccNotificationID;
-
-        UPDATE NotificationRecipientList
-          SET Status = DRAFT_NOTIFICATION_STATUS,
-              StatusID = DRAFT_NOTIFICATION_STATUSID
-          WHERE NotificationID = ccNotificationID;
-      ELSE
-        UPDATE Notification n
-          INNER JOIN NotificationSystemMsg nm ON nm.NotificationID = n.NotificationID
-          INNER JOIN (SELECT DISTINCT nrl.MessageID, nrl.Status, nrl.StatusID FROM tmp_NotificationRecipientList nrl) AS t ON t.MessageID = nm.MessageID
-          SET n.Status = t.Status,
-  				    n.StatusID = t.StatusID
-          WHERE n.NotificationID = ccNotificationID;
-      END IF;
-	  DELETE FROM tmpMessageChannel m WHERE m.MessageId = ccMessageID AND m.ChannelId = ccChannelId;
-	 END WHILE;
-
-    SET iLoop := iLoop + 1;
-  END WHILE;
+			#Update Status for Notification
+			IF ccIsTest = 1 THEN
+				UPDATE Notification
+				SET Status = DRAFT_NOTIFICATION_STATUS
+					,StatusID = DRAFT_NOTIFICATION_STATUSID
+				WHERE NotificationID = ccNotificationID;
+	
+				UPDATE NotificationRecipientList
+				SET Status = DRAFT_NOTIFICATION_STATUS
+					,StatusID = DRAFT_NOTIFICATION_STATUSID
+				WHERE NotificationID = ccNotificationID;
+			ELSE
+				UPDATE Notification n
+				INNER JOIN (SELECT DISTINCT nrl.VoidingHistoryCollectionId, nrl.Status, nrl.StatusID FROM tmp_NotificationRecipientList nrl) AS t 
+					ON t.VoidingHistoryCollectionId = ccVoidingHistoryCollectionId
+				SET n.Status = t.Status
+  				    ,n.StatusID = t.StatusID
+				WHERE n.NotificationID = ccNotificationID;
+			END IF;
+			DELETE FROM tmpMessageChannel m WHERE m.VoidingHistoryCollectionId = ccVoidingHistoryCollectionId AND m.ChannelId = ccChannelId;
+		END WHILE;
+		SET iLoop := iLoop + 1;
+	END WHILE;
 
 	/*Step 9: Update Setting*/
-  #Update Max MsgID
-  UPDATE SystemSetting
-  	SET Value = (SELECT MAX(MessageID) FROM tmp_MsgHeader)
-  WHERE ID = 8;
-         
-  #Update flag to 'Done'
-  UPDATE SystemSetting
-  	SET Value = VALUE_DONE
-  WHERE ID = 6 AND Value = VALUE_RUNNING;
-  
-  /*Step 10: Return imported messages*/
-  #Get ChatGroupID which receives carbon coppies of all imported messages
-  SELECT Value INTO ccConversationGroupID
-     FROM SystemSetting
-     WHERE ID = 10;
+	#Update Max VoidingHistoryCollectionId
+	UPDATE SystemSetting
+		SET Value = (SELECT MAX(VoidingHistoryCollectionId) FROM tmp_MsgHeader)
+	WHERE ID = 8;
+			
+	#Update flag to 'Done'
+	UPDATE SystemSetting
+		SET Value = VALUE_DONE
+	WHERE ID = 6 AND Value = VALUE_RUNNING;
+	
+	/*Step 10: Return imported messages*/
+	#Get ChatGroupID which receives carbon coppies of all imported messages
+	SELECT Value INTO ccConversationGroupID
+	FROM SystemSetting
+	WHERE ID = 10;
 	 
-  DROP TEMPORARY TABLE IF EXISTS tmp_Carbon;
-  CREATE TEMPORARY TABLE tmp_Carbon(ConversationGroupID INT UNSIGNED);
+	DROP TEMPORARY TABLE IF EXISTS tmp_Carbon;
+	CREATE TEMPORARY TABLE tmp_Carbon(ConversationGroupID INT UNSIGNED);
     
     IF IFNULL(ccConversationGroupID, '') <> '' THEN
 		SET @SqlCommand = REPLACE(ccConversationGroupID, ',', '''),(''');
@@ -498,37 +541,38 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 		DEALLOCATE PREPARE Stmt;
 	END IF;
   
-  #Return Bot, Chatgroup
-  SELECT g.ConversationID AS ChatGroupConversationID, g.ServiceUrl, g.ChannelID, cc.ChannelName,b.ConversationID AS BotConversationID, b.Name AS BotName
-  FROM ConversationGroup g
-  	INNER JOIN ConversationGroupBot gb ON g.ConversationGroupID = gb.ConversationGroupID
-  	INNER JOIN ConversationBot b ON b.ConversationBotID = gb.ConversationBotID
-	INNER JOIN ConversationChannel cc ON cc.ChannelId = g.ChannelId
-  	WHERE g.ConversationGroupID IN (SELECT ConversationGroupID FROM tmp_Carbon);
+	#Return Bot Chatgroup
+	SELECT g.ConversationID AS ChatGroupConversationID, g.ServiceUrl, g.ChannelID, cc.ChannelName, b.ConversationID AS BotConversationID, b.Name AS BotName
+	FROM ConversationGroup g
+		INNER JOIN ConversationGroupBot gb ON g.ConversationGroupID = gb.ConversationGroupID
+		INNER JOIN ConversationBot b ON b.ConversationBotID = gb.ConversationBotID
+		INNER JOIN ConversationChannel cc ON cc.ChannelId = g.ChannelId
+		WHERE g.ConversationGroupID IN (SELECT ConversationGroupID FROM tmp_Carbon);
   
-  #Return all imported message content
-  SELECT n.NotificationID, n.Title, n.Content, n.ChannelID, c.ChannelName
-  FROM Notification n
-	INNER JOIN ConversationChannel c ON c.ChannelID = n.ChannelId
-  WHERE n.NotificationID IN (SELECT t.NotificationID FROM tmp_Notification t);
-  
-  #Get Finish Time to calculate execution duration
-  SET finishTime = UTC_TIMESTAMP(3);
-  SET duration = TIMESTAMPDIFF(MICROSECOND, startTime, finishTime) / 1000; 	#miliseconds
-		
-  #Get Log Content, JSON format
-  SET logContent = JSON_OBJECT('MessageHeader - AbnormalBets', messageHeader);
+	#Return all imported message content
+	SELECT n.NotificationID, n.Title, n.Content, n.ChannelID, c.ChannelName
+	FROM Notification n
+		INNER JOIN ConversationChannel c ON c.ChannelID = n.ChannelId
+	WHERE n.NotificationID IN (SELECT t.NotificationID FROM tmp_Notification t);
+	
+	#Get Finish Time to calculate execution duration
+	SET finishTime = UTC_TIMESTAMP(3);
+	SET duration = TIMESTAMPDIFF(MICROSECOND, startTime, finishTime) / 1000; 	#miliseconds
+			
+	#Get Log Content JSON format
+	SET logContent = JSON_OBJECT('MessageHeader - AbnormalBets', messageHeader);
 						
-  #Write User Log
-  IF EXISTS (SELECT 1 FROM tmp_MsgHeader) THEN
-	  CALL NCB_UserLog_RunSP_Ins(
-													ACTION_ID #actionID
-													, -1  #referenceID
-													, STARIXIT_CUSTID #UserID
-													, logContent #LogContent
-													, startTime #logtime
-													, duration	#Duration
-													);
+	#Write User Log
+	IF EXISTS (SELECT 1 FROM tmp_MsgHeader) THEN
+	  CALL NCB_UserLog_RunSP_Ins 
+	  (
+			ACTION_ID #actionID
+			,-1  #referenceID
+			,STARIXIT_CUSTID #UserID
+			,logContent #LogContent
+			,startTime #logtime
+			,duration	#Duration
+	  );
     END IF;
 END;
 

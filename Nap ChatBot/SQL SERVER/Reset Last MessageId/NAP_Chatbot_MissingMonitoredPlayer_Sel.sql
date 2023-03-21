@@ -10,6 +10,7 @@ AS
 
 	Revisions:
 		- 20220823@Malcolm: Initialize SP [RedmineId: #170182]
+		- 20230128@Malcolm: Scale for ChatBot [RedmineId : #181907] 
 */
 
 BEGIN
@@ -49,10 +50,6 @@ BEGIN
 		INNER JOIN dbo.Exchange e WITH(NOLOCK) ON e.ExchangeId = c.currency
 	WHERE h.LogId > @FromLogId AND h.LogId <= @MaxLogId
 	ORDER BY LogId ASC
-
-	SELECT @MaxLogId = MAX(LogID) FROM @Tmp
-
-	SELECT @FromLogId AS FromLogId, CASE WHEN ISNULL(@MaxLogId, 0) = 0 THEN @FromLogId ELSE @MaxLogId END AS ToLogId
 
 	SELECT t.LogID,  DATEADD(HOUR, 12, t.CreatedDate) AS CreatedDate
 		, '<p>Monitored Player: ' + ISNULL(username2, '') + '('+ ISNULL(t.Username, '') + ')'  

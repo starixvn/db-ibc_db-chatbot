@@ -1,9 +1,6 @@
 /*<info serverAlias="DBMSG-bodb_Message" executers="bodbAdminNet" isFunction="0" isNested="0"></info>*/
 ALTER PROCEDURE [dbo].[NAP_Chatbot_SpecialDeleteMsg_AbnormalBets_Sel]
-	@MessageIdLst		XML,
-	@BatchSize			INT,
-	@MsgContentsTypeLst VARCHAR(2000),
-	@Environment		VARCHAR(50) = 'UAT'
+	@MessageIdLst XML
 AS
 
 /*
@@ -17,85 +14,38 @@ AS
 		- 20200701@Percy: Enhance mechaism to get new MessageId - Phase 2 [RedmineId: #135686]
 		- 20200804@Percy: Add RequestId for Ticket Voiding Abnormal Bets - Phase 3 [RedmineId: #135686]
 		- 20220728@Malcolm: Scale out DBTRANS [RedmineId: #175878]
+		- 20230128@Malcolm: Scale for ChatBot [RedmineId : #181907] 
 
 	Param's Explanation:
 		@MessageIdLst:
 			<root>
-				<r MessageId="1" RequestId="1" />
-				<r MessageId="1" RequestId="2" />
-				<r MessageId="3" RequestId="2" />
+				<r VoidingHistoryCollectionId="1" MessageId="1"/>
 			</root>
 */
 
 BEGIN
 	SET NOCOUNT ON
 
-	DECLARE @XML XML
-
 	-- Insert messages
-	CREATE TABLE #Message (MessageId INT, TargetId INT, RequestId INT, JobIdentify TINYINT)
-	INSERT INTO  #Message (MessageId, TargetId, RequestId, JobIdentify)
+	CREATE TABLE #Message (VoidingHistoryCollectionId INT, MessageId INT)
+	INSERT INTO  #Message (VoidingHistoryCollectionId, MessageId)
 	SELECT
-		t.c.value('@MessageId', 'INT') AS MessageId
-		,0 AS TargetId
-		,t.c.value('@RequestId', 'INT') AS RequestId
-		,2 AS JobIdentify
+		t.c.value('@VoidingHistoryCollectionId', 'INT') AS MessageId
+		,t.c.value('@MessageId', 'INT') AS MessageId
 	FROM @MessageIdLst.nodes('root/r') AS t(c)
 	OPTION (OPTIMIZE FOR (@MessageIdLst = NULL))
 
-	INSERT INTO dbo.MsgChatBot (MessageId, TargetId, RequestId, JobIdentify, Environment, IsFinished)
-	SELECT m.MessageId, m.TargetId, m.RequestId, m.JobIdentify, @Environment, 0
-	FROM #Message m
-		LEFT JOIN dbo.MsgChatBot mc WITH (NOLOCK)
-			ON m.MessageId = mc.MessageId
-				AND m.TargetId = mc.TargetId
-				AND m.RequestId = mc.RequestId
-				AND m.JobIdentify = mc.JobIdentify
-				AND mc.Environment = @Environment
-	WHERE mc.MessageId IS NULL
+	;WITH CTE AS
+	(
+		SELECT VoidingHistoryCollectionId, MIN(MessageId) AS MessageId
+		FROM #Message
+		GROUP BY VoidingHistoryCollectionId
+	)
+	SELECT e.VoidingHistoryCollectionId, m.Content_en, m.Content_cs
+	FROM dbo.Msg m WITH(NOLOCK)	
+		INNER JOIN CTE e ON e.MessageId = m.MessageId
+	ORDER BY VoidingHistoryCollectionId
 
 	DROP TABLE #Message
-	
-	-- MsgContentsType
-	CREATE TABLE #MsgContentsTypeLst (MsgContentsType INT)
-	CREATE UNIQUE CLUSTERED INDEX PK_MsgContentsType ON #MsgContentsTypeLst (MsgContentsType)
-
-	SET @XML = N'<root><r>' + REPLACE(@MsgContentsTypeLst, ',', '</r><r>') + '</r></root>'
-	
-	INSERT INTO #MsgContentsTypeLst(MsgContentsType)
-	SELECT r.value('.', 'NVARCHAR(15)') AS MsgContentsType
-	FROM @xml.nodes('//root/r') AS RECORDS(r)
-	WHERE LEN(ISNULL(r.value('.', 'NVARCHAR(15)'), '')) > 0
-
-	-- Get top new messages
-	DECLARE @tblMessage TABLE (MessageId INT, MsgContentsType TINYINT, Content_en NVARCHAR(4000), Content_cs NVARCHAR(4000))
-
-	INSERT INTO @tblMessage (MessageId, MsgContentsType, Content_en, Content_cs)
-	SELECT TOP (@BatchSize) m.MessageId, m.MsgContentsType, m.Content_en, m.Content_cs
-	FROM dbo.Msg m WITH (NOLOCK)
-	WHERE m.msgtype = 1
-		AND m.isbatch = 1
-		AND m.Content_en LIKE '%@@%'
-		AND EXISTS (
-			SELECT 1 FROM dbo.MsgChatBot mc WITH (NOLOCK)
-			WHERE m.MessageId = mc.MessageId
-				AND mc.TargetId = 0
-				AND mc.JobIdentify = 2
-				AND mc.Environment = @Environment
-				AND mc.IsFinished = 0
-		)
-		AND EXISTS (SELECT 1 FROM #MsgContentsTypeLst mct WHERE m.MsgContentsType = mct.MsgContentsType)
-	ORDER BY m.MessageId
-	OPTION(RECOMPILE)
-
-	SELECT mc.RequestId, m.MessageId, m.MsgContentsType, m.Content_en, m.Content_cs
-	FROM @tblMessage m
-		INNER JOIN dbo.MsgChatBot mc WITH (NOLOCK) ON m.MessageId = mc.MessageId
-	WHERE mc.TargetId = 0
-		AND mc.JobIdentify = 2
-		AND mc.Environment = @Environment
-		AND mc.IsFinished = 0
-
-	DROP TABLE #MsgContentsTypeLst
 END
 GO

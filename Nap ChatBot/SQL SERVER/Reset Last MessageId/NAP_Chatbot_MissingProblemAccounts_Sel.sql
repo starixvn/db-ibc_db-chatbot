@@ -12,6 +12,7 @@ AS
 		- 20220404@Malcolm: Initialize SP [RedmineId: #170182]
 		- 20220607@Malcolm: Get customer class from 1 to 7 [RedmineId: #173799]
 		- 20220607@Malcolm: Get customer class from 200 to 299 [RedmineId: #175973]
+		- 20230128@Malcolm: Scale for ChatBot [RedmineId : #181907] 
 */
 
 BEGIN
@@ -39,10 +40,6 @@ BEGIN
 		AND d.OldCustomerClass BETWEEN 200 AND 299
 		AND d.LogID > @FromLogId 
 		AND d.LogID <= @MaxLogId
-		
-	SELECT @MaxLogId = MAX(LogID) FROM @Tmp
-
-	SELECT @FromLogId AS FromLogId, CASE WHEN ISNULL(@MaxLogId, 0) = 0 THEN @FromLogId ELSE @MaxLogId END AS ToLogId
 
 	SELECT t.LogID,  DATEADD(HOUR, 12, t.CreatedDate) AS CreatedDate
 		, '<p>Problem Player: ' + ISNULL(c.Username, '') 

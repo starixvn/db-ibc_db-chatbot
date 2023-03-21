@@ -10,6 +10,7 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_JobInfo_Sel`(
 			- 20211010@Malcolm: Get information of Job [RedmineID: #162825]
 			- 20220414@Malcolm: Add Job [RedmineID: #170182]
 			- 20220414@Malcolm: Add Job Monitered Player [RedmineID: #174402]
+			- 20230128@Malcolm: Scale for ChatBot [RedmineId : #181907] 
     */
 )
 SQL SECURITY DEFINER
@@ -57,7 +58,7 @@ BEGIN
 	
     SELECT JobIdentify, Value AS ReferenceId 
     FROM SystemSetting 
-    WHERE Description LIKE '%Previous MaxMessageID%' OR Description LIKE '%LastLogId%' 
+    WHERE Description LIKE '%- ReferenceId -%'
     ORDER BY JobIdentify;
     
 	SELECT JobIdentify, MsgContentsType 
