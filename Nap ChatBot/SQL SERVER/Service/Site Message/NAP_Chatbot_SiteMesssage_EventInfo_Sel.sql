@@ -54,7 +54,7 @@ BEGIN
 				,l.leaguename	AS LeagueNameEN
 				,l.leaguenamecn AS LeagueNameCS
 				,h.teamname + (CASE WHEN m.IsNeutral = 1 THEN ' (N)' ELSE '' END) AS HomeNameEN
-				,h.teamnamecn + (CASE WHEN m.IsNeutral = 1 THEN ' (中)' ELSE '' END) AS HomeNameCS
+				,h.teamnamecn + (CASE WHEN m.IsNeutral = 1 THEN N' (中)' ELSE '' END) AS HomeNameCS
 				,a.teamname		AS AwayNameEN
 				,a.teamnamecn	AS AwayNameCS
 			FROM dbo.match m WITH (NOLOCK)
