@@ -19,6 +19,7 @@ AS
 		- 20211122@Malcolm: VoIding Abnormal bet for Mix Parlay [RedmineId: #163777]
 		- 20220728@Malcolm: Get tickets and username form all SiteDB [RedmineId: #175878]
 		- 20220728@Malcolm: Scale out ChatBot [RedmineId: #175878]
+		- 20230322@Roy: Chatbot - Missing text (N) for the team name [RedmineID: #185414]
 
 	Param's Explanation:
 		+ @TicketInfo:
@@ -159,15 +160,15 @@ BEGIN
 			,FullTimeHomeScore
 			,FullTimeAwayScore
 		)
-		SELECT DISTINCT vh.VoidingHistoryCollectionId, FORMAT(DATEADD(HOUR, 12, GlobalShowTime), N'h:mm tt') AS KickOffTime, l.LeagueName, h.TeamName AS HomeName, a.TeamName AS AwayName, m.hthomescore, m.htawayscore, m.finalhomescore, m.finalawayscore
+		SELECT DISTINCT vh.VoidingHistoryCollectionId, FORMAT(DATEADD(HOUR, 12, GlobalShowTime), N'h:mm tt') AS KickOffTime, l.LeagueName, h.TeamName + (CASE WHEN m.IsNeutral = 1 THEN ' (N)' ELSE '' END) AS HomeName, a.TeamName AS AwayName, m.hthomescore, m.htawayscore, m.finalhomescore, m.finalawayscore
 		FROM #AbnormalInfo vh
 			INNER JOIN dbo.TicketVoIding_RequestDetail rd WITH (NOLOCK) ON rd.RequestId = vh.RequestId
 			CROSS APPLY (
-				SELECT m.hthomescore, m.htawayscore, m.finalhomescore, m.finalawayscore, m.GlobalShowTime
+				SELECT m.hthomescore, m.htawayscore, m.finalhomescore, m.finalawayscore, m.GlobalShowTime, m.IsNeutral
 				FROM dbo.match m WITH(NOLOCK)
 				WHERE m.matchId = rd.matchId
 				UNION
-				SELECT m.hthomescore, m.htawayscore, m.finalhomescore, m.finalawayscore, m.GlobalShowTime
+				SELECT m.hthomescore, m.htawayscore, m.finalhomescore, m.finalawayscore, m.GlobalShowTime, m.IsNeutral
 				FROM dbo.match14 m WITH(NOLOCK)
 				WHERE m.matchId = rd.matchId
 			) m
