@@ -10,6 +10,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NAP_User_ReCheckIn(
 
         Revisions:
 				- 20190408@Dominic: First Commit
+				- 20230323@Roy: Chatbot for Licensee | Shorten the synchronization of User Permission Control to avoid confusing (#185539)
         
     */
 )
@@ -29,7 +30,7 @@ BEGIN
 				WHERE ou.Id = onUserId;    
 				 
 				IF ROW_COUNT() = 0 THEN
-					SELECT isKickedOut = 1;
+					SET isKickedOut = 1;
 				END IF;
 		END IF;
 END;
