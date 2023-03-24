@@ -10,6 +10,7 @@ AS
 	Revisions:
 		- 20200305@Percy: Initialize SP [RedmineID: #126143]
 		- 20200715@Percy: Return full input list of match [RedmineID: #135686]
+		- 20230322@Roy: Chatbot - Missing text (N) for the team name [RedmineID: #185414]
 */
 BEGIN
 	SET NOCOUNT ON
@@ -52,8 +53,8 @@ BEGIN
 				,l.IsTest
 				,l.leaguename	AS LeagueNameEN
 				,l.leaguenamecn AS LeagueNameCS
-				,h.teamname		AS HomeNameEN
-				,h.teamnamecn	AS HomeNameCS
+				,h.teamname + (CASE WHEN m.IsNeutral = 1 THEN ' (N)' ELSE '' END) AS HomeNameEN
+				,h.teamnamecn + (CASE WHEN m.IsNeutral = 1 THEN N' (中)' ELSE '' END) AS HomeNameCS
 				,a.teamname		AS AwayNameEN
 				,a.teamnamecn	AS AwayNameCS
 			FROM dbo.match m WITH (NOLOCK)
