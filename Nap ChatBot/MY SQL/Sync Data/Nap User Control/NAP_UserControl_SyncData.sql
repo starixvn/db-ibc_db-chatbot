@@ -742,39 +742,35 @@ BEGIN
 	DROP TEMPORARY TABLE IF EXISTS tmp_UserFuncChange;
 	CREATE TEMPORARY TABLE tmp_UserFuncChange ( UserId INT );
 	
-	##Add/Remove/Update Permission##
-	INSERT INTO tmp_UserFuncChange ( UserId )
-	SELECT UserId
-	FROM (
-		##Remove OR Update Permission##
-		SELECT uf.UserId
-		FROM NAP_UserFunction uf
-		LEFT JOIN tmp_NAP_UserFunction tmp ON uf.UserId = tmp.UserId
-			AND uf.FunctionId = tmp.FunctionId
-			AND uf.Policy = tmp.Policy
-			AND uf.SiteId = tmp.SiteId
-		WHERE tmp.UserId IS NULL
+	##Remove OR Update Permission##
+	INSERT INTO tmp_UserFuncChange (UserId)
+	SELECT uf.UserId
+	FROM NAP_UserFunction uf
+	LEFT JOIN tmp_NAP_UserFunction tmp ON uf.UserId = tmp.UserId
+		AND uf.FunctionId = tmp.FunctionId
+		AND uf.Policy = tmp.Policy
+		AND uf.SiteId = tmp.SiteId
+	WHERE tmp.UserId IS NULL
+	GROUP BY uf.UserId;
 		
-		UNION ALL
-			
-		##Add Permission##
-		SELECT tmp.UserId
-		FROM tmp_NAP_UserFunction tmp
-		LEFT JOIN NAP_UserFunction uf ON uf.UserId = tmp.UserId
-			AND uf.FunctionId = tmp.FunctionId
-			AND uf.Policy = tmp.Policy
-			AND uf.SiteId = tmp.SiteId
-		WHERE uf.UserId IS NULL
-			AND EXISTS (
-				SELECT 1
-				FROM NAP_UserFunction uf2
-				WHERE uf2.UserId = tmp.UserId
-					AND AND uf2.SiteId = tmp.SiteId
-			)
-	) t
-	GROUP BY UserId;
+	##Add Permission##
+	INSERT INTO tmp_UserFuncChange (UserId)
+	SELECT tmp.UserId
+	FROM tmp_NAP_UserFunction tmp
+	LEFT JOIN NAP_UserFunction uf ON uf.UserId = tmp.UserId
+		AND uf.FunctionId = tmp.FunctionId
+		AND uf.Policy = tmp.Policy
+		AND uf.SiteId = tmp.SiteId
+	WHERE uf.UserId IS NULL
+		AND EXISTS (
+			SELECT 1
+			FROM NAP_UserFunction uf2
+			WHERE uf2.UserId = tmp.UserId
+				AND uf2.SiteId = tmp.SiteId
+		)
+	GROUP BY tmp.UserId;
 	
-	##Mark permission changed ##
+	##Mark permission changed (tmp_UserFuncChange can dup UserId)##
 	UPDATE NAP_OnUser ou
     INNER JOIN tmp_UserFuncChange tmp ON ou.UserId = tmp.UserId
     SET ou.IsPermissionChanged = 1;
