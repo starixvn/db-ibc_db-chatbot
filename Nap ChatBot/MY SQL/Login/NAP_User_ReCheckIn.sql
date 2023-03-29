@@ -38,4 +38,3 @@ END;
 
 //
 DELIMITER ;
-GRANT EXECUTE ON PROCEDURE NAP_User_ReCheckIn TO 'ncb.admin'@'%';

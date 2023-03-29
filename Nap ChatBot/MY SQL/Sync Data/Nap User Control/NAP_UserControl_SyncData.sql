@@ -1114,4 +1114,3 @@ END;
 
 //
 DELIMITER ;
-GRANT EXECUTE ON PROCEDURE NAP_UserControl_SyncData TO 'ncb.admin'@'%';
