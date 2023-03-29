@@ -1,3 +1,4 @@
+/*<info serverAlias="DBCB-ChatBot" databaseType="2" executers="ncb.admin" isFunction="0" isNested="0"></info>*/
 DROP PROCEDURE IF EXISTS NAP_UserControl_SyncData;
 DELIMITER //
 
@@ -23,6 +24,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NAP_UserControl_SyncData(
 
         Revisions:
 				- 20190829@Oliver: First Commit
+				- 20230329@Roy: Chatbot for Licensee | Shorten the synchronization of User Permission Control to avoid confusing (#185539)
         
     */
 )
@@ -735,7 +737,48 @@ BEGIN
 
 		SET iLoop = iLoop +1;
 	END WHILE;
-
+	
+	###User Permission Control###
+	DROP TEMPORARY TABLE IF EXISTS tmp_UserFuncChange;
+	CREATE TEMPORARY TABLE tmp_UserFuncChange ( UserId INT );
+	
+	##Add/Remove/Update Permission##
+	INSERT INTO tmp_UserFuncChange ( UserId )
+	SELECT UserId
+	FROM (
+		##Remove OR Update Permission##
+		SELECT uf.UserId
+		FROM NAP_UserFunction uf
+		LEFT JOIN tmp_NAP_UserFunction tmp ON uf.UserId = tmp.UserId
+			AND uf.FunctionId = tmp.FunctionId
+			AND uf.Policy = tmp.Policy
+			AND uf.SiteId = tmp.SiteId
+		WHERE tmp.UserId IS NULL
+		
+		UNION ALL
+			
+		##Add Permission##
+		SELECT tmp.UserId
+		FROM tmp_NAP_UserFunction tmp
+		LEFT JOIN NAP_UserFunction uf ON uf.UserId = tmp.UserId
+			AND uf.FunctionId = tmp.FunctionId
+			AND uf.Policy = tmp.Policy
+			AND uf.SiteId = tmp.SiteId
+		WHERE uf.UserId IS NULL
+			AND EXISTS (
+				SELECT 1
+				FROM NAP_UserFunction uf2
+				WHERE uf2.UserId = tmp.UserId
+					AND AND uf2.SiteId = tmp.SiteId
+			)
+	) t
+	GROUP BY UserId;
+	
+	##Mark permission changed ##
+	UPDATE NAP_OnUser ou
+    INNER JOIN tmp_UserFuncChange tmp ON ou.UserId = tmp.UserId
+    SET ou.IsPermissionChanged = 1;
+	
     DELETE uf FROM NAP_UserFunction uf 
             LEFT JOIN tmp_NAP_UserFunction tmp ON uf.UserId = tmp.UserId 
                                         AND uf.FunctionId = tmp.FunctionId
