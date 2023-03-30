@@ -4,7 +4,7 @@ DELIMITER //
 
 CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NAP_User_ReCheckIn(
 	IN onUserId INT,
-    OUT isKickedOut BOOL
+    OUT isKickedOut BOOL,
     OUT isPermissionChanged BOOL
     /*
 		Creator: Dominic@20190408
