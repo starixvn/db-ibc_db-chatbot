@@ -5,6 +5,7 @@ DELIMITER //
 CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NAP_User_ReCheckIn(
 	IN onUserId INT,
     OUT isKickedOut BOOL
+    OUT isPermissionChanged BOOL
     /*
 		Creator: Dominic@20190408
         Param:
@@ -20,7 +21,7 @@ BEGIN
 		IF EXISTS (	
 				SELECT 1 
 				FROM NAP_OnUser ou
-				WHERE ou.Id = onUserId AND (ou.IsKickedOut = 1 OR ou.IsPermissionChanged = 1)
+				WHERE ou.Id = onUserId AND ou.IsKickedOut = 1
 		) THEN
 				SET isKickedOut = 1;
 		ELSE    
@@ -33,6 +34,16 @@ BEGIN
 				IF ROW_COUNT() = 0 THEN
 					SET isKickedOut = 1;
 				END IF;
+		END IF;
+		
+		IF EXISTS (
+				SELECT 1 
+				FROM NAP_OnUser ou
+				WHERE ou.Id = onUserId AND ou.IsPermissionChanged = 1
+		) THEN
+				SET isPermissionChanged = 1;
+		ELSE
+				SET isPermissionChanged = 0;
 		END IF;
 END;
 

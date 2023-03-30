@@ -4,4 +4,4 @@
   DB: ChatBot
   Task: Add new column
 */
-ALTER TABLE NAP_OnUser ADD COLUMN IsPermissionChanged BIT (1) DEFAULT NULL;
+ALTER TABLE NAP_OnUser ADD COLUMN IsPermissionChanged BIT (1) DEFAULT 0;
