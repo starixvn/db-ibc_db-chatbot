@@ -496,7 +496,7 @@ NAP_UserControl_SyncData_ByUserId:BEGIN
             , f.ModifiedBy = tmpf.ModifiedBy
             , f.ModifiedDate = tmpf.ModifiedDate
             , f.Environment = tmpf.Environment;
-
+/* --Ignore sync NAP_OnUser table
 ################# NAP_OnUser ########################### 
 
   DROP TEMPORARY TABLE IF EXISTS tmp_NAP_OnUser;
@@ -564,6 +564,7 @@ NAP_UserControl_SyncData_ByUserId:BEGIN
         ,ou.IsKickedOut = tmp.IsKickedOut
         ,ou.IP = tmp.IP
         ,ou.NetSessionId = tmp.NetSessionId;
+*/
 
 ################# NAP_Sites ########################### 
 
