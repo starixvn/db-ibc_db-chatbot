@@ -20,6 +20,7 @@ AS
 		- 20220728@Malcolm: Get tickets and username form all SiteDB [RedmineId: #175878]
 		- 20220728@Malcolm: Scale out ChatBot [RedmineId: #175878]
 		- 20230322@Roy: Chatbot - Missing text (N) for the team name [RedmineID: #185414]
+		- 20230207@Malcolm: Split 789y site [RedmineId: #182692]
 
 	Param's Explanation:
 		+ @TicketInfo:
@@ -228,18 +229,37 @@ BEGIN
 		--Info of User (Abnormal Accounts)
 		,CTE_AbnormalAccounts_Site AS
 		(
-			SELECT vh.VoidingHistoryCollectionId, f.value AS Username ,CASE WHEN s.custId IS NULL AND c.site NOT IN ('CN88', '789y') THEN 'NV88' ELSE c.site END AS site, CASE WHEN s.custId IS NULL THEN 0 ELSE 1 END AS isDeposit, CASE WHEN c.currency = 20 THEN 1 ELSE 0 END AS IsTest
+			SELECT 
+				vh.VoidingHistoryCollectionId
+				,f.value AS Username 
+				,CASE WHEN s.custId IS NULL AND c.site <> 'CN88' AND ISNULL(st.SiteLabel, '') <> '789y' THEN 'NV88' 
+				 ELSE 
+					CASE WHEN ISNULL(st.SiteLabel, '') = '789y' THEN  '789y'
+					ELSE c.site END 
+				 END AS site
+				,CASE WHEN s.custId IS NULL THEN 0 ELSE 1 END AS isDeposit
+				,CASE WHEN c.currency = 20 THEN 1 ELSE 0 END AS IsTest
 			FROM #AbnormalInfo vh
 			CROSS APPLY STRING_SPLIT(vh.Usernames, ',') f
 				INNER JOIN dbo.Customer c WITH(NOLOCK) ON c.username = CONVERT(VARCHAR(30), f.value)
+				INNER JOIN dbo.Site st WITH(NOLOCK) ON st.site = c.site
 				LEFT JOIN dbo.Dep_CustSuper s WITH(NOLOCK) ON s.custId = c.srecommend
 			WHERE vh.IssueTypeId = 13
 		)
 		,CTE_AbnormalBets_Site AS
 		(
-			SELECT t.VoidingHistoryCollectionId, CASE WHEN s.custId IS NULL AND c.site NOT IN ('CN88', '789y') THEN 'NV88' ELSE c.site END AS site, CASE WHEN s.custId IS NULL THEN 0 ELSE 1 END AS isDeposit, CASE WHEN c.currency = 20 THEN 1 ELSE 0 END AS IsTest
+			SELECT 
+				t.VoidingHistoryCollectionId
+				,CASE WHEN s.custId IS NULL AND c.site <> 'CN88' AND ISNULL(st.SiteLabel, '') <> '789y' THEN 'NV88' 
+				 ELSE 
+					CASE WHEN ISNULL(st.SiteLabel, '') = '789y' THEN  '789y'
+					ELSE c.site END 
+				 END AS site
+				,CASE WHEN s.custId IS NULL THEN 0 ELSE 1 END AS isDeposit
+				,CASE WHEN c.currency = 20 THEN 1 ELSE 0 END AS IsTest
 			FROM #AbnormalBetsInfo t
 				INNER JOIN dbo.Customer c WITH (NOLOCK) ON t.recommend = c.custId
+				INNER JOIN dbo.Site st WITH(NOLOCK) ON st.site = c.site
 				LEFT JOIN dbo.Dep_CustSuper s WITH (NOLOCK) ON c.srecommend = s.custId
 		),CTE_site AS
 		(
