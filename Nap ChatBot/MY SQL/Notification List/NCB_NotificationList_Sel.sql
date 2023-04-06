@@ -1,4 +1,4 @@
-/*<info serverAlias="DBCB-ChatBot" databaseType="2" executers="ncb.admin,vnteam" isFunction="0" isNested="0"></info>*/
+/*<info serverAlias="DBCB-ChatBot" databaseType="2" executers="ncb.admin" isFunction="0" isNested="0"></info>*/
 DROP PROCEDURE IF EXISTS NCB_NotificationList_Sel;
 
 DELIMITER //
@@ -43,7 +43,17 @@ BEGIN
     DECLARE SENT_STATUSID_RESOLVED TINYINT UNSIGNED DEFAULT 5;
     
 	DECLARE rowStart INT;
+    DECLARE prowStart INT;
+    DECLARE NDay INT;
+    DECLARE RowCount INT;
+    DECLARE pId INT;
+    DECLARE pFromSendTime DATETIME;
+    DECLARE pToSendTime DATETIME;
+    DECLARE pInsert INT;
+    
     SET rowStart =	pageSize * (pageIndex - 1);   
+    SET pInsert = 0;
+    SET RowCount = 0;
     
     SET configSendTimeTo = DATE_ADD(configSendTimeTo, INTERVAL 1 DAY);
     
@@ -105,7 +115,7 @@ BEGIN
         DEALLOCATE PREPARE stmt;
 	END IF;
     
-    #1st dataset: Return Total_Row for paging
+   /* #1st dataset: Return Total_Row for paging
     SELECT COUNT(1) Total_Row
     FROM Notification n
     WHERE n.NotificationTypeID IN (SELECT	tmp_nt.NotificationTypeID FROM tmp_notificationTypeIDLst tmp_nt)
@@ -120,7 +130,74 @@ BEGIN
             WHERE nrl.NotificationID = n.NotificationID
 			AND nrl.RecipientID IN (SELECT tmp_rid.RecipientID FROM tmp_recipientIDLst tmp_rid)
     ) AND (EXISTS (SELECT 1 FROM NotificationSystemMsg m WHERE m.NotificationID = n.NotificationID AND m.MessageID = messageId) OR IFNULL(messageId, 0) = 0);
+	*/
     
+    DROP TEMPORARY TABLE IF EXISTS tmp_RowCount;
+    CREATE TEMPORARY TABLE tmp_RowCount
+    (
+			SendTime DATETIME
+            ,Nrows INT
+    );
+	INSERT INTO tmp_RowCount (SendTime, Nrows)
+	SELECT 
+		CONVERT(n.ConfigSendTime, DATE)
+        ,COUNT(1) AS Nrows
+    FROM Notification n
+		INNER JOIN NotificationType nt ON n.NotificationTypeID = nt.NotificationTypeID
+        INNER JOIN Customer c ON n.CreatorID = c.custid
+    WHERE n.NotificationTypeID IN (SELECT tmp_nt.NotificationTypeID FROM tmp_notificationTypeIDLst tmp_nt)
+		AND n.ConfigSendTime >= configSendTimeFrom
+		AND n.ConfigSendTime < configSendTimeTo
+		AND (creatorID IS NULL OR n.CreatorID = creatorID)
+		AND n.StatusID IN (SELECT tmp_stt.StatusID FROM tmp_notificationStatusIDLst tmp_stt)
+		AND n.ChannelID IN (SELECT tmp_c.ChannelID FROM tmp_ChannelIDLst tmp_c)
+		AND EXISTS (
+			SELECT 1
+            FROM NotificationRecipientList nrl
+            WHERE nrl.NotificationID = n.NotificationID
+			AND nrl.RecipientID IN (SELECT tmp_rid.RecipientID FROM tmp_recipientIDLst tmp_rid)
+		)
+		AND (EXISTS (SELECT 1 FROM NotificationSystemMsg m WHERE m.NotificationID = n.NotificationID AND m.MessageID = messageId) OR IFNULL(messageId, 0) = 0)
+	GROUP BY CONVERT(n.ConfigSendTime, DATE);
+    
+	SELECT CONVERT(IFNULL(SUM(Nrows), 0), SIGNED) AS Total_Row FROM tmp_RowCount;
+	
+    DROP TEMPORARY TABLE IF EXISTS tmp_MonthDate;
+    CREATE TEMPORARY TABLE tmp_MonthDate 
+    (
+		SendTime DATETIME 
+        ,TotalRows INT
+    );
+    
+    INSERT INTO tmp_MonthDate (SendTime, TotalRows)
+    WITH RECURSIVE CTE AS  
+    (
+		SELECT configSendTimeFrom AS SendTime
+        UNION ALL
+        SELECT DATE_ADD(SendTime, INTERVAL 1 DAY)
+        FROM CTE
+        WHERE SendTime < configSendTimeTo
+    ) 
+    SELECT e.SendTime,n.totalRows
+	FROM CTE e,
+		LATERAL  (
+			SELECT SUM(Nrows) AS totalRows FROM tmp_RowCount t WHERE t.SendTime >= e.SendTime
+		) AS n;
+
+	-- SELECT * FROM tmp_MonthDate;
+    SELECT  
+		MAX(CASE WHEN totalRows >= (rowStart + pageSize) THEN SendTime ELSE configSendTimeFrom END) 
+		,IFNULL(MAX(CASE WHEN totalRows >= rowStart THEN DATE_ADD(SendTime, INTERVAL 1 DAY) ELSE NULL END), configSendTimeTo)
+	INTO pFromSendTime, pToSendTime
+	FROM tmp_MonthDate e;
+	-- SELECT pFromSendTime, pToSendTime;
+    WITH CTE AS
+    (
+		SELECT IFNULL(MAX(totalRows), 0) AS totalRows FROM tmp_MonthDate WHERE SendTime = pToSendTime
+    )
+    SELECT rowStart - totalRows INTO prowStart
+    FROM CTE;
+	-- SELECT prowStart;
 	#Get data based on Page Index and Page Size
     DROP TEMPORARY TABLE IF EXISTS tmp_Notification;
 	CREATE TEMPORARY TABLE tmp_Notification
@@ -140,6 +217,7 @@ BEGIN
 		,ChannelID 					TINYINT UNSIGNED
 	);
     #Get data based on Page Index and Page Size
+    
     INSERT INTO tmp_Notification 
 	(	
 		NotificationID								
@@ -170,8 +248,8 @@ BEGIN
 		INNER JOIN NotificationType nt ON n.NotificationTypeID = nt.NotificationTypeID
         INNER JOIN Customer c ON n.CreatorID = c.custid
     WHERE n.NotificationTypeID IN (SELECT tmp_nt.NotificationTypeID FROM tmp_notificationTypeIDLst tmp_nt)
-		AND n.ConfigSendTime >= configSendTimeFrom
-		AND n.ConfigSendTime < configSendTimeTo
+		AND n.ConfigSendTime >= pFromSendTime
+		AND n.ConfigSendTime < pToSendTime
 		AND (creatorID IS NULL OR n.CreatorID = creatorID)
 		AND n.StatusID IN (SELECT tmp_stt.StatusID FROM tmp_notificationStatusIDLst tmp_stt)
 		AND n.ChannelID IN (SELECT tmp_c.ChannelID FROM tmp_ChannelIDLst tmp_c)
@@ -183,7 +261,7 @@ BEGIN
 		)
 		AND (EXISTS (SELECT 1 FROM NotificationSystemMsg m WHERE m.NotificationID = n.NotificationID AND m.MessageID = messageId) OR IFNULL(messageId, 0) = 0)
     ORDER BY n.ConfigSendTime DESC, n.NotificationID DESC
-    LIMIT rowStart, pageSize; 
+    LIMIT prowStart, pageSize; 
 	
 	DROP TEMPORARY TABLE IF EXISTS tmp_NotificationMsg;
 	CREATE TEMPORARY TABLE tmp_NotificationMsg(NotificationID INT, MessageIdList MEDIUMTEXT);
