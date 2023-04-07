@@ -42,7 +42,7 @@ BEGIN
 	WHERE Description LIKE '%Notification Template ID / MsgContentsType / NotificationType%';
 
     DROP TEMPORARY TABLE IF EXISTS tmpParseJsonTable;
-    CREATE TEMPORARY TABLE IF NOT EXISTS tmpParseJsonTable(NotificationTypeID SMALLINT UNSIGNED);
+    CREATE TEMPORARY TABLE IF NOT EXISTS tmpParseJsonTable(NotificationTypeID SMALLINT UNSIGNED); 
 
 	#Get Settings
 	SET pID = 1;
