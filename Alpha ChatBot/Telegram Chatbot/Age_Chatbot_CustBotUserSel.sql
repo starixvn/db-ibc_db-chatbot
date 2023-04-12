@@ -34,7 +34,10 @@ BEGIN
 		AND Status = 1
 		AND IsVerifyOTP = 1
 	
-	SELECT * FROM #Result	
+	SELECT rs.*, b.System, c.username, @ChatID  as ChatID
+	FROM #Result rs
+		INNER JOIN Bot b WITH(NOLOCK) ON rs.BotID = b.BotID
+		INNER JOIN bodb02.dbo.customer c WITH(NOLOCK) ON rs.custid = c.custid
 	
 	SELECT cf.userid,f.FunctionID, f.FunctionName, f.FunctionKey, f.Type, cf.Status
 	FROM CustBotFunction cf WITH(NOLOCK) 
