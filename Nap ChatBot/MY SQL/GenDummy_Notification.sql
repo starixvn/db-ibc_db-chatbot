@@ -9,9 +9,11 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE GenDummy_Notification(
 	,IN var_SendTimeTo DATETIME
 	,OUT var_FromNotiID INT UNSIGNED
     ,OUT var_ToNotiID INT UNSIGNED
-)
-GenDummy_Notification:BEGIN
 	/*
+    Creator   : 20230417@Roy
+    Task      : NAP ChatBot - Gen Dummy Notification
+	DB: DBCB-ChatBot
+    Params    :
 		SET @var_ConfigSendTimeFrom = cast('2023-04-14 00:00:00' as datetime);
 		SET @var_ConfigSendTimeTo = cast('2023-04-14 00:00:00' as datetime);
 		SET @var_SendTimeFrom = cast('2020-02-13 00:00:00' as datetime);
@@ -23,8 +25,12 @@ GenDummy_Notification:BEGIN
 			1. Get dataset BETWEEN var_ConfigSendTimeFrom AND var_ConfigSendTimeTo
 			2. Insert into Notification, NotificationRecipientList, NotificationSystemMsg for each [ConfigSendTime] BETWEEN var_SendTimeFrom AND var_SendTimeTo
 			3. Return [FromNotiID] AND [ToNotiID] of Notification
-			
-	*/
+    Revisions :
+		20230417@Roy: Initiliaze SP
+  */
+)
+GenDummy_Notification:BEGIN
+	
 	DECLARE var_SendTime DATETIME;
 	DECLARE var_MaxBFNotiID INT;
 	DECLARE var_MaxNewNotiID INT;
