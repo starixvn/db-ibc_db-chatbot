@@ -542,22 +542,21 @@ NAP_UserControl_SyncData_ByUserId:BEGIN
 	##delete UserId if exists
     DELETE cur FROM NAP_OnUser cur WHERE cur.UserId = UserId;
 
-    INSERT INTO NAP_OnUser(Id
-                            , UserId
-                            , SiteId
-                            , ReloadTime
-                            , IsKickedOut
-                            , IP
-                            , NetSessionId
-                                )
-    SELECT tmp.Id 
-            , tmp.UserId 
-            , tmp.SiteId
-            , tmp.ReloadTime
-            , tmp.IsKickedOut
-            , tmp.IP
-            , tmp.NetSessionId
-    FROM tmp_NAP_OnUser tmp;
+    INSERT INTO NAP_OnUser (
+		UserId
+		,SiteId
+		,ReloadTime
+		,IsKickedOut
+		,IP
+		,NetSessionId
+	)
+	SELECT tmp.UserId
+		,tmp.SiteId
+		,tmp.ReloadTime
+		,tmp.IsKickedOut
+		,tmp.IP
+		,tmp.NetSessionId
+	FROM tmp_NAP_OnUser tmp;
 
 ################# NAP_Sites ########################### 
 
