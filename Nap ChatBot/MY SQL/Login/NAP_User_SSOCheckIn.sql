@@ -1,3 +1,4 @@
+/*<info serverAlias="DBCB-ChatBot" databaseType="2" executers="ncb.admin" isFunction="0" isNested="0"></info>*/
 DROP PROCEDURE IF EXISTS NAP_User_SSOCheckIn;
 DELIMITER //
 
@@ -15,6 +16,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NAP_User_SSOCheckIn(
 
         Revisions:
 				- 20190408@Dominic: First Commit
+				- 20230329@Roy: Chatbot for Licensee | Shorten the synchronization of User Permission Control to avoid confusing (#185539)
         
     */
 )
@@ -48,9 +50,34 @@ BEGIN
 			END IF;
             
 		END IF;
-        
+		
+		#Make sure IsPermissionChanged (match with NAP_UserControl_SyncData_ByUserId)
+		IF EXISTS (
+			SELECT 1
+			FROM NAP_OnUser ou
+			WHERE ou.UserId = userID
+				AND ou.SiteId = siteID
+				AND ou.IsPermissionChanged = 1
+		)
+		THEN
+			-- Insert new onuser
+			INSERT INTO NAP_OnUser(UserId, SiteId, IsKickedOut, IP, NetSessionId, IsPermissionChanged)
+			SELECT userID, siteID, 0, iP, netSessionId, 0;
+		
+			SET onUserId = LAST_INSERT_ID();
+
+			-- Update last login date
+			IF (siteID = 0) THEN
+					UPDATE NAP_Users u
+					SET u.LastLoginDate = loginDate
+					WHERE u.UserId = userID;
+			ELSE
+					UPDATE NAP_UserSite us
+					SET us.LastLoginDate = loginDate
+					WHERE us.SiteId = siteID AND us.UserId=userID;
+			END IF;
+		END IF;
 END;
 
 //
 DELIMITER ;
-GRANT EXECUTE ON PROCEDURE NAP_User_SSOCheckIn TO 'ncb.admin'@'%';
