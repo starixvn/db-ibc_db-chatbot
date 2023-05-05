@@ -497,7 +497,7 @@ NAP_UserControl_SyncData_ByUserId:BEGIN
             , f.ModifiedDate = tmpf.ModifiedDate
             , f.Environment = tmpf.Environment;
 
-##Sync NAP_OnUser only for this UserId
+/* --Ignore sync NAP_OnUser table
 ################# NAP_OnUser ########################### 
 
   DROP TEMPORARY TABLE IF EXISTS tmp_NAP_OnUser;
@@ -542,7 +542,7 @@ NAP_UserControl_SyncData_ByUserId:BEGIN
 	##delete UserId if exists
     DELETE cur FROM NAP_OnUser cur WHERE cur.UserId = UserId;
 	
-	##Insert without NAP_OnUser.Id (IsPermissionChanged = 1 is signal for NAP_User_SSOCheckIn)
+	##Insert without NAP_OnUser.Id (handle NAP_OnUser.Id at NAP_User_SSOCheckIn)
     INSERT INTO NAP_OnUser (
 		UserId
 		,SiteId
@@ -550,7 +550,6 @@ NAP_UserControl_SyncData_ByUserId:BEGIN
 		,IsKickedOut
 		,IP
 		,NetSessionId
-		,IsPermissionChanged
 	)
 	SELECT tmp.UserId
 		,tmp.SiteId
@@ -558,8 +557,8 @@ NAP_UserControl_SyncData_ByUserId:BEGIN
 		,tmp.IsKickedOut
 		,tmp.IP
 		,tmp.NetSessionId
-		,1 AS IsPermissionChanged
 	FROM tmp_NAP_OnUser tmp;
+	*/
 
 ################# NAP_Sites ########################### 
 
@@ -766,7 +765,6 @@ NAP_UserControl_SyncData_ByUserId:BEGIN
 	##delete others UserId from Input
 	DELETE tmp FROM tmp_NAP_UserFunction tmp WHERE tmp.UserId <> UserId OR tmp.UserId IS NULL;
 	
-	/*
 	##Mark permission changed##
 	DROP TEMPORARY TABLE IF EXISTS tmp_UserFuncChange;
 	CREATE TEMPORARY TABLE tmp_UserFuncChange ( UserId INT, SiteId INT);
@@ -802,7 +800,6 @@ NAP_UserControl_SyncData_ByUserId:BEGIN
 		INNER JOIN tmp_UserFuncChange tmp ON tmp.UserId = ou.UserId AND tmp.SiteId = ou.SiteId
 		SET ou.IsPermissionChanged = 1;
     END IF;
-	*/
 	
 	##delete UserId if exists
 	DELETE cur FROM NAP_UserFunction cur WHERE cur.UserId = UserId;

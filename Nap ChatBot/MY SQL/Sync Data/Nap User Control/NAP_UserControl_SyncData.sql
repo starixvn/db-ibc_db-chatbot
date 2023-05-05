@@ -766,11 +766,12 @@ NAP_UserControl_SyncData:BEGIN
 	
 	###User Permission Control###
 	DROP TEMPORARY TABLE IF EXISTS tmp_UserFuncChange;
-	CREATE TEMPORARY TABLE tmp_UserFuncChange ( UserId INT );
+	CREATE TEMPORARY TABLE tmp_UserFuncChange ( UserId INT, SiteId INT);
 	
 	##Remove OR Update Permission##
-	INSERT INTO tmp_UserFuncChange (UserId)
+	INSERT INTO tmp_UserFuncChange (UserId, SiteId)
 	SELECT uf.UserId
+		,uf.SiteId
 	FROM NAP_UserFunction uf
 	LEFT JOIN tmp_NAP_UserFunction tmp ON uf.UserId = tmp.UserId
 		AND uf.FunctionId = tmp.FunctionId
@@ -780,8 +781,9 @@ NAP_UserControl_SyncData:BEGIN
 	GROUP BY uf.UserId;
 	
 	##Add OR Update Permission##
-	INSERT INTO tmp_UserFuncChange (UserId)
+	INSERT INTO tmp_UserFuncChange (UserId, SiteId)
 	SELECT tmp.UserId
+		,tmp.SiteId
 	FROM tmp_NAP_UserFunction tmp
 	LEFT JOIN NAP_UserFunction uf ON uf.UserId = tmp.UserId
 		AND uf.FunctionId = tmp.FunctionId
@@ -797,7 +799,7 @@ NAP_UserControl_SyncData:BEGIN
 	
 	##Mark permission changed (tmp_UserFuncChange can dup UserId)##
 	UPDATE NAP_OnUser ou
-	INNER JOIN tmp_UserFuncChange tmp ON ou.UserId = tmp.UserId
+	INNER JOIN tmp_UserFuncChange tmp ON ou.UserId = tmp.UserId AND tmp.SiteId = ou.SiteId
 	SET ou.IsPermissionChanged = 1;
 	
     DELETE uf FROM NAP_UserFunction uf 
