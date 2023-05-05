@@ -762,16 +762,35 @@ NAP_UserControl_SyncData_ByUserId:BEGIN
 	END WHILE;
 	
 	##delete others UserId from Input
-	DELETE tmp FROM tmp_NAP_UserFunction tmp WHERE tmp.UserId <> UserId OR tmp.UserId IS NULL;
+	DELETE tmp FROM tmp_NAP_UserFunction tmp WHERE tmp.UserId <> UserId;
 	
 	##Mark permission changed##
+	DROP TEMPORARY TABLE IF EXISTS tmp_UserFuncChange;
+	CREATE TEMPORARY TABLE tmp_UserFuncChange ( UserId INT );
+	
+	INSERT INTO tmp_UserFuncChange (UserId)
+	SELECT uf.UserId
+	FROM NAP_UserFunction uf
+	LEFT JOIN tmp_NAP_UserFunction tmp ON uf.UserId = tmp.UserId
+		AND uf.FunctionId = tmp.FunctionId
+		AND uf.Policy = tmp.Policy
+		AND uf.SiteId = tmp.SiteId
+	WHERE uf.UserId = UserId
+		AND tmp.UserId IS NULL;
+	
+	INSERT INTO tmp_UserFuncChange (UserId)
+	SELECT tmp.UserId
+	FROM tmp_NAP_UserFunction tmp
+	LEFT JOIN NAP_UserFunction uf ON uf.UserId = tmp.UserId
+		AND uf.FunctionId = tmp.FunctionId
+		AND uf.Policy = tmp.Policy
+		AND uf.SiteId = tmp.SiteId
+	WHERE tmp.UserId = UserId
+		AND uf.UserId IS NULL;
+	
 	IF EXISTS (
-		SELECT tmp.UserId
-		FROM tmp_NAP_UserFunction tmp
-		INNER JOIN NAP_UserFunction uf ON uf.UserId = tmp.UserId
-		WHERE uf.FunctionId <> tmp.FunctionId OR tmp.FunctionId IS NULL
-			OR uf.Policy <> tmp.Policy OR tmp.Policy IS NULL
-			OR uf.SiteId <> tmp.SiteId OR tmp.SiteId IS NULL
+		SELECT UserId
+		FROM tmp_UserFuncChange
 	) THEN
 		UPDATE NAP_OnUser ou
 		SET ou.IsPermissionChanged = 1
