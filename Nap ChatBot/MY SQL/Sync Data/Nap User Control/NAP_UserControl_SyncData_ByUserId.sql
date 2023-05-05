@@ -537,7 +537,7 @@ NAP_UserControl_SyncData_ByUserId:BEGIN
 	END WHILE;
 	
 	##delete others UserId from Input
-	DELETE tmp FROM tmp_NAP_OnUser tmp WHERE tmp.UserId <> UserId;
+	DELETE tmp FROM tmp_NAP_OnUser tmp WHERE tmp.UserId <> UserId OR tmp.UserId IS NULL;
 	
 	##delete UserId if exists
     DELETE cur FROM NAP_OnUser cur WHERE cur.UserId = UserId;
@@ -762,7 +762,7 @@ NAP_UserControl_SyncData_ByUserId:BEGIN
 	END WHILE;
 	
 	##delete others UserId from Input
-	DELETE tmp FROM tmp_NAP_UserFunction tmp WHERE tmp.UserId <> UserId;
+	DELETE tmp FROM tmp_NAP_UserFunction tmp WHERE tmp.UserId <> UserId OR tmp.UserId IS NULL;
 	
 	##delete UserId if exists
 	DELETE cur FROM NAP_UserFunction cur WHERE cur.UserId = UserId;
@@ -833,7 +833,7 @@ NAP_UserControl_SyncData_ByUserId:BEGIN
 	END WHILE;
 
 	##delete others UserId from Input
-	DELETE tmp FROM tmp_NAP_Users tmp WHERE tmp.UserId <> UserId;
+	DELETE tmp FROM tmp_NAP_Users tmp WHERE tmp.UserId <> UserId OR tmp.UserId IS NULL;
 	
 	##delete UserId if exists
 	DELETE cur FROM NAP_Users cur WHERE cur.UserId = UserId;
@@ -922,7 +922,7 @@ NAP_UserControl_SyncData_ByUserId:BEGIN
 	END WHILE;
 	
 	##delete others UserId from Input
-	DELETE tmp FROM tmp_NAP_UserSite tmp WHERE tmp.UserId <> UserId;
+	DELETE tmp FROM tmp_NAP_UserSite tmp WHERE tmp.UserId <> UserId OR tmp.UserId IS NULL;
 	
 	##delete UserId if exists
 	DELETE cur FROM NAP_UserSite cur WHERE cur.UserId = UserId;
@@ -984,7 +984,7 @@ NAP_UserControl_SyncData_ByUserId:BEGIN
 	END WHILE;
 
 	##delete others UserId from Input
-	DELETE tmp FROM tmp_Customer tmp WHERE tmp.CustId <> UserId;
+	DELETE tmp FROM tmp_Customer tmp WHERE tmp.CustId <> UserId OR tmp.CustId IS NULL;
 	
 	##delete UserId if exists
     DELETE cur FROM Customer cur WHERE cur.CustId = UserId;
@@ -1029,7 +1029,7 @@ NAP_UserControl_SyncData_ByUserId:BEGIN
 	END WHILE;
 
 	##delete others UserId from Input
-	DELETE tmp FROM tmp_CustInfo tmp WHERE tmp.custid <> UserId;
+	DELETE tmp FROM tmp_CustInfo tmp WHERE tmp.custid <> UserId OR tmp.CustId IS NULL;
 	
 	##delete UserId if exists
     DELETE cur FROM custInfo cur WHERE cur.custid = UserId;
