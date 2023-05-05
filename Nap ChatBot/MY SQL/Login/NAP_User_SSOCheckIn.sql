@@ -1,3 +1,4 @@
+/*<info serverAlias="DBCB-ChatBot" databaseType="2" executers="ncb.admin" isFunction="0" isNested="0"></info>*/
 DROP PROCEDURE IF EXISTS NAP_User_SSOCheckIn;
 DELIMITER //
 
@@ -71,5 +72,4 @@ BEGIN
 END;
 
 //
-DELIMITER ;
-GRANT EXECUTE ON PROCEDURE NAP_User_SSOCheckIn TO 'ncb.admin'@'%';
+DELIMITER;
