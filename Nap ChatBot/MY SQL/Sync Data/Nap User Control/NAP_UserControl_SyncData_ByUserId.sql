@@ -764,26 +764,42 @@ NAP_UserControl_SyncData_ByUserId:BEGIN
 	##delete others UserId from Input
 	DELETE tmp FROM tmp_NAP_UserFunction tmp WHERE tmp.UserId <> UserId OR tmp.UserId IS NULL;
 	
+	##Mark permission changed##
+	IF EXISTS (
+		SELECT tmp.UserId
+		FROM tmp_NAP_UserFunction tmp
+		INNER JOIN NAP_UserFunction uf ON uf.UserId = tmp.UserId
+		WHERE uf.FunctionId <> tmp.FunctionId OR tmp.FunctionId IS NULL
+			OR uf.Policy <> tmp.Policy OR tmp.Policy IS NULL
+			OR uf.SiteId <> tmp.SiteId OR tmp.SiteId IS NULL
+	) THEN
+		UPDATE NAP_OnUser ou
+		SET ou.IsPermissionChanged = 1
+		WHERE ou.UserId = UserId;
+    END IF;
+	
 	##delete UserId if exists
 	DELETE cur FROM NAP_UserFunction cur WHERE cur.UserId = UserId;
 	
-    INSERT INTO NAP_UserFunction(UserId
-                            , FunctionId
-                            , SiteId
-                            , Policy
-                            , CreatedBy
-                            , CreatedDate
-                            , ModifiedBy
-                            , ModifiedDate)
-    SELECT tmp.UserId 
-            , tmp.FunctionId 
-            , tmp.SiteId
-            , tmp.Policy
-            , tmp.CreatedBy
-            , tmp.CreatedDate
-            , tmp.ModifiedBy
-            , tmp.ModifiedDate
-    FROM tmp_NAP_UserFunction tmp;
+	INSERT INTO NAP_UserFunction (
+		UserId
+		,FunctionId
+		,SiteId
+		,Policy
+		,CreatedBy
+		,CreatedDate
+		,ModifiedBy
+		,ModifiedDate
+	)
+	SELECT tmp.UserId
+		,tmp.FunctionId
+		,tmp.SiteId
+		,tmp.Policy
+		,tmp.CreatedBy
+		,tmp.CreatedDate
+		,tmp.ModifiedBy
+		,tmp.ModifiedDate
+	FROM tmp_NAP_UserFunction tmp;
 
 ################# NAP_Users ########################### 
 
