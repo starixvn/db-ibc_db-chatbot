@@ -33,6 +33,7 @@ NAP_UserControl_SyncData:BEGIN
 	DECLARE iLoop INT;
 	DECLARE VALUE_RUNNING TEXT DEFAULT 'Running';
 	DECLARE VALUE_DONE TEXT DEFAULT 'Done';
+	SET errCode=0, errMsg='';
 	
 	################# Make sure Sync UserControl [job] and [manual by UserId] NOT Exec the same time###########################
 	SET iLoop = 10;
@@ -46,6 +47,8 @@ NAP_UserControl_SyncData:BEGIN
 		IF ROW_COUNT() = 0 THEN
 			SET iLoop = iLoop - 1;
 			IF iLoop < 0 THEN
+				SET errCode = 1;
+				SET errMsg = 'SyncUserControl By Schedule - Wait for SystemSetting.SyncUserControl too long';
 				LEAVE NAP_UserControl_SyncData;
 			ELSE
 				DO SLEEP(1);

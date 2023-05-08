@@ -50,7 +50,7 @@ NAP_UserControl_SyncData_ByUserId:BEGIN
 			SET iLoop = iLoop - 1;
 			IF iLoop < 0 THEN
 				SET errCode = 1;
-				SET errMsg = 'Wait for sync UserControl too long';
+				SET errMsg = 'SyncUserControl By UserId - Wait for SystemSetting.SyncUserControl too long';
 				LEAVE NAP_UserControl_SyncData_ByUserId;
 			ELSE
 				DO SLEEP(1);
