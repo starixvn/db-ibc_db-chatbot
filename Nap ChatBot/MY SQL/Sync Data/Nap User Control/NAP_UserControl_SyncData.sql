@@ -778,7 +778,8 @@ NAP_UserControl_SyncData:BEGIN
 		AND uf.Policy = tmp.Policy
 		AND uf.SiteId = tmp.SiteId
 	WHERE tmp.UserId IS NULL
-	GROUP BY uf.UserId;
+	GROUP BY uf.UserId
+		,uf.SiteId;
 	
 	##Add OR Update Permission##
 	INSERT INTO tmp_UserFuncChange (UserId, SiteId)
@@ -795,7 +796,8 @@ NAP_UserControl_SyncData:BEGIN
 			FROM NAP_UserFunction uf2
 			WHERE uf2.UserId = tmp.UserId
 		)
-	GROUP BY tmp.UserId;
+	GROUP BY tmp.UserId
+		,tmp.SiteId;
 	
 	##Mark permission changed (tmp_UserFuncChange can dup UserId)##
 	UPDATE NAP_OnUser ou
