@@ -60,7 +60,8 @@ NAP_User_SSOCheckIn:BEGIN
 	WHERE ou.UserId = userID
 		AND ou.SiteId = siteID
 		AND ou.IP = iP
-		AND ou.NetSessionId = netSessionId;
+		AND ou.NetSessionId = netSessionId
+		AND ou.IsKickedOut = 0;
 		
 	IF onUserId IS NULL THEN
 		-- Insert new onuser
