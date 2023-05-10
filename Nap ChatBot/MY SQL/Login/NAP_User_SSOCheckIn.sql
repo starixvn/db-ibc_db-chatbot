@@ -30,34 +30,75 @@ NAP_User_SSOCheckIn:BEGIN
 		SET ou.IsKickedOut = 1 
 		WHERE ou.UserId = userID
 		AND ou.SiteId = siteID;
-	ELSEIF EXISTS (
+	END IF;
+	
+	/*
+		*** For SSO Login ***
+			- If SSO login by the same Session (same browser)
+				+ IsPermissionChanged = 1 => insert new onuser, return ID
+				+ IsPermissionChanged = 0 => return same Session ID
+			- Otherwise (diff browser): kick out all by [UserId/SiteId] + insert new onuser, return ID
+	*/
+	IF EXISTS (
 		SELECT 1
 		FROM NAP_OnUser ou
-		WHERE ou.UserId = userID AND ou.SiteId = siteID AND ou.IsPermissionChanged = 1
+		WHERE ou.UserId = userID
+			AND ou.SiteId = siteID
+			AND ou.IP = iP
+			AND ou.NetSessionId = netSessionId
 	) THEN
+		##IsPermissionChanged = 0 => return same Session ID
+		SELECT MAX(Id)
+		INTO onUserId
+		FROM NAP_OnUser ou
+		WHERE ou.UserId = userID
+			AND ou.SiteId = siteID
+			AND ou.IP = iP
+			AND ou.NetSessionId = netSessionId
+			AND ou.IsPermissionChanged = 0;
+		
+		##IsPermissionChanged = 1 => insert new onuser, return ID
+		IF onUserId IS NULL THEN
+			-- Insert new onuser
+			INSERT INTO NAP_OnUser(UserId, SiteId, IsKickedOut, IP, NetSessionId, IsPermissionChanged)
+			SELECT userID, siteID, 0, iP, netSessionId, 0;
+
+			SET onUserId = LAST_INSERT_ID();
+			-- Update last login date
+			IF (siteID = 0) THEN
+				UPDATE NAP_Users u
+				SET u.LastLoginDate = loginDate
+				WHERE u.UserId = userID;
+			ELSE
+				UPDATE NAP_UserSite us
+				SET us.LastLoginDate = loginDate
+				WHERE us.SiteId = siteID AND us.UserId=userID;
+			END IF;
+		END IF;
+	ELSE
+		##kick out all by [UserId/SiteId] + insert new onuser, return ID
 		UPDATE NAP_OnUser ou
-		SET ou.IsPermissionChanged = 1
+		SET ou.IsKickedOut = 1
 		WHERE ou.UserId = userID
 			AND ou.SiteId = siteID;
-	END IF;
-	
-	-- Insert new onuser
-	INSERT INTO NAP_OnUser(UserId, SiteId, IsKickedOut, IP, NetSessionId, IsPermissionChanged)
-	SELECT userID, siteID, 0, iP, netSessionId, 0;
+		
+		-- Insert new onuser
+		INSERT INTO NAP_OnUser(UserId, SiteId, IsKickedOut, IP, NetSessionId, IsPermissionChanged)
+		SELECT userID, siteID, 0, iP, netSessionId, 0;
 
-	SET onUserId = LAST_INSERT_ID();
-	
-	-- Update last login date
-	IF (siteID = 0) THEN
-		UPDATE NAP_Users u
-		SET u.LastLoginDate = loginDate
-		WHERE u.UserId = userID;
-	ELSE
-		UPDATE NAP_UserSite us
-		SET us.LastLoginDate = loginDate
-		WHERE us.SiteId = siteID AND us.UserId=userID;
-	END IF;
-	
+		SET onUserId = LAST_INSERT_ID();
+		
+		-- Update last login date
+		IF (siteID = 0) THEN
+			UPDATE NAP_Users u
+			SET u.LastLoginDate = loginDate
+			WHERE u.UserId = userID;
+		ELSE
+			UPDATE NAP_UserSite us
+			SET us.LastLoginDate = loginDate
+			WHERE us.SiteId = siteID AND us.UserId=userID;
+		END IF;
+	END IF;	
 END;
 
 //
