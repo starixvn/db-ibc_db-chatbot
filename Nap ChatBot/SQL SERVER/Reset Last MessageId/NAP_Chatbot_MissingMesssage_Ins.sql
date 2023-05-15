@@ -1,9 +1,11 @@
 /*<info serverAlias="DBMSG-bodb_Message" executers="bodbAdminNet" isFunction="0" isNested="0"></info>*/
 ALTER PROCEDURE [dbo].[NAP_Chatbot_MissingMesssage_Ins]
-	@MessageList	XML
-	,@Environment	VARCHAR(20)
-	,@ErrCode		INT = 0 OUTPUT
-	,@ErrMsg		NVARCHAR(4000) = '' OUTPUT
+	@MessageList		XML
+	,@Environment		VARCHAR(20)
+	,@SiteAsJSON		NVARCHAR(MAX)
+	,@DepSCustAsJSON	NVARCHAR(MAX)
+	,@ErrCode			INT = 0 OUTPUT
+	,@ErrMsg			NVARCHAR(4000) = '' OUTPUT
 AS
 /*
 	Created: 20211007@Malcolm
@@ -13,12 +15,39 @@ AS
 	Revisions:
 		- 20211007@Malcolm: Initialize SP [RedmineID: #162825]
 		- 20230118@Malcolm: Scale out for ChatBot [RedmineID: #181907]
+		- 20230515@Roy: Database - HA DB061/DB062 [RedmineID: #169643]
 
 	. @MessageList
 			<root>
 				<r JobIdentify="1" MessageId="1" />
 				<r JobIdentify="3" MessageId="12" />
 			</root>
+	@SiteAsJSON
+		[
+		   {
+			  "site":"033333",
+			  "isDeposit":false,
+			  "IsChinaView":false
+		   },
+		   {
+			  "site":"0sServices",
+			  "isDeposit":true,
+			  "IsChinaView":false
+		   }
+		]
+	@DepSCustAsJSON
+		[
+		   {
+			  "CustId":179457,
+			  "site":"12Bet",
+			  "Currency":20
+		   },
+		   {
+			  "CustId":791080,
+			  "site":"12Bet",
+			  "Currency":3
+		   }
+		]
 */
 BEGIN
 	SET NOCOUNT ON
@@ -38,8 +67,16 @@ BEGIN
 		IF EXISTS (SELECT 1 FROM @Message WHERE JobIdentify = 1)
 		BEGIN
 			DECLARE @DepositSuper TABLE (CustId INT, site VARCHAR(50))
-			INSERT INTO @DepositSuper (CustId, site)
-			SELECT CustId, site FROM DBACC.bodb02.dbo.Dep_CustSuper WITH (NOLOCK) WHERE site IN ('spondemo' ,'Athena000') OR Currency NOT IN (20, 27, 28)
+			INSERT INTO @DepositSuper (CustId, Site)
+			SELECT DISTINCT CustId
+				,Site
+			FROM OPENJSON(@DepSCustAsJSON) WITH (
+					CustId INT '$.CustId'
+					Site VARCHAR(20) '$.Site'
+					,Currency INT '$.Currency'
+				)
+			WHERE Site IN ('spondemo' ,'Athena000')
+				OR Currency NOT IN (20, 27, 28)
 
 			INSERT INTO dbo.MsgChatBot (MessageId, TargetId, JobIdentify, CheckInTime, Environment, IsFinished, RequestId)
 			SELECT DISTINCT mt.MessageId, mt.TargetId, 1, GETDATE(), @Environment, 1, 0
@@ -61,7 +98,12 @@ BEGIN
 		BEGIN
 			DECLARE @DepositSite TABLE (SiteName VARCHAR(50), PRIMARY KEY (SiteName))
 			INSERT INTO @DepositSite (SiteName)
-			SELECT site FROM DBACC.bodb02.dbo.Site WITH (NOLOCK) WHERE isDeposit = 1
+			SELECT DISTINCT Site
+			FROM OPENJSON(@SiteAsJSON) WITH (
+					Site NVARCHAR(50) '$.Site'
+					,isDeposit BIT '$.isDeposit'
+				)
+			WHERE isDeposit = 1
 
 			INSERT INTO dbo.MsgChatBot (MessageId, TargetId, JobIdentify, CheckInTime, Environment, IsFinished, RequestId)
 			SELECT DISTINCT mt.MessageId, mt.TargetId, 3, GETDATE(), @Environment, 1, 0

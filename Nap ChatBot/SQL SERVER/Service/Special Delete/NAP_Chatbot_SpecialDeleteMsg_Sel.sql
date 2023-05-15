@@ -5,6 +5,8 @@ ALTER PROCEDURE [dbo].[NAP_Chatbot_SpecialDeleteMsg_Sel]
 	,@BatchSize				INT
 	,@MsgContentsTypeLst	VARCHAR(2000)
 	,@Environment			VARCHAR(20)
+	,@SiteAsJSON			NVARCHAR(MAX)
+	,@DepSCustAsJSON		NVARCHAR(MAX)
 AS
 
 /*
@@ -18,6 +20,34 @@ AS
 		- 20210618@Percy: Migrate DBMSG to new server [RedmineID: #157217]
 		- 20211012@Malcolm: Rescan messageid <= @MessageId [RedmineID: #162825]
 		- 20220223@Malcolm: Remove SABA text out of the league name for China View platform [RedmineID: #168798]
+		- 20230515@Roy: Database - HA DB061/DB062 [RedmineID: #169643]
+	
+	@SiteAsJSON
+		[
+		   {
+			  "site":"033333",
+			  "isDeposit":false,
+			  "IsChinaView":false
+		   },
+		   {
+			  "site":"0sServices",
+			  "isDeposit":true,
+			  "IsChinaView":false
+		   }
+		]
+	@DepSCustAsJSON
+		[
+		   {
+			  "CustId":179457,
+			  "site":"12Bet",
+			  "Currency":20
+		   },
+		   {
+			  "CustId":791080,
+			  "site":"12Bet",
+			  "Currency":3
+		   }
+		]
 */
 
 BEGIN
@@ -27,6 +57,17 @@ BEGIN
 
 	CREATE TABLE #MsgContentsTypeLst(MsgContentsType TINYINT)
 	CREATE UNIQUE CLUSTERED INDEX PK_MsgContentsType ON #MsgContentsTypeLst(MsgContentsType)
+	
+	CREATE TABLE #tmpSite (
+		Site NVARCHAR(50)
+		,IsChinaView BIT
+	)
+	
+	CREATE TABLE #tmpDepCustSuper (
+		CustId INT
+		,Site VARCHAR(20)
+		,Currency INT
+	)
 
 	DECLARE @XML XML  = NULL
 
@@ -36,14 +77,44 @@ BEGIN
 	SELECT r.value('.', 'NVARCHAR(15)') AS MsgContentsType
 	FROM @xml.nodes('//root/r') AS RECORDS(r)
 	WHERE LEN(ISNULL(r.value('.', 'NVARCHAR(15)'), '')) > 0
-
+	
+	INSERT INTO #tmpSite (
+		Site
+		,IsChinaView
+	)
+	SELECT DISTINCT Site
+		,ISNULL(IsChinaView, 0)
+	FROM OPENJSON(@SiteAsJSON) WITH (
+			Site NVARCHAR(50) '$.Site'
+			,IsChinaView BIT '$.IsChinaView'
+		)
+		
+	INSERT INTO #tmpDepCustSuper (
+		CustId
+		,Site
+		,Currency
+	)
+	SELECT DISTINCT CustId
+		,Site
+		,Currency
+	FROM OPENJSON(@DepSCustAsJSON) WITH (
+			CustId INT '$.CustId'
+			Site VARCHAR(20) '$.Site'
+			,Currency INT '$.Currency'
+		)
+	
 	DECLARE @DepositSuper TABLE (CustId INT, site VARCHAR(50), IsChinaView BIT)
 	INSERT INTO @DepositSuper (CustId, site, IsChinaView)
 	SELECT CustId, site, ISNULL(IsChinaView, 0)
-	FROM OPENQUERY(DBACC, 'SELECT d.CustId, d.site, ISNULL(s.IsChinaView, 0) AS IsChinaView 
-						   FROM bodb02.dbo.Dep_CustSuper d WITH (NOLOCK) 
-		                       LEFT JOIN bodb02.dbo.Site s WITH(NOLOCK) ON s.site = d.site 
-						   WHERE d.site IN (''spondemo'' ,''Athena000'') OR d.Currency NOT IN (20, 27, 28)')
+	FROM (
+		SELECT d.CustId
+			,d.site
+			,ISNULL(s.IsChinaView, 0) AS IsChinaView
+		FROM #tmpDepCustSuper AS d
+			LEFT JOIN #tmpSite AS s ON s.site = d.site
+		WHERE d.site IN ('spondemo','Athena000')
+			OR d.Currency NOT IN (20,27,28)
+	) AS t
 
 	DECLARE @Msg TABLE (MessageId INT, MsgContentsType TINYINT, Content_en NVARCHAR(4000), Content_cs NVARCHAR(4000), PostTime DATETIME, IsNew TINYINT, LeagueGroupID SMALLINT)
 	
@@ -122,5 +193,9 @@ BEGIN
 		)
 	GROUP BY mt.MessageId, mt.TargetId, ds.site, m.LeagueGroupID, ds.IsChinaView
 	ORDER BY mt.MessageId, ds.site
+	
+	DROP TABLE #MsgContentsTypeLst
+	DROP TABLE #tmpSite
+	DROP TABLE #tmpDepCustSuper
 END
 GO

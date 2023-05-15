@@ -1,0 +1,54 @@
+/*<info serverAlias="DBACC-bodb02" executers="bodbAdminNet" isFunction="0" isNested="0"></info>*/
+ALTER PROCEDURE NAP_Chatbot_DataToJson_Sel
+	@TableName NVARCHAR(250)
+AS
+/*
+	Created: 20230515@Roy
+	Task: Get data and convert to JSON
+	DB: DBACC.bodb02
+
+	Revisions:
+		20230515@Roy: Database - HA DB061/DB062 (#169643)
+	
+	Output JSON object as format
+		[
+		   {
+			  "CustId":179457,
+			  "site":"12Bet",
+			  "Currency":20
+		   },
+		   {
+			  "CustId":791080,
+			  "site":"12Bet",
+			  "Currency":3
+		   }
+		]
+*/
+BEGIN
+	SET NOCOUNT ON
+	
+	DECLARE @JsonData NVARCHAR(MAX)
+	
+	IF @TableName = 'Dep_CustSuper'
+	BEGIN
+		SET @JsonData = (
+			SELECT CustId
+				,site
+				,Currency
+			FROM bodb02.dbo.Dep_CustSuper WITH (NOLOCK)
+			FOR JSON AUTO
+		)
+	END
+	ELSE IF @TableName = 'Site'
+	BEGIN
+		SET @JsonData = (
+			SELECT site
+				,isDeposit
+				,ISNULL(IsChinaView, 0) AS IsChinaView
+			FROM bodb02.dbo.Site WITH (NOLOCK)
+			FOR JSON AUTO
+		)
+	END
+	
+	SELECT @JsonData AS JsonData
+END
