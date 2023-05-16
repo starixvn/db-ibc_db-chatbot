@@ -6,7 +6,7 @@ ALTER PROCEDURE [dbo].[NAP_Chatbot_SpecialDeleteMsg_Sel]
 	,@MsgContentsTypeLst	VARCHAR(2000)
 	,@Environment			VARCHAR(20)
 	,@SiteAsJSON			NVARCHAR(MAX)
-	,@DepSCustAsJSON		NVARCHAR(MAX)
+	,@DepCustSAsJSON		NVARCHAR(MAX)
 AS
 
 /*
@@ -35,7 +35,7 @@ AS
 			  "IsChinaView":false
 		   }
 		]
-	@DepSCustAsJSON
+	@DepCustSAsJSON
 		[
 		   {
 			  "CustId":179457,
@@ -59,13 +59,13 @@ BEGIN
 	CREATE UNIQUE CLUSTERED INDEX PK_MsgContentsType ON #MsgContentsTypeLst(MsgContentsType)
 	
 	CREATE TABLE #tmpSite (
-		Site NVARCHAR(50)
+		Site VARCHAR(50)
 		,IsChinaView BIT
 	)
 	
 	CREATE TABLE #tmpDepCustSuper (
 		CustId INT
-		,Site VARCHAR(20)
+		,Site VARCHAR(50)
 		,Currency INT
 	)
 
@@ -85,9 +85,9 @@ BEGIN
 	SELECT DISTINCT Site
 		,ISNULL(IsChinaView, 0)
 	FROM OPENJSON(@SiteAsJSON) WITH (
-			Site NVARCHAR(50) '$.Site'
+			Site VARCHAR(50) '$.Site'
 			,IsChinaView BIT '$.IsChinaView'
-		)
+		)--OPENJSON case-sensitive
 		
 	INSERT INTO #tmpDepCustSuper (
 		CustId
@@ -97,11 +97,11 @@ BEGIN
 	SELECT DISTINCT CustId
 		,Site
 		,Currency
-	FROM OPENJSON(@DepSCustAsJSON) WITH (
+	FROM OPENJSON(@DepCustSAsJSON) WITH (
 			CustId INT '$.CustId'
-			Site VARCHAR(20) '$.Site'
+			Site VARCHAR(50) '$.Site'
 			,Currency INT '$.Currency'
-		)
+		)--OPENJSON case-sensitive
 	
 	DECLARE @DepositSuper TABLE (CustId INT, site VARCHAR(50), IsChinaView BIT)
 	INSERT INTO @DepositSuper (CustId, site, IsChinaView)

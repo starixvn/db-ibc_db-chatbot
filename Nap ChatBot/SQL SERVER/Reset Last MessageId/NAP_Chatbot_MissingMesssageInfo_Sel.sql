@@ -4,7 +4,7 @@ ALTER PROCEDURE [dbo].[NAP_Chatbot_MissingMesssageInfo_Sel]
 	,@MsgContentsTypeList	XML
 	,@RequestList		    XML
 	,@SiteAsJSON		NVARCHAR(MAX)
-	,@DepSCustAsJSON	NVARCHAR(MAX)
+	,@DepCustSAsJSON	NVARCHAR(MAX)
 AS
 /*
 	Created: 20211007@Malcolm
@@ -46,7 +46,7 @@ AS
 			  "IsChinaView":false
 		   }
 		]
-	@DepSCustAsJSON
+	@DepCustSAsJSON
 		[
 		   {
 			  "CustId":179457,
@@ -106,11 +106,11 @@ BEGIN
 		INSERT INTO @DepositSuper (CustId, Site)
 		SELECT DISTINCT CustId
 			,Site
-		FROM OPENJSON(@DepSCustAsJSON) WITH (
+		FROM OPENJSON(@DepCustSAsJSON) WITH (
 				CustId INT '$.CustId'
-				Site VARCHAR(20) '$.Site'
+				Site VARCHAR(50) '$.Site'
 				,Currency INT '$.Currency'
-			)
+			)--OPENJSON case-sensitive
 		WHERE Site IN ('spondemo' ,'Athena000')
 			OR Currency NOT IN (20, 27, 28)
 
@@ -160,9 +160,9 @@ BEGIN
 		INSERT INTO @DepositSite (SiteName)
 		SELECT DISTINCT Site
 		FROM OPENJSON(@SiteAsJSON) WITH (
-				Site NVARCHAR(50) '$.Site'
+				Site VARCHAR(50) '$.Site'
 				,isDeposit BIT '$.isDeposit'
-			)
+			)--OPENJSON case-sensitive
 		WHERE isDeposit = 1
 
 		INSERT INTO @Msg (VoidingHistoryCollectionId, MessageId, Content_en, JobIdentify, Posttime)

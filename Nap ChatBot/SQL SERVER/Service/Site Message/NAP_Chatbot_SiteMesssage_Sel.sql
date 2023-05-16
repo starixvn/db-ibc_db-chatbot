@@ -45,10 +45,10 @@ BEGIN
 	SELECT DISTINCT Site
 		,ISNULL(IsChinaView, 0)
 	FROM OPENJSON(@SiteAsJSON) WITH (
-			Site NVARCHAR(50) '$.Site'
+			Site VARCHAR(50) '$.Site'
 			,isDeposit BIT '$.isDeposit'
 			,IsChinaView BIT '$.IsChinaView'
-		)
+		)--OPENJSON case-sensitive
 	WHERE isDeposit = 1
 
 	DECLARE @Msg TABLE 

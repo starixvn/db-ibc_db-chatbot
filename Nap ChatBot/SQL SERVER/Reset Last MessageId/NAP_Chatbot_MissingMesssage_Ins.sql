@@ -3,7 +3,7 @@ ALTER PROCEDURE [dbo].[NAP_Chatbot_MissingMesssage_Ins]
 	@MessageList		XML
 	,@Environment		VARCHAR(20)
 	,@SiteAsJSON		NVARCHAR(MAX)
-	,@DepSCustAsJSON	NVARCHAR(MAX)
+	,@DepCustSAsJSON	NVARCHAR(MAX)
 	,@ErrCode			INT = 0 OUTPUT
 	,@ErrMsg			NVARCHAR(4000) = '' OUTPUT
 AS
@@ -35,7 +35,7 @@ AS
 			  "IsChinaView":false
 		   }
 		]
-	@DepSCustAsJSON
+	@DepCustSAsJSON
 		[
 		   {
 			  "CustId":179457,
@@ -70,11 +70,11 @@ BEGIN
 			INSERT INTO @DepositSuper (CustId, Site)
 			SELECT DISTINCT CustId
 				,Site
-			FROM OPENJSON(@DepSCustAsJSON) WITH (
+			FROM OPENJSON(@DepCustSAsJSON) WITH (
 					CustId INT '$.CustId'
-					Site VARCHAR(20) '$.Site'
+					Site VARCHAR(50) '$.Site'
 					,Currency INT '$.Currency'
-				)
+				)--OPENJSON case-sensitive
 			WHERE Site IN ('spondemo' ,'Athena000')
 				OR Currency NOT IN (20, 27, 28)
 
@@ -100,9 +100,9 @@ BEGIN
 			INSERT INTO @DepositSite (SiteName)
 			SELECT DISTINCT Site
 			FROM OPENJSON(@SiteAsJSON) WITH (
-					Site NVARCHAR(50) '$.Site'
+					Site VARCHAR(50) '$.Site'
 					,isDeposit BIT '$.isDeposit'
-				)
+				)--OPENJSON case-sensitive
 			WHERE isDeposit = 1
 
 			INSERT INTO dbo.MsgChatBot (MessageId, TargetId, JobIdentify, CheckInTime, Environment, IsFinished, RequestId)
