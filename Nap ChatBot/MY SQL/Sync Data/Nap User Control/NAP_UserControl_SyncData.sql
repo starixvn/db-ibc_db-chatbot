@@ -1,3 +1,4 @@
+/*<info serverAlias="DBCB-ChatBot" databaseType="2" executers="ncb.admin" isFunction="0" isNested="0"></info>*/
 DROP PROCEDURE IF EXISTS NAP_UserControl_SyncData;
 DELIMITER //
 
@@ -23,12 +24,40 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NAP_UserControl_SyncData(
 
         Revisions:
 				- 20190829@Oliver: First Commit
+				- 20230329@Roy: Chatbot for Licensee | Shorten the synchronization of User Permission Control to avoid confusing (#185539)
         
     */
 )
 SQL SECURITY DEFINER
-BEGIN
+NAP_UserControl_SyncData:BEGIN
 	DECLARE iLoop INT;
+	DECLARE VALUE_RUNNING TEXT DEFAULT 'Running';
+	DECLARE VALUE_DONE TEXT DEFAULT 'Done';
+	SET errCode=0, errMsg='';
+	
+	################# Make sure Sync UserControl [job] and [manual by UserId] NOT Exec the same time###########################
+	SET iLoop = 10;
+	WHILE iLoop >= 0 DO
+	
+		UPDATE SystemSetting
+		SET Value = VALUE_RUNNING
+		WHERE ID = 30
+			AND Value = VALUE_DONE;
+		
+		IF ROW_COUNT() = 0 THEN
+			SET iLoop = iLoop - 1;
+			IF iLoop < 0 THEN
+				SET errCode = 1;
+				SET errMsg = 'SyncUserControl By Schedule - Wait for SystemSetting.SyncUserControl too long';
+				LEAVE NAP_UserControl_SyncData;
+			ELSE
+				DO SLEEP(1);
+			END IF;
+		ELSE
+			SET iLoop = -1;
+		END IF;
+	END WHILE;
+	
 ################# NAP_Functions ###########################
 
 	DROP TEMPORARY TABLE IF EXISTS tmp_NAP_Functions;
@@ -466,6 +495,7 @@ BEGIN
             , f.ModifiedDate = tmpf.ModifiedDate
             , f.Environment = tmpf.Environment;
 
+/* --Ignore sync NAP_OnUser table
 ################# NAP_OnUser ########################### 
 
   DROP TEMPORARY TABLE IF EXISTS tmp_NAP_OnUser;
@@ -533,6 +563,7 @@ BEGIN
         ,ou.IsKickedOut = tmp.IsKickedOut
         ,ou.IP = tmp.IP
         ,ou.NetSessionId = tmp.NetSessionId;
+*/
 
 ################# NAP_Sites ########################### 
 
@@ -735,12 +766,50 @@ BEGIN
 
 		SET iLoop = iLoop +1;
 	END WHILE;
-
+	
+	###User Permission Control###
+	DROP TEMPORARY TABLE IF EXISTS tmp_UserFuncChange;
+	CREATE TEMPORARY TABLE tmp_UserFuncChange ( UserId INT, SiteId INT);
+	
+	##Remove OR Update Permission##
+	INSERT INTO tmp_UserFuncChange (UserId, SiteId)
+	SELECT uf.UserId
+		,uf.SiteId
+	FROM NAP_UserFunction uf
+	LEFT JOIN tmp_NAP_UserFunction tmp ON uf.UserId = tmp.UserId
+		AND uf.FunctionId = tmp.FunctionId
+		AND uf.Policy = tmp.Policy
+		AND uf.SiteId = tmp.SiteId
+	WHERE tmp.UserId IS NULL
+	GROUP BY uf.UserId
+		,uf.SiteId;
+	
+	##Add OR Update Permission##
+	INSERT INTO tmp_UserFuncChange (UserId, SiteId)
+	SELECT tmp.UserId
+		,tmp.SiteId
+	FROM tmp_NAP_UserFunction tmp
+	LEFT JOIN NAP_UserFunction uf ON uf.UserId = tmp.UserId
+		AND uf.FunctionId = tmp.FunctionId
+		AND uf.Policy = tmp.Policy
+		AND uf.SiteId = tmp.SiteId
+	WHERE uf.UserId IS NULL
+		AND EXISTS (
+			SELECT 1
+			FROM NAP_UserFunction uf2
+			WHERE uf2.UserId = tmp.UserId
+		)
+	GROUP BY tmp.UserId
+		,tmp.SiteId;
+	
+	##Mark permission changed (tmp_UserFuncChange can dup UserId)##
+	UPDATE NAP_OnUser ou
+	INNER JOIN tmp_UserFuncChange tmp ON ou.UserId = tmp.UserId AND tmp.SiteId = ou.SiteId
+	SET ou.IsPermissionChanged = 1;
+	
     DELETE uf FROM NAP_UserFunction uf 
             LEFT JOIN tmp_NAP_UserFunction tmp ON uf.UserId = tmp.UserId 
                                         AND uf.FunctionId = tmp.FunctionId
-                                        AND uf.Policy = tmp.Policy
-                                        AND uf.SiteId = tmp.SiteId
             WHERE tmp.UserId IS NULL;
 
     INSERT INTO NAP_UserFunction(UserId
@@ -762,19 +831,23 @@ BEGIN
     FROM tmp_NAP_UserFunction tmp
     LEFT JOIN NAP_UserFunction uf ON uf.UserId = tmp.UserId 
                                         AND uf.FunctionId = tmp.FunctionId
-                                        AND uf.Policy = tmp.Policy
-                                        AND uf.SiteId = tmp.SiteId
     WHERE uf.UserId IS NULL;
 
     UPDATE NAP_UserFunction uf
     INNER JOIN tmp_NAP_UserFunction tmp ON uf.UserId = tmp.UserId 
                                         AND uf.FunctionId = tmp.FunctionId
-                                        AND uf.Policy = tmp.Policy
-                                        AND uf.SiteId = tmp.SiteId
     SET uf.CreatedBy = tmp.CreatedBy
         ,uf.CreatedDate = tmp.CreatedDate
         ,uf.ModifiedBy = tmp.ModifiedBy
-        ,uf.ModifiedDate = tmp.ModifiedDate;
+        ,uf.ModifiedDate = tmp.ModifiedDate
+		,uf.Policy = tmp.Policy
+		,uf.SiteId = tmp.SiteId
+	WHERE uf.Policy <> tmp.Policy
+		OR uf.SiteId <> tmp.SiteId
+		OR uf.ModifiedDate <> tmp.ModifiedDate
+		OR uf.CreatedDate <> tmp.CreatedDate
+		OR IFNULL(uf.ModifiedBy, -1) <> IFNULL(tmp.ModifiedBy, -1)
+		OR IFNULL(uf.CreatedBy, -1) <> IFNULL(tmp.CreatedBy, -1);
         
 ################# NAP_Users ########################### 
 
@@ -1067,8 +1140,13 @@ BEGIN
   INNER JOIN tmp_CustInfo tmp ON m.custid = tmp.CustId
   SET m.username = tmp.Username
       ,m.closed = tmp.Closed;
+	
+	#Update [SyncUserControl] flag to 'Done'
+	UPDATE SystemSetting
+	SET Value = VALUE_DONE
+	WHERE ID = 30
+		AND Value = VALUE_RUNNING;
 END;
 
 //
 DELIMITER ;
-GRANT EXECUTE ON PROCEDURE NAP_UserControl_SyncData TO 'ncb.admin'@'%';

@@ -1,3 +1,4 @@
+/*<info serverAlias="DBCB-ChatBot" databaseType="2" executers="ncb.admin" isFunction="0" isNested="0"></info>*/
 DROP PROCEDURE IF EXISTS NAP_UserControl_SyncData_ByUserId;
 DELIMITER //
 
@@ -24,14 +25,40 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NAP_UserControl_SyncData_ByUserI
 
         Revisions:
 				- 20190829@Oliver: First Commit
+				- 20230329@Roy: Chatbot for Licensee | Shorten the synchronization of User Permission Control to avoid confusing (#185539)
         
     */
 )
 SQL SECURITY DEFINER
-BEGIN
+NAP_UserControl_SyncData_ByUserId:BEGIN
 
 	DECLARE iLoop INT;
-  SET errCode=0, errMsg='';
+	DECLARE VALUE_RUNNING TEXT DEFAULT 'Running';
+	DECLARE VALUE_DONE TEXT DEFAULT 'Done';
+	SET errCode=0, errMsg='';
+	
+	################# Make sure Sync UserControl [job] and [manual by UserId] NOT Exec the same time###########################
+	SET iLoop = 10;
+	WHILE iLoop >= 0 DO
+	
+		UPDATE SystemSetting
+		SET Value = VALUE_RUNNING
+		WHERE ID = 30
+			AND Value = VALUE_DONE;
+		
+		IF ROW_COUNT() = 0 THEN
+			SET iLoop = iLoop - 1;
+			IF iLoop < 0 THEN
+				SET errCode = 1;
+				SET errMsg = 'SyncUserControl By UserId - Wait for SystemSetting.SyncUserControl too long';
+				LEAVE NAP_UserControl_SyncData_ByUserId;
+			ELSE
+				DO SLEEP(1);
+			END IF;
+		ELSE
+			SET iLoop = -1;
+		END IF;
+	END WHILE;
 
 ################# NAP_Functions ###########################
 
@@ -470,6 +497,7 @@ BEGIN
             , f.ModifiedDate = tmpf.ModifiedDate
             , f.Environment = tmpf.Environment;
 
+/* --Ignore sync NAP_OnUser table
 ################# NAP_OnUser ########################### 
 
   DROP TEMPORARY TABLE IF EXISTS tmp_NAP_OnUser;
@@ -507,36 +535,30 @@ BEGIN
             , JSON_UNQUOTE(JSON_EXTRACT(OnUser, CONCAT('$[', iLoop, '].NetSessionId')));
 		SET iLoop = iLoop +1;
 	END WHILE;
-
-    DELETE ou FROM NAP_OnUser ou LEFT JOIN tmp_NAP_OnUser tmp ON ou.Id = tmp.Id WHERE ou.UserId = UserId AND tmp.Id IS NULL;
-
-    INSERT INTO NAP_OnUser(Id
-                            , UserId
-                            , SiteId
-                            , ReloadTime
-                            , IsKickedOut
-                            , IP
-                            , NetSessionId
-                                )
-    SELECT tmp.Id 
-            , tmp.UserId 
-            , tmp.SiteId
-            , tmp.ReloadTime
-            , tmp.IsKickedOut
-            , tmp.IP
-            , tmp.NetSessionId
-    FROM tmp_NAP_OnUser tmp
-    LEFT JOIN NAP_OnUser ou ON tmp.Id = ou.Id
-    WHERE ou.Id IS NULL;
-
-    UPDATE NAP_OnUser ou
-    INNER JOIN tmp_NAP_OnUser tmp ON tmp.Id = ou.Id
-    SET ou.UserId = tmp.UserId
-        ,ou.SiteId = tmp.SiteId
-        ,ou.ReloadTime = tmp.ReloadTime
-        ,ou.IsKickedOut = tmp.IsKickedOut
-        ,ou.IP = tmp.IP
-        ,ou.NetSessionId = tmp.NetSessionId;
+	
+	##delete others UserId from Input
+	DELETE tmp FROM tmp_NAP_OnUser tmp WHERE tmp.UserId <> UserId OR tmp.UserId IS NULL;
+	
+	##delete UserId if exists
+    DELETE cur FROM NAP_OnUser cur WHERE cur.UserId = UserId;
+	
+	##Insert without NAP_OnUser.Id (handle NAP_OnUser.Id at NAP_User_SSOCheckIn)
+    INSERT INTO NAP_OnUser (
+		UserId
+		,SiteId
+		,ReloadTime
+		,IsKickedOut
+		,IP
+		,NetSessionId
+	)
+	SELECT tmp.UserId
+		,tmp.SiteId
+		,tmp.ReloadTime
+		,tmp.IsKickedOut
+		,tmp.IP
+		,tmp.NetSessionId
+	FROM tmp_NAP_OnUser tmp;
+	*/
 
 ################# NAP_Sites ########################### 
 
@@ -739,46 +761,68 @@ BEGIN
 
 		SET iLoop = iLoop +1;
 	END WHILE;
-
-    DELETE uf FROM NAP_UserFunction uf 
-            LEFT JOIN tmp_NAP_UserFunction tmp ON uf.UserId = tmp.UserId 
-                                        AND uf.FunctionId = tmp.FunctionId
-                                        AND uf.Policy = tmp.Policy
-                                        AND uf.SiteId = tmp.SiteId
-            WHERE uf.UserId = UserId AND tmp.UserId IS NULL;
-
-    INSERT INTO NAP_UserFunction(UserId
-                            , FunctionId
-                            , SiteId
-                            , Policy
-                            , CreatedBy
-                            , CreatedDate
-                            , ModifiedBy
-                            , ModifiedDate)
-    SELECT tmp.UserId 
-            , tmp.FunctionId 
-            , tmp.SiteId
-            , tmp.Policy
-            , tmp.CreatedBy
-            , tmp.CreatedDate
-            , tmp.ModifiedBy
-            , tmp.ModifiedDate
-    FROM tmp_NAP_UserFunction tmp
-    LEFT JOIN NAP_UserFunction uf ON uf.UserId = tmp.UserId 
-                                        AND uf.FunctionId = tmp.FunctionId
-                                        AND uf.Policy = tmp.Policy
-                                        AND uf.SiteId = tmp.SiteId
-    WHERE uf.UserId IS NULL;
-
-    UPDATE NAP_UserFunction uf
-    INNER JOIN tmp_NAP_UserFunction tmp ON uf.UserId = tmp.UserId 
-                                        AND uf.FunctionId = tmp.FunctionId
-                                        AND uf.Policy = tmp.Policy
-                                        AND uf.SiteId = tmp.SiteId
-    SET uf.CreatedBy = tmp.CreatedBy
-        ,uf.CreatedDate = tmp.CreatedDate
-        ,uf.ModifiedBy = tmp.ModifiedBy
-        ,uf.ModifiedDate = tmp.ModifiedDate;
+	
+	##delete others UserId from Input
+	DELETE tmp FROM tmp_NAP_UserFunction tmp WHERE tmp.UserId <> UserId OR tmp.UserId IS NULL;
+	
+	##Mark permission changed##
+	DROP TEMPORARY TABLE IF EXISTS tmp_UserFuncChange;
+	CREATE TEMPORARY TABLE tmp_UserFuncChange ( UserId INT, SiteId INT);
+	
+	INSERT INTO tmp_UserFuncChange (UserId, SiteId)
+	SELECT uf.UserId
+		,uf.SiteId
+	FROM NAP_UserFunction uf
+	LEFT JOIN tmp_NAP_UserFunction tmp ON uf.UserId = tmp.UserId
+		AND uf.FunctionId = tmp.FunctionId
+		AND uf.Policy = tmp.Policy
+		AND uf.SiteId = tmp.SiteId
+	WHERE uf.UserId = UserId
+		AND tmp.UserId IS NULL;
+	
+	INSERT INTO tmp_UserFuncChange (UserId, SiteId)
+	SELECT tmp.UserId
+		,tmp.SiteId
+	FROM tmp_NAP_UserFunction tmp
+	LEFT JOIN NAP_UserFunction uf ON uf.UserId = tmp.UserId
+		AND uf.FunctionId = tmp.FunctionId
+		AND uf.Policy = tmp.Policy
+		AND uf.SiteId = tmp.SiteId
+	WHERE tmp.UserId = UserId
+		AND uf.UserId IS NULL;
+	
+	##Use at NAP_User_SSOCheckIn
+	IF EXISTS (
+		SELECT UserId
+		FROM tmp_UserFuncChange
+	) THEN
+		UPDATE NAP_OnUser ou
+		INNER JOIN tmp_UserFuncChange tmp ON tmp.UserId = ou.UserId AND tmp.SiteId = ou.SiteId
+		SET ou.IsPermissionChanged = 1;
+    END IF;
+	
+	##delete UserId if exists
+	DELETE cur FROM NAP_UserFunction cur WHERE cur.UserId = UserId;
+	
+	INSERT INTO NAP_UserFunction (
+		UserId
+		,FunctionId
+		,SiteId
+		,Policy
+		,CreatedBy
+		,CreatedDate
+		,ModifiedBy
+		,ModifiedDate
+	)
+	SELECT tmp.UserId
+		,tmp.FunctionId
+		,tmp.SiteId
+		,tmp.Policy
+		,tmp.CreatedBy
+		,tmp.CreatedDate
+		,tmp.ModifiedBy
+		,tmp.ModifiedDate
+	FROM tmp_NAP_UserFunction tmp;
 
 ################# NAP_Users ########################### 
 
@@ -827,9 +871,11 @@ BEGIN
 		SET iLoop = iLoop +1;
 	END WHILE;
 
-    DELETE u FROM NAP_Users u
-            LEFT JOIN tmp_NAP_Users tmp ON u.UserId = tmp.UserId 
-            WHERE u.UserId = UserId AND tmp.UserId IS NULL;
+	##delete others UserId from Input
+	DELETE tmp FROM tmp_NAP_Users tmp WHERE tmp.UserId <> UserId OR tmp.UserId IS NULL;
+	
+	##delete UserId if exists
+	DELETE cur FROM NAP_Users cur WHERE cur.UserId = UserId;
 
     INSERT INTO NAP_Users(UserId
                             , GroupId
@@ -845,18 +891,7 @@ BEGIN
             , tmp.CreatedDate
             , tmp.ModifiedBy
             , tmp.ModifiedDate
-    FROM tmp_NAP_Users tmp
-    LEFT JOIN NAP_Users m ON m.UserId = tmp.UserId 
-    WHERE m.UserId IS NULL;
-
-    UPDATE NAP_Users m
-    INNER JOIN tmp_NAP_Users tmp ON m.UserId = tmp.UserId 
-    SET m.GroupId = tmp.GroupId
-        ,m.LastLoginDate = tmp.LastLoginDate
-        ,m.CreatedBy = tmp.CreatedBy
-        ,m.CreatedDate = tmp.CreatedDate
-        ,m.ModifiedBy = tmp.ModifiedBy
-        ,m.ModifiedDate = tmp.ModifiedDate;
+    FROM tmp_NAP_Users tmp;
 
 ################# NAP_UserSite ########################### 
 
@@ -924,10 +959,12 @@ BEGIN
 
 		SET iLoop = iLoop +1;
 	END WHILE;
-
-    DELETE us FROM NAP_UserSite us
-            LEFT JOIN tmp_NAP_UserSite tmp ON us.UserId = tmp.UserId AND us.SiteId = tmp.SiteId AND us.Level = tmp.Level
-            WHERE us.UserId = UserId AND tmp.UserId IS NULL;
+	
+	##delete others UserId from Input
+	DELETE tmp FROM tmp_NAP_UserSite tmp WHERE tmp.UserId <> UserId OR tmp.UserId IS NULL;
+	
+	##delete UserId if exists
+	DELETE cur FROM NAP_UserSite cur WHERE cur.UserId = UserId;
 
     INSERT INTO NAP_UserSite(UserId
                             , SiteId
@@ -951,20 +988,7 @@ BEGIN
             , tmp.ModifiedDate
             , tmp.ExpiredDate
             , tmp.IsNeverExpired
-    FROM tmp_NAP_UserSite tmp
-    LEFT JOIN NAP_UserSite m ON m.UserId = tmp.UserId AND m.SiteId = tmp.SiteId AND m.Level = tmp.Level
-    WHERE m.UserId IS NULL;
-
-    UPDATE NAP_UserSite m
-    INNER JOIN tmp_NAP_UserSite tmp ON m.UserId = tmp.UserId AND m.SiteId = tmp.SiteId AND m.Level = tmp.Level
-    SET m.IsActive = tmp.IsActive
-        ,m.LastLoginDate = tmp.LastLoginDate
-        ,m.CreatedBy = tmp.CreatedBy
-        ,m.CreatedDate = tmp.CreatedDate
-        ,m.ModifiedBy = tmp.ModifiedBy
-        ,m.ModifiedDate = tmp.ModifiedDate
-        ,m.ExpiredDate = tmp.ExpiredDate
-        ,m.IsNeverExpired = tmp.IsNeverExpired;
+    FROM tmp_NAP_UserSite tmp;
 
 ################# Customer ########################### 
 
@@ -998,35 +1022,27 @@ BEGIN
 		SET iLoop = iLoop +1;
 	END WHILE;
 
-  DELETE c FROM Customer c
-          LEFT JOIN tmp_Customer tmp ON c.custid = tmp.CustId
-          WHERE c.custid = UserId AND tmp.CustId IS NULL;
-
-  INSERT INTO Customer(
-                            custid 
-                          , firstname 
-                          , lastname 
-                          , username 
-                          , userpwd
-                          , email
-                            )
-  SELECT tmp.CustId 
-          , tmp.FirstName 
-          , tmp.LastName
-          , tmp.Username
-          , tmp.UserPwd
-          , tmp.Email
-  FROM tmp_Customer tmp
-  LEFT JOIN Customer c ON c.custid = tmp.CustId
-  WHERE c.custid IS NULL;
-
-  UPDATE Customer m
-  INNER JOIN tmp_Customer tmp ON m.custid = tmp.CustId
-  SET m.firstname = tmp.FirstName
-      ,m.lastname = tmp.LastName
-      ,m.username = tmp.Username
-      ,m.userpwd = tmp.UserPwd
-      ,m.email = tmp.Email;
+	##delete others UserId from Input
+	DELETE tmp FROM tmp_Customer tmp WHERE tmp.CustId <> UserId OR tmp.CustId IS NULL;
+	
+	##delete UserId if exists
+    DELETE cur FROM Customer cur WHERE cur.CustId = UserId;
+	
+	INSERT INTO Customer (
+		custid
+		,firstname
+		,lastname
+		,username
+		,userpwd
+		,email
+		)
+	SELECT tmp.CustId
+		,tmp.FirstName
+		,tmp.LastName
+		,tmp.Username
+		,tmp.UserPwd
+		,tmp.Email
+	FROM tmp_Customer tmp;
 
 ################# CustInfo ########################### 
 
@@ -1051,28 +1067,28 @@ BEGIN
 		SET iLoop = iLoop +1;
 	END WHILE;
 
-  DELETE c FROM custInfo c
-          LEFT JOIN tmp_CustInfo tmp ON c.custid = tmp.CustId
-          WHERE c.custid = UserId AND tmp.CustId IS NULL;
+	##delete others UserId from Input
+	DELETE tmp FROM tmp_CustInfo tmp WHERE tmp.custid <> UserId OR tmp.CustId IS NULL;
+	
+	##delete UserId if exists
+    DELETE cur FROM custInfo cur WHERE cur.custid = UserId;
 
-  INSERT INTO custInfo(
-                            custid 
-                          , username 
-                          , closed
-                            )
-  SELECT tmp.CustId 
-          , tmp.Username
-          , tmp.Closed
-  FROM tmp_CustInfo tmp
-  LEFT JOIN custInfo c ON c.custid = tmp.CustId
-  WHERE c.custid IS NULL;
+	INSERT INTO custInfo (
+		custid
+		,username
+		,closed
+	)
+	SELECT tmp.CustId
+		,tmp.Username
+		,tmp.Closed
+	FROM tmp_CustInfo tmp;
 
-  UPDATE custInfo m
-  INNER JOIN tmp_CustInfo tmp ON m.custid = tmp.CustId
-  SET m.username = tmp.Username
-      ,m.closed = tmp.Closed;
+	#Update [SyncUserControl] flag to 'Done'
+	UPDATE SystemSetting
+	SET Value = VALUE_DONE
+	WHERE ID = 30
+		AND Value = VALUE_RUNNING;
 END;
 
 //
 DELIMITER ;
-GRANT EXECUTE ON PROCEDURE NAP_UserControl_SyncData_ByUserId TO 'ncb.admin'@'%';
