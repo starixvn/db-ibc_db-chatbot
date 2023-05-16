@@ -72,7 +72,7 @@ BEGIN
 				,Site
 			FROM OPENJSON(@DepCustSAsJSON) WITH (
 					CustId INT '$.CustId'
-					Site VARCHAR(50) '$.Site'
+					,Site VARCHAR(50) '$.Site'
 					,Currency INT '$.Currency'
 				)--OPENJSON case-sensitive
 			WHERE Site IN ('spondemo' ,'Athena000')
