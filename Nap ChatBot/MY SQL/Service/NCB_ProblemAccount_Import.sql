@@ -16,10 +16,11 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_ProblemAccount_Import(
     Params    :
       - @Message : [{"LogId":1, "CustId":1, "Username":"Supertest1", "Username2":"abdkkll", "SiteName":"12BET","CategoryId":"2", "CustomerClass":"2", "CreatedDate":"2022-04-04 00:00:00", "IsTest":"0"}]
       - @CategoryInfo : [{"CategoryId":"1", "CategoryNameEN":"Group Betting", "CategoryNameCS":"群组投注"}]
-	  - @CustomerClassInfo : [{"CustomerClass":"1", "CustomerClassNameEN":"Group Betting", "CustomerClassNameCS":"群组投注"}]
+	  - @CustomerClassInfo : [{"CustomerClass":"1", "CustomerClassNameEN":"Group Betting", "CustomerClassNameCS":"群组投注"}] --CustomerClassName will store Risk Level (#186091)
     Revisions :
       - 20220404@Malcolm: Initiliaze SP [RedmineID: #170182]
 	  - 20220607@Malcolm: Get Username2 [RedmineID: #173799]
+	  - 20230406@Roy: Chatbot for Licensee | Revise the content for problem account's notification [RedmineID: #186091]
 
   */
 )
@@ -133,13 +134,13 @@ NCB_ProblemAccount_Import:BEGIN
 	CREATE TEMPORARY TABLE IF NOT EXISTS tmp_CustomerClassInfo
 	(
 		CustomerClass 		SMALLINT UNSIGNED
-		,CustomerClassNameEN VARCHAR(100)
-		,CustomerClassNameCS VARCHAR(100) CHARACTER SET utf8mb4
+		,RiskLevelEN VARCHAR(100)
+		,RiskLevelCS VARCHAR(100) CHARACTER SET utf8mb4
 		,UNIQUE INDEX Index_CustomerClass(CustomerClass)
 	);
 	
-	INSERT INTO tmp_CustomerClassInfo (CustomerClass, CustomerClassNameEN, CustomerClassNameCS)   
-	SELECT t.CustomerClass, t.CustomerClassNameEN, t.CustomerClassNameCS
+	INSERT INTO tmp_CustomerClassInfo (CustomerClass, RiskLevelEN, RiskLevelCS)   
+	SELECT t.CustomerClass, t.RiskLevelEN, t.RiskLevelCS
 	FROM 
 		JSON_TABLE
 		(
@@ -147,9 +148,9 @@ NCB_ProblemAccount_Import:BEGIN
 			"$[*]"
 			COLUMNS
 			(
-				CustomerClass 		SMALLINT 		PATH "$.CustomerClass"
-				,CustomerClassNameEN VARCHAR(100) 	PATH "$.CustomerClassNameEN"
-				,CustomerClassNameCS VARCHAR(100)	PATH "$.CustomerClassNameCS"
+				CustomerClass 		SMALLINT 	PATH "$.CustomerClass"
+				,RiskLevelEN VARCHAR(100) 		PATH "$.CustomerClassNameEN"
+				,RiskLevelCS VARCHAR(100)		PATH "$.CustomerClassNameCS"
 			)
 		) AS t;
 	
@@ -217,9 +218,8 @@ NCB_ProblemAccount_Import:BEGIN
 		FROM tmp_MsgContentTypeTemplate 
 		WHERE TemplateContent NOT LIKE '%{Problem Player}%'
 			OR TemplateContent NOT LIKE '%{Marked Date}%'
-			OR TemplateContent NOT LIKE '%{Class Number}%'
-			OR TemplateContent NOT LIKE '%{Class Name EN CN}%'
-			OR TemplateContent NOT LIKE '%{Reason EN CN}%') 
+			OR TemplateContent NOT LIKE '%{Risk Level EN CN}%'
+	) 
 	THEN
 		SET errCode = 1802;
 
@@ -228,9 +228,7 @@ NCB_ProblemAccount_Import:BEGIN
 		FROM tmp_MsgContentTypeTemplate
 		WHERE TemplateContent NOT LIKE '%{Problem Player}%'
 			OR TemplateContent NOT LIKE '%{Marked Date}%'
-			OR TemplateContent NOT LIKE '%{Class Number}%'
-			OR TemplateContent NOT LIKE '%{Class Name EN CN}%'
-			OR TemplateContent NOT LIKE '%{Reason EN CN}%';
+			OR TemplateContent NOT LIKE '%{Risk Level EN CN}%';
 
 		SET errMsg = CONCAT('Notification template is not existing (IDs): ', errMsg);
 
@@ -427,14 +425,14 @@ NCB_ProblemAccount_Import:BEGIN
 		,UsernameList 		VARCHAR(4000)
 		,MarkedDate 		VARCHAR(200)
 		,CustomerClass		SMALLINT
-		,CustomerClassName 	VARCHAR(2000)
+		,RiskLevel 			VARCHAR(2000)
 		,Reason 			VARCHAR(2000) 
 		,StatusID 			TINYINT UNSIGNED
 		,Status 			VARCHAR(20)
 		,INDEX Index_LogId  (ID)
 	);
   
-	INSERT INTO tmp_Notification (ID, ChannelId, UsernameList, MarkedDate, CustomerClass, CustomerClassName, Reason, StatusID, Status)
+	INSERT INTO tmp_Notification (ID, ChannelId, UsernameList, MarkedDate, CustomerClass, RiskLevel, Reason, StatusID, Status)
 	WITH CTE AS
 	(
 		SELECT 
@@ -456,7 +454,7 @@ NCB_ProblemAccount_Import:BEGIN
 		,UsernameList
 		,CASE WHEN MinMarkedDate = MaxMarkedDate THEN CONVERT(DATE_FORMAT(MinMarkedDate,'%m/%d/%Y %H:%i:%s'), CHAR(20)) ELSE CONCAT(CONVERT(DATE_FORMAT(MinMarkedDate,'%m/%d/%Y %H:%i:%s'), CHAR(20)), ' - ', CONVERT(DATE_FORMAT(MaxMarkedDate,'%m/%d/%Y %H:%i:%s'), CHAR(20))) END AS MarkedDate
 		,e.CustomerClass
-		,CONCAT(i.CustomerClassNameEN, ' [', i.CustomerClassNameCS, ']') AS CustomerClassName
+		,CONCAT(i.RiskLevelEN, ' [', i.RiskLevelCS, ']') AS RiskLevel
 		,CONCAT(c.CategoryNameEN ,' [', c.CategoryNameCS,']') AS Reason
 		,StatusID
 		,Status
@@ -475,13 +473,10 @@ NCB_ProblemAccount_Import:BEGIN
 			,ct.TemplateTitle
 			,REPLACE(
 				REPLACE(
-					REPLACE(
-						REPLACE(
-							REPLACE(ct.TemplateContent, '{Problem Player}', h.UsernameList)
-							, 	'{Marked Date}', h.MarkedDate)
-						, '{Class Number}', h.CustomerClass)
-					, '{Class Name EN CN}', h.CustomerClassName)
-				, '{Reason EN CN}',h.Reason) AS Content
+					REPLACE(ct.TemplateContent, '{Problem Player}', h.UsernameList)
+				, '{Marked Date}', h.MarkedDate)
+			, '{Risk Level EN CN}', h.RiskLevel)
+			AS Content
 			,startTime, 0 SendImmediately, STARIXIT_CUSTID, pCreatedDate, CREATING_NOTIFICATION_STATUS, CREATING_NOTIFICATION_STATUSID, h.ChannelID
 	    FROM tmp_Notification h
 	  	INNER JOIN tmp_MsgContentTypeTemplate ct ON ct.MsgContentsType = pMsgContentsType
