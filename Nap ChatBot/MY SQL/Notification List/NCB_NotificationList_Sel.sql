@@ -36,6 +36,7 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_NotificationList_Sel`(
 				- 20200302@Oliver: get additional notificationTypeId - RedmineID: #129339
                 - 20210513@Malcolm: Integrate Telegram [RedmineID: #151807]
 				- 20220118@Malcolm: Scale out for ChatBot [RedmineID: #181907]
+				- 20230523@Roy: Notification Bell Issue [RedmineID: #188599]
     */
 )
 BEGIN
@@ -45,7 +46,7 @@ BEGIN
 	DECLARE rowStart INT;
     SET rowStart =	pageSize * (pageIndex - 1);   
     
-    SET configSendTimeTo = DATE_ADD(configSendTimeTo, INTERVAL 1 DAY);
+    #SET configSendTimeTo = DATE_ADD(configSendTimeTo, INTERVAL 1 DAY);
     
 	#Insert comma seperated list notificationTypeIDLst to temporary tables
     DROP TEMPORARY TABLE IF EXISTS tmp_notificationTypeIDLst;
