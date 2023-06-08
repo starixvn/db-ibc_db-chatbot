@@ -3,6 +3,8 @@ ALTER PROCEDURE [dbo].[NAP_Chatbot_MissingMesssageInfo_Sel]
 	@MessageList			XML
 	,@MsgContentsTypeList	XML
 	,@RequestList		    XML
+	,@SiteAsJSON		NVARCHAR(MAX)
+	,@DepCustSAsJSON	NVARCHAR(MAX)
 AS
 /*
 	Created: 20211007@Malcolm
@@ -12,6 +14,8 @@ AS
 	Revisions:
 		- 20211007@Malcolm: Initialize SP [RedmineID: #162825]
 		- 20220116@Malcolm: Scale out for ChatBot [RedmineId: #181907]
+		- 20230515@Roy: Database - HA DB061/DB062 [RedmineID: #169643]
+	
 	. @MessageList
 			<root>
 				<r JobIdentify="1" ReferenceId="1"/>
@@ -29,6 +33,32 @@ AS
 				<r VoidingHistoryCollectionId="1" MessageId="1" RequestId="1"/>
 				<r VoidingHistoryCollectionId="2" MessageId="12" RequestId="2"/>
 			</root>
+	@SiteAsJSON
+		[
+		   {
+			  "site":"033333",
+			  "isDeposit":false,
+			  "IsChinaView":false
+		   },
+		   {
+			  "site":"0sServices",
+			  "isDeposit":true,
+			  "IsChinaView":false
+		   }
+		]
+	@DepCustSAsJSON
+		[
+		   {
+			  "CustId":179457,
+			  "site":"12Bet",
+			  "Currency":20
+		   },
+		   {
+			  "CustId":791080,
+			  "site":"12Bet",
+			  "Currency":3
+		   }
+		]
 */
 BEGIN
 	SET NOCOUNT ON
@@ -74,7 +104,15 @@ BEGIN
 
 		DECLARE @DepositSuper TABLE (CustId INT PRIMARY KEY, Site VARCHAR(50))
 		INSERT INTO @DepositSuper (CustId, Site)
-		SELECT CustId, site FROM DBACC.bodb02.dbo.Dep_CustSuper WITH (NOLOCK) WHERE site IN ('spondemo' ,'Athena000') OR Currency NOT IN (20, 27, 28)
+		SELECT DISTINCT CustId
+			,Site
+		FROM OPENJSON(@DepCustSAsJSON) WITH (
+				CustId INT '$.CustId'
+				,Site VARCHAR(50) '$.Site'
+				,Currency INT '$.Currency'
+			)--OPENJSON case-sensitive
+		WHERE Site IN ('spondemo' ,'Athena000')
+			OR Currency NOT IN (20, 27, 28)
 
 		INSERT INTO @Msg (VoidingHistoryCollectionId, MessageId, Content_en, JobIdentify, Posttime)
 		SELECT MessageId, m.MessageId, m.Content_en, 1 AS JobIdentify, m.PostTime
@@ -120,7 +158,12 @@ BEGIN
 
 		DECLARE @DepositSite TABLE (SiteName VARCHAR(50), PRIMARY KEY (SiteName))
 		INSERT INTO @DepositSite (SiteName)
-		SELECT Site FROM DBACC.bodb02.dbo.Site WITH(NOLOCK) WHERE isDeposit = 1;
+		SELECT DISTINCT Site
+		FROM OPENJSON(@SiteAsJSON) WITH (
+				Site VARCHAR(50) '$.Site'
+				,isDeposit BIT '$.isDeposit'
+			)--OPENJSON case-sensitive
+		WHERE isDeposit = 1
 
 		INSERT INTO @Msg (VoidingHistoryCollectionId, MessageId, Content_en, JobIdentify, Posttime)
 		SELECT MessageId, m.MessageId, m.Content_en, 3 AS JobIdentify, PostTime

@@ -5,6 +5,7 @@ ALTER PROCEDURE [dbo].[NAP_Chatbot_SiteMesssage_Sel]
 	,@BatchSize				INT
 	,@MsgContentsTypeLst	VARCHAR(2000)
 	,@Environment			VARCHAR(20)
+	,@SiteAsJSON			NVARCHAR(MAX)
 AS
 
 /*
@@ -19,6 +20,7 @@ AS
 		- 20210618@Percy: Migrate DBMSG to new server [RedmineID: #157217]
 		- 20211012@Malcolm: Rescan messageid <= @MessageId [RedmineID: #162825]
 		- 20220223@Malcolm: Remove SABA text out of the league name for China View platform [RedmineID: #168798]
+		- 20230515@Roy: Database - HA DB061/DB062 [RedmineID: #169643]
 */
 
 BEGIN
@@ -40,7 +42,14 @@ BEGIN
 
 	DECLARE @DepositSite TABLE (SiteName VARCHAR(50), IsChinaView BIT, PRIMARY KEY (SiteName))
 	INSERT INTO @DepositSite (SiteName, IsChinaView)
-	SELECT site, ISNULL(IsChinaView, 0) FROM DBACC.bodb02.dbo.Site WITH (NOLOCK) WHERE isDeposit = 1
+	SELECT DISTINCT Site
+		,ISNULL(IsChinaView, 0)
+	FROM OPENJSON(@SiteAsJSON) WITH (
+			Site VARCHAR(50) '$.Site'
+			,isDeposit BIT '$.isDeposit'
+			,IsChinaView BIT '$.IsChinaView'
+		)--OPENJSON case-sensitive
+	WHERE isDeposit = 1
 
 	DECLARE @Msg TABLE 
 	(
