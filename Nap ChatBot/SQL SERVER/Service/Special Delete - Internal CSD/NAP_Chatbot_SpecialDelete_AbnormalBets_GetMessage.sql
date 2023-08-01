@@ -15,6 +15,7 @@ AS
 		- 20210413@Malcolm: Integrate AB (Real member) voiding tickets [RedmineID: #153112]
 		- 20210405@Malcolm: Add RequestId for Ticket Voiding Abnormal Accounts [RedmineID: #152175]
 		- 20220112@Malcolm: Scale Out for ChatBot [RedmineId : #181907]
+		- 20230731@Malcolm: Incorporate voiding duplicated bet tickets with TVS [RedmineId : #191355]
 */
 
 BEGIN
@@ -35,6 +36,7 @@ BEGIN
 		,VoidingHistoryId			INT
 		,Usernames					NVARCHAR(MAX)
 		,TransIds					VARCHAR(MAX)
+		,DuplicatedTickets			VARCHAR(MAX)
 		,FilterBy					TINYINT
 		,IssueTypeId				TINYINT
 	)
@@ -57,24 +59,29 @@ BEGIN
 	UPDATE r
 		SET r.IssueTypeId = rq.IssueTypeId
 			,r.Usernames = CASE WHEN rq.IssueTypeId = 13 THEN n.Usernames ELSE '' END
-			,r.FilterBy = n.FilterBy
+			,r.FilterBy = ISNULL(n.FilterBy, 0)
 			,r.TransIds = CASE WHEN rq.IssueTypeId = 13 THEN '' ELSE vh.TransIds END
+			,r.DuplicatedTickets = CASE WHEN rq.IssueTypeId = 20 THEN n.DuplicatedTickets ELSE NULL END
 	FROM #Result r
 		INNER JOIN dbo.TicketVoiding_VoidingHistory vh WITH(NOLOCK) ON vh.VoidingHistoryId = r.VoidingHistoryId
 		INNER JOIN dbo.TicketVoiding_Request rq WITH(NOLOCK) ON vh.RequestId = rq.RequestId 
 		OUTER APPLY (
-			SELECT TOP(1) FilterBy, Usernames 
+			SELECT TOP(1) CASE WHEN r.IssueTypeId IN (11, 20) THEN FilterBy ELSE 0 END AS FilterBy, Usernames, CASE WHEN rq.IssueTypeId = 20 THEN rd.TransIds ELSE NULL END AS DuplicatedTickets
 			FROM dbo.TicketVoIding_RequestDetail rd WITH(NOLOCK) 
 			WHERE rd.RequestId = vh.RequestId
-		) AS n(FilterBy, Usernames)
+		) AS n(FilterBy, Usernames, DuplicatedTickets)
 
-	SELECT VoidingHistoryCollectionId, VoidingHistoryId, ISNULL(FilterBy, 0) AS FilterBy, TransIds, IssueTypeId
+	SELECT VoidingHistoryCollectionId, VoidingHistoryId, TransIds, FilterBy, IssueTypeId
 	FROM #Result -- Abnormal bets
 	WHERE IssueTypeId IN (11, 15)
 
 	SELECT VoidingHistoryCollectionId, VoidingHistoryId, Usernames
 	FROM #Result
 	WHERE IssueTypeId = 13 -- Abnormal accounts
+
+	SELECT VoidingHistoryCollectionId, VoidingHistoryId, DuplicatedTickets, FilterBy, IssueTypeId
+	FROM #Result
+	WHERE IssueTypeId = 20 -- Duplicated tickets
 
 	DROP TABLE #Result
 END

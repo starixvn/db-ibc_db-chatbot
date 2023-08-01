@@ -3,8 +3,9 @@ DROP PROCEDURE IF EXISTS NCB_SpecialDeleteMsg_AbnormalBets_Import;
 DELIMITER //
 
 CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_SpecialDeleteMsg_AbnormalBets_Import(
-  IN messageHeader 	JSON
-  ,IN messageDetail JSON
+  IN messageHeader 	 JSON
+  ,IN messageDetail  JSON
+  ,IN duplicatedInfo JSON
   ,OUT errCode 		INT
   ,OUT errMsg 		VARCHAR(200)
 
@@ -15,14 +16,23 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_SpecialDeleteMsg_AbnormalBets
     Params    :
       - @MessageHeader:
 							[  
-								{ "VoidingHistoryCollectionId":885128, "RequestIDLst":"101102", "DecidedByLst":"PatrickStarix", "RequestByLst":"PatrickStarix", "VoidByLst":"Starix", "ReasonLst":"Group BettingOthers", "KickOffTime":"2020-02-12 03:00:00", "LeagueName":"ENG", "HomeName":"MC", "AwayName":"MU", "HalfTimeHomeScore":1, "HalfTimeAwayScore":0, "FullTimeHomeScore":1, "FullTimeAwayScore":1, "TypeNameLst":"HandicapOver/Under", "TotalTickets": 1, "CreditSiteLst":"CN88NV88", "DepositSiteLst":"12BETHaifa", "MinWinlostDate" : "2021-01-01", "MaxWinlostDate" : "2021-04-02", "UsernameLst" : "Malcolm1", "Type" : "1", "Content_en":"", "Content_cs":"", "IsTest":0}
-								 ,{ "VoidingHistoryCollectionId":885131, "RequestIDLst":"103104", "DecidedByLst":"PatrickStarix", "RequestByLst":"PatrickStarix", "VoidByLst":"Starix", "ReasonLst":"Group BettingOthers", "KickOffTime":"2020-02-12 03:00:00", "LeagueName":"ENG", "HomeName":"MC", "AwayName":"MU", "HalfTimeHomeScore":1, "HalfTimeAwayScore":0, "FullTimeHomeScore":1, "FullTimeAwayScore":1, "TypeNameLst":"Moneyline", "TotalTickets": 10, "CreditSiteLst":"CN88NV88", "DepositSiteLst":"12BETHaifa", "MinWinlostDate" : "2021-01-01", "MaxWinlostDate" : "2021-04-02", "UsernameLst" : "Malcoln1", "Type" : "2", "Content_en":"", "Content_cs":"", "IsTest":0}
+								{ "VoidingHistoryCollectionId":885128, "RequestIDLst":"101102", "DecidedByLst":"PatrickStarix", "RequestByLst":"PatrickStarix", "VoidByLst":"Starix", "ReasonLst":"Group BettingOthers", "KickOffTime":"2020-02-12 03:00:00", "LeagueName":"ENG", "HomeName":"MC", "AwayName":"MU", "HalfTimeHomeScore":1, "HalfTimeAwayScore":0, "FullTimeHomeScore":1, "FullTimeAwayScore":1, "TypeNameLst":"HandicapOver/Under", "TotalTickets": 1, "CreditSiteLst":"CN88NV88", "DepositSiteLst":"12BETHaifa", "MinWinlostDate" : "2021-01-01", "MaxWinlostDate" : "2021-04-02", "UsernameLst" : "Malcolm1", "IssueTypeId" : "11", "IsParlay":"0", "Content_en":"", "Content_cs":"", "IsTest":0, "MatchId":"123"
+								}
+								,{ "VoidingHistoryCollectionId":885131, "RequestIDLst":"103104", "DecidedByLst":"PatrickStarix", "RequestByLst":"PatrickStarix", "VoidByLst":"Starix", "ReasonLst":"Group BettingOthers", "KickOffTime":"2020-02-12 03:00:00", "LeagueName":"ENG", "HomeName":"MC", "AwayName":"MU", "HalfTimeHomeScore":1, "HalfTimeAwayScore":0, "FullTimeHomeScore":1, "FullTimeAwayScore":1, "TypeNameLst":"Moneyline", "TotalTickets": 10, "CreditSiteLst":"CN88NV88", "DepositSiteLst":"12BETHaifa", "MinWinlostDate" : "2021-01-01", "MaxWinlostDate" : "2021-04-02", "UsernameLst" : "Malcoln1", "IssueTypeId" : "11", "IsParlay":"0", "Content_en":"", "Content_cs":"", "IsTest":0, "MatchId":"123"
+								}
 							]
 							
 	- @messageDetail: 		[{ "VoidingHistoryCollectionId":885128, "MessageId": 1}
 							,{ "VoidingHistoryCollectionId":885129, "MessageId": 2}
 							,{ "VoidingHistoryCollectionId":885130, "MessageId": 3}
 							,{ "VoidingHistoryCollectionId":885131, "MessageId": 4}]
+							
+	- @DuplicatedInfo		[  
+								{ "VoidingHistoryCollectionId":885128, "Status":"running", "CurrencyName":"USD", "OrgTransId":"1", "VoidedTransId":2, "TransInfo":""
+								}
+								,{ "VoidingHistoryCollectionId":885131, "Status":"running", "CurrencyName":"USD", "OrgTransId":"1", "VoidedTransId":2, "TransInfo":""
+								}
+							]
 
     Revisions :
       - 20200214@Percy: Initiliaze SP [RedmineID: #127944]
@@ -33,10 +43,11 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_SpecialDeleteMsg_AbnormalBets
 	  - 20210513@Malcolm: Integrate Telegram [RedmineID: #151807]
       - 20211123@Malcolm: Voiding abnormalbet for Mix parlay [RedmineID: #163777]
 	  - 20230117@Malcolm: Scale out for ChatBot [RedmineID: #181907]
+	  - 20230731@Malcolm: Incorporate voiding duplicated bet tickets with TVS [RedmineId : #191355]
+	  
 	Param's Explanation:
-		- Type = 1: for message of abnormal bets (issue type = 11 15)
-		- Type = 2: for message of abnormal accounts (issue type = 13)
-        - Type = 3: for message of abnormal bets (mix parlay (Filterby = 1))
+		- IssueTypeId = 15 : AB real member, 13 : Abnormal Account, 11: Abnormal Bet, 20: Duplicated Tickets
+		- IsParlay = 0: Singel ticket, 1: Parlay ticket
   */
 )
 SQL SECURITY DEFINER
@@ -114,7 +125,9 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 		,MinWinlostDate 			DATETIME(3)
 		,MaxWinlostDate 			DATETIME(3)
 		,UsernameLst 				TEXT
-		,Type						INT
+		,IssueTypeId				INT
+		,IsParlay					TINYINT
+		,matchId 					INT
 		,PRIMARY KEY (Id)
 		,UNIQUE INDEX Index_VoidingHistoryCollectionId(VoidingHistoryCollectionId)
 	);
@@ -145,7 +158,9 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 		,MinWinlostDate 
 		,MaxWinlostDate 
 		,UsernameLst
-		,Type 
+		,IssueTypeId
+		,IsParlay	
+		,matchId
 		,CheckMsg
 	)
 	SELECT 
@@ -173,7 +188,9 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 		,MinWinlostDate 
 		,MaxWinlostDate 
 		,UsernameLst
-		,Type 
+		,IssueTypeId
+		,IsParlay	
+		,matchId
 		,'' AS CheckMsg
 	FROM 
 		JSON_TABLE
@@ -206,9 +223,111 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 				,MinWinlostDate 			DATETIME(3)     PATH "$.MinWinlostDate"
 				,MaxWinlostDate 			DATETIME(3)     PATH "$.MaxWinlostDate"
 				,UsernameLst 				TEXT            PATH "$.UsernameLst"
-				,Type 						INT             PATH "$.Type"
+				,IssueTypeId 				INT     		PATH "$.IssueTypeId"
+				,IsParlay 					TINYINT     	PATH "$.IsParlay"
+				,matchId 					INT     		PATH "$.matchId"
 			)
 		) AS t;
+		
+	DROP TEMPORARY TABLE IF EXISTS tmp_CopyMsgHeader;
+	CREATE TEMPORARY TABLE IF NOT EXISTS tmp_CopyMsgHeader
+	(
+		Id							INT NOT NULL AUTO_INCREMENT
+		,VoidingHistoryCollectionId INT
+		,IsTest 					TINYINT
+		,RequestIDLst 				TEXT
+		,DecidedByLst 				TEXT
+		,RequestByLst 				TEXT
+		,VoidByLst 					TEXT
+		,ReasonLst 					TEXT
+		,KickOffTime 				TEXT
+		,LeagueName 				TEXT
+		,HomeName 					TEXT
+		,AwayName 					TEXT
+		,HalfTimeHomeScore 			TEXT
+		,HalfTimeAwayScore 			TEXT
+		,FullTimeHomeScore 			TEXT
+		,FullTimeAwayScore 			TEXT
+		,TypeNameLst 				TEXT
+		,TotalTickets 				INT
+		,CreditSiteLst 				TEXT
+		,DepositSiteLst 			TEXT
+		,Content_en 				TEXT
+		,Content_cs 				TEXT
+		,Content_Detail 			TEXT
+		,CheckMsg 					TEXT
+		,CheckMsgDetail 			TEXT
+		,MinWinlostDate 			DATETIME(3)
+		,MaxWinlostDate 			DATETIME(3)
+		,UsernameLst 				TEXT
+		,IssueTypeId				INT
+		,IsParlay					TINYINT
+		,matchId 					INT
+		,PRIMARY KEY (Id)
+		,UNIQUE INDEX Index_VoidingHistoryCollectionId(VoidingHistoryCollectionId)
+	);
+	
+	INSERT INTO tmp_CopyMsgHeader
+	(
+		VoidingHistoryCollectionId 
+		,IsTest 
+		,RequestIDLst 
+		,DecidedByLst 
+		,RequestByLst 
+		,VoidByLst 
+		,ReasonLst 
+		,KickOffTime 
+		,LeagueName
+		,HomeName 
+		,AwayName 
+		,HalfTimeHomeScore 
+		,HalfTimeAwayScore 
+		,FullTimeHomeScore 
+		,FullTimeAwayScore 
+		,TypeNameLst 
+		,TotalTickets 
+		,CreditSiteLst 
+		,DepositSiteLst 
+		,Content_en 
+		,Content_cs
+		,MinWinlostDate 
+		,MaxWinlostDate 
+		,UsernameLst
+		,IssueTypeId
+		,IsParlay	
+		,matchId
+		,CheckMsg
+	)
+	SELECT 
+		VoidingHistoryCollectionId 
+		,IsTest 
+		,RequestIDLst 
+		,DecidedByLst 
+		,RequestByLst 
+		,VoidByLst 
+		,ReasonLst 
+		,KickOffTime 
+		,LeagueName
+		,HomeName 
+		,AwayName 
+		,HalfTimeHomeScore 
+		,HalfTimeAwayScore 
+		,FullTimeHomeScore 
+		,FullTimeAwayScore 
+		,TypeNameLst 
+		,TotalTickets 
+		,CreditSiteLst 
+		,DepositSiteLst 
+		,Content_en 
+		,Content_cs
+		,MinWinlostDate 
+		,MaxWinlostDate 
+		,UsernameLst
+		,IssueTypeId
+		,IsParlay	
+		,matchId
+		,'' AS CheckMsg
+	FROM tmp_MsgHeader;
     
 	DROP TEMPORARY TABLE IF EXISTS tmp_MsgDetail;
 	CREATE TEMPORARY TABLE IF NOT EXISTS tmp_MsgDetail (VoidingHistoryCollectionId INT, MessageId INT);
@@ -226,90 +345,193 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 				,MessageId					INT PATH "$.MessageId"
 			)
 		) AS t;
+		
+	DROP TEMPORARY TABLE IF EXISTS tmp_DuplicatedInfo;
+	CREATE TEMPORARY TABLE IF NOT EXISTS tmp_DuplicatedInfo (
+		VoidingHistoryCollectionId INT, CustId INT, Username VARCHAR(30), Status VARCHAR(10) CHARACTER SET utf8mb4, CurrencyName VARCHAR(50) CHARACTER SET utf8mb4
+		,OrgTransId BIGINT, VoidedTransId BIGINT, odds VARCHAR(20), TransInfo TEXT
+	);
+	
+	INSERT INTO tmp_DuplicatedInfo (VoidingHistoryCollectionId, CustId, Username, OrgTransId, VoidedTransId, odds, Status, CurrencyName, TransInfo)
+	SELECT VoidingHistoryCollectionId, CustId, Username, OrgTransId, VoidedTransId, odds, Status, CurrencyName, TransInfo
+	FROM 
+		JSON_TABLE
+		(
+			messageDetail
+			,"$[*]"
+			COLUMNS
+			(
+				VoidingHistoryCollectionId 	INT 		PATH "$.VoidingHistoryCollectionId"
+				,CustId						INT 		PATH "$.CustId"
+				,Username					VARCHAR(30) PATH "$.Username"	 
+				,OrgTransId					BIGINT 		PATH "$.OrgTransId"
+				,VoidedTransId				BIGINT 		PATH "$.VoidedTransId"
+				,Status						VARCHAR(10) CHARACTER SET utf8mb4 PATH "$.Status" 
+				,CurrencyName				VARCHAR(50) CHARACTER SET utf8mb4 PATH "$.CurrencyName"
+				,TransInfo					TEXT        PATH "$.TransInfo"
+			)
+		) AS t;
     
+	/*Abnormal bet (15), Ab real member (11)*/
     #Update Content_Detail
 	UPDATE tmp_MsgHeader
     SET Content_Detail = CONCAT(
         'Request No.: ', RequestIDLst
-        , '\r\n', '\r\n'
-        , 'Event Start Time: ', KickOffTime
-        , '\r\n'
-        , 'League: ', LeagueName
-        , '\r\n'
-        , 'Match: ', HomeName , ' - vs - ' , AwayName
-        , '\r\n', '\r\n'
-        , '**Affected Credit sites:', CASE WHEN CreditSiteLst > '' THEN CONCAT(' ', CreditSiteLst, '**') ELSE '**' END
-        , '\r\n'
-        , '**Affected Licensee sites:', CASE WHEN DepositSiteLst > '' THEN CONCAT(' ', DepositSiteLst, '**') ELSE '**' END
-        , '\r\n', '\r\n'
-        , 'Bettype: ', TypeNameLst
-        , '\r\n'
-        , 'Total: ', IFNULL(CONVERT(TotalTickets USING latin1), '')
-        , '\r\n'
-        , 'Reason: ', ReasonLst
-        , '\r\n'
-        , 'Results: ', 'HT ', IFNULL(CONCAT(NULLIF(HalfTimeHomeScore, 'NULL') , '-', NULLIF(HalfTimeAwayScore, 'NULL')), 'N/A'), ', FT ', IFNULL(CONCAT(NULLIF(FullTimeHomeScore, 'NULL') , '-', NULLIF(FullTimeAwayScore, 'NULL')), 'N/A')
-        , '\r\n'
-        , 'Decided by: ', DecidedByLst
-        , '\r\n'
-        , 'Requested by: ', RequestByLst
-        , '\r\n'
-        , 'Voided by: ', VoidByLst
-        , '\r\n', '\r\n'
-        , IFNULL(Content_en, '')
-        , '\r\n', '\r\n'
-        , IFNULL(Content_cs, '')
+        ,'\r\n', '\r\n'
+        ,IF
+		(
+			IsParlay = 0
+			,CONCAT
+			(
+				'Event Start Time: ', KickOffTime
+				,'\r\n'
+				,'League: ', LeagueName
+				,'\r\n'
+				,'Match: ', HomeName , ' - vs - ' , AwayName
+				,'\r\n', '\r\n'
+			)
+			,''
+		)
+        ,'**Affected Credit sites:', CASE WHEN CreditSiteLst > '' THEN CONCAT(' ', CreditSiteLst, '**') ELSE '**' END
+        ,'\r\n'
+        ,'**Affected Licensee sites:', CASE WHEN DepositSiteLst > '' THEN CONCAT(' ', DepositSiteLst, '**') ELSE '**' END
+        ,'\r\n', '\r\n'
+        ,'Bettype: ', TypeNameLst
+        ,'\r\n'
+        ,'Total: ', IFNULL(CONVERT(TotalTickets USING latin1), '')
+        ,'\r\n'
+        ,'Reason: ', ReasonLst
+        ,'\r\n'
+        ,IF
+		(
+			IsParlay = 0
+			,CONCAT
+			(
+				'Results: ', 'HT ', IFNULL(CONCAT(NULLIF(HalfTimeHomeScore, 'NULL') , '-', NULLIF(HalfTimeAwayScore, 'NULL')), 'N/A'), ', FT ', IFNULL(CONCAT(NULLIF(FullTimeHomeScore, 'NULL') , '-', NULLIF(FullTimeAwayScore, 'NULL')), 'N/A')
+				,'\r\n'
+			)
+			,''
+		)
+        ,'Decided by: ', DecidedByLst
+        ,'\r\n'
+        ,'Requested by: ', RequestByLst
+        ,'\r\n'
+        ,'Voided by: ', VoidByLst
+        ,'\r\n', '\r\n'
+        ,IFNULL(Content_en, '')
+        ,'\r\n', '\r\n'
+        ,IFNULL(Content_cs, '')
         )
-	WHERE Type = 1;
+	WHERE IssueTypeId IN (11, 15);
     
+	/*Abnormal Account (13)*/
     UPDATE tmp_MsgHeader
     SET Content_Detail = CONCAT(
         'Request No.: ', RequestIDLst
-        , '\r\n', '\r\n'
-        , '**Affected Credit sites:', IFNULL(CreditSiteLst,''), '**'
-        , '\r\n'
-        , '**Affected Licensee sites:', IFNULL(DepositSiteLst,''), '**'
-        , '\r\n', '\r\n'
-        , 'Event Date: ', IFNULL(DATE_FORMAT(MinWinlostDate,'%b %d, %Y'),''),' - ',IFNULL(DATE_FORMAT(MaxWinlostDate,'%b %d, %Y'),'')
-        , '\r\n'
+        ,'\r\n', '\r\n'
+        ,'**Affected Credit sites:', IFNULL(CreditSiteLst,''), '**'
+        ,'\r\n'
+        ,'**Affected Licensee sites:', IFNULL(DepositSiteLst,''), '**'
+        ,'\r\n', '\r\n'
+        ,'Event Date: ', IFNULL(DATE_FORMAT(MinWinlostDate,'%b %d, %Y'),''),' - ',IFNULL(DATE_FORMAT(MaxWinlostDate,'%b %d, %Y'),'')
+        ,'\r\n'
         ,'Affected accounts: ', IFNULL(UsernameLst,'')
-        , '\r\n'
-        , 'Requested by: ', RequestByLst
-        , '\r\n'
-        , 'Voided by: ', VoidByLst
-        , '\r\n', '\r\n'
-        , IFNULL(Content_en, '')
-        , '\r\n', '\r\n'
-        , IFNULL(Content_cs, '')
+        ,'\r\n'
+        ,'Requested by: ', RequestByLst
+        ,'\r\n'
+        ,'Voided by: ', VoidByLst
+        ,'\r\n', '\r\n'
+        ,IFNULL(Content_en, '')
+        ,'\r\n', '\r\n'
+        ,IFNULL(Content_cs, '')
         )
-	WHERE Type = 2;
+	WHERE IssueTypeId = 13;
 	
-    UPDATE tmp_MsgHeader
-    SET Content_Detail = CONCAT(
-        'Request No.: ', RequestIDLst
-        , '\r\n', '\r\n'
-        , '**Affected Credit sites:', CASE WHEN CreditSiteLst > '' THEN CONCAT(' ', CreditSiteLst, '**') ELSE '**' END
-        , '\r\n'
-        , '**Affected Licensee sites:', CASE WHEN DepositSiteLst > '' THEN CONCAT(' ', DepositSiteLst, '**') ELSE '**' END
-        , '\r\n', '\r\n'
-        , 'Bettype: ', TypeNameLst
-        , '\r\n'
-        , 'Total: ', IFNULL(CONVERT(TotalTickets USING latin1), '')
-        , '\r\n'
-        , 'Reason: ', ReasonLst
-        , '\r\n'
-        , 'Decided by: ', DecidedByLst
-        , '\r\n'
-        , 'Requested by: ', RequestByLst
-        , '\r\n'
-        , 'Voided by: ', VoidByLst
-        , '\r\n', '\r\n'
-        , IFNULL(Content_en, '')
-        , '\r\n', '\r\n'
-        , IFNULL(Content_cs, '')
-        )
-	WHERE Type = 3;
-	
+	/*Duplicated tickets*/
+	#Update Content_Detail
+	WITH CTE_CommonInfo AS
+	(
+		SELECT 
+			VoidingHistoryCollectionId
+			,CONCAT
+			(
+				'Request No: ', RequestIDLst
+				,'\r\n','\r\n'
+				,IF(IsParlay = 0,CONCAT('Match ID:	', IFNULL(CONVERT(matchid USING latin1), ''),'\r\n'),'')
+				,'Affected Credit sites: ', CreditSiteLst
+				,'\r\n'
+				,'Affected Licensee sites:	', DepositSiteLst
+				,'\r\n','\r\n'
+				,'Total:	', IFNULL(CONVERT(TotalTickets USING latin1), '')
+				,'\r\n'
+				,'Decided by:	',DecidedByLst
+				,'\r\n'
+				,'Requested by:	', RequestByLst
+				,'\r\n'
+				,'Voided by: ', VoidByLst
+				,'\r\n','\r\n'
+				,'VOID Duplicate Ticket Entry'
+				,'\r\n','\r\n'
+			) AS Content
+			,CONCAT
+			(	
+				'\r\n','\r\n'
+				,Content_en
+				,'\r\n','\r\n'
+				,Content_cs
+			) AS Message
+		FROM tmp_CopyMsgHeader
+        WHERE IssueTypeId = 20 
+		GROUP BY VoidingHistoryCollectionId
+	),CTE_TicketsDetail AS
+	(
+		SELECT 
+			VoidingHistoryCollectionId
+			,OrgTransId
+			,Username
+			,COUNT(1) AS TotalTickets
+			,GROUP_CONCAT(
+				CONCAT
+				(
+					IFNULL(TransInfo, '')
+					,'\r\n'
+					,'Stake: ', IFNULL(CONVERT(Stake USING latin1), ''), '(', CurrencyName, ')'
+					,'\r\n'
+					,'Status:	', Status
+                    ,'\r\n'
+				) 
+				ORDER BY Status ASC SEPARATOR ''
+			) AS ContentDetail
+		FROM tmp_CopyMsgHeader
+        WHERE IssueTypeId = 20 
+		GROUP BY VoidingHistoryCollectionId, OrgTransId, Username
+	),CTE_Tickets AS
+	(
+		SELECT 
+			VoidingHistoryCollectionId
+			,GROUP_CONCAT(
+				CONCAT
+				(
+					'- System ID: ', Username
+					,'\r\n'
+					,'- Remained ticket:'
+					,'\r\n'
+					,'Ref No: ', IFNULL(CONVERT(OrgTransId USING latin1), '')
+					,'\r\n'
+					,'- Voided ticket: ', IFNULL(CONVERT(TotalTickets USING latin1), '0')
+					,'\r\n'
+					,ContentDetail
+				)
+				ORDER BY Username ASC SEPARATOR ''
+			) AS Content
+		FROM CTE_TicketsDetail
+		GROUP BY VoidingHistoryCollectionId
+	)
+	UPDATE tmp_MsgHeader h 
+		LEFT JOIN CTE_CommonInfo e ON e.VoidingHistoryCollectionId = h.VoidingHistoryCollectionId
+		LEFT JOIN CTE_Tickets s ON s.VoidingHistoryCollectionId = h.VoidingHistoryCollectionId
+	SET h.Content_Detail = CONCAT(e.Content, s.content, e.Message);
+    
 	/*Step 2: Parse JSON data for message template notification type*/
 	SELECT Value INTO templateNotifcationType
     FROM SystemSetting
