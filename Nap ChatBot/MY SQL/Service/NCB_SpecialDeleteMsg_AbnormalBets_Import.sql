@@ -28,9 +28,9 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_SpecialDeleteMsg_AbnormalBets
 							,{ "VoidingHistoryCollectionId":885131, "MessageId": 4}]
 							
 	- @DuplicatedInfo		[  
-								{ "VoidingHistoryCollectionId":885128, "Status":"running", "CurrencyName":"USD", "OrgTransId":"1", "VoidedTransId":2, "TransInfo":""
+								{ "VoidingHistoryCollectionId":885128, "CustId":"12", "Username":"Supertestm1", "Stake":"100.00", "Status":"running", "CurrencyName":"USD", "OrgTransId":"1", "VoidedTransId":2, "TransInfo":""
 								}
-								,{ "VoidingHistoryCollectionId":885131, "Status":"running", "CurrencyName":"USD", "OrgTransId":"1", "VoidedTransId":2, "TransInfo":""
+								,{ "VoidingHistoryCollectionId":885131, "CustId":"12", "Username":"Supertestm1", "Stake":"100.00", "Status":"running", "CurrencyName":"USD", "OrgTransId":"1", "VoidedTransId":2, "TransInfo":""
 								}
 							]
 
@@ -127,7 +127,7 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 		,UsernameLst 				TEXT
 		,IssueTypeId				INT
 		,IsParlay					TINYINT
-		,matchId 					INT
+		,MatchId 					INT
 		,PRIMARY KEY (Id)
 		,UNIQUE INDEX Index_VoidingHistoryCollectionId(VoidingHistoryCollectionId)
 	);
@@ -160,7 +160,7 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 		,UsernameLst
 		,IssueTypeId
 		,IsParlay	
-		,matchId
+		,MatchId
 		,CheckMsg
 	)
 	SELECT 
@@ -190,7 +190,7 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 		,UsernameLst
 		,IssueTypeId
 		,IsParlay	
-		,matchId
+		,MatchId
 		,'' AS CheckMsg
 	FROM 
 		JSON_TABLE
@@ -225,109 +225,13 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 				,UsernameLst 				TEXT            PATH "$.UsernameLst"
 				,IssueTypeId 				INT     		PATH "$.IssueTypeId"
 				,IsParlay 					TINYINT     	PATH "$.IsParlay"
-				,matchId 					INT     		PATH "$.matchId"
+				,MatchId 					INT     		PATH "$.MatchId"
 			)
 		) AS t;
 		
 	DROP TEMPORARY TABLE IF EXISTS tmp_CopyMsgHeader;
-	CREATE TEMPORARY TABLE IF NOT EXISTS tmp_CopyMsgHeader
-	(
-		Id							INT NOT NULL AUTO_INCREMENT
-		,VoidingHistoryCollectionId INT
-		,IsTest 					TINYINT
-		,RequestIDLst 				TEXT
-		,DecidedByLst 				TEXT
-		,RequestByLst 				TEXT
-		,VoidByLst 					TEXT
-		,ReasonLst 					TEXT
-		,KickOffTime 				TEXT
-		,LeagueName 				TEXT
-		,HomeName 					TEXT
-		,AwayName 					TEXT
-		,HalfTimeHomeScore 			TEXT
-		,HalfTimeAwayScore 			TEXT
-		,FullTimeHomeScore 			TEXT
-		,FullTimeAwayScore 			TEXT
-		,TypeNameLst 				TEXT
-		,TotalTickets 				INT
-		,CreditSiteLst 				TEXT
-		,DepositSiteLst 			TEXT
-		,Content_en 				TEXT
-		,Content_cs 				TEXT
-		,Content_Detail 			TEXT
-		,CheckMsg 					TEXT
-		,CheckMsgDetail 			TEXT
-		,MinWinlostDate 			DATETIME(3)
-		,MaxWinlostDate 			DATETIME(3)
-		,UsernameLst 				TEXT
-		,IssueTypeId				INT
-		,IsParlay					TINYINT
-		,matchId 					INT
-		,PRIMARY KEY (Id)
-		,UNIQUE INDEX Index_VoidingHistoryCollectionId(VoidingHistoryCollectionId)
-	);
-	
-	INSERT INTO tmp_CopyMsgHeader
-	(
-		VoidingHistoryCollectionId 
-		,IsTest 
-		,RequestIDLst 
-		,DecidedByLst 
-		,RequestByLst 
-		,VoidByLst 
-		,ReasonLst 
-		,KickOffTime 
-		,LeagueName
-		,HomeName 
-		,AwayName 
-		,HalfTimeHomeScore 
-		,HalfTimeAwayScore 
-		,FullTimeHomeScore 
-		,FullTimeAwayScore 
-		,TypeNameLst 
-		,TotalTickets 
-		,CreditSiteLst 
-		,DepositSiteLst 
-		,Content_en 
-		,Content_cs
-		,MinWinlostDate 
-		,MaxWinlostDate 
-		,UsernameLst
-		,IssueTypeId
-		,IsParlay	
-		,matchId
-		,CheckMsg
-	)
-	SELECT 
-		VoidingHistoryCollectionId 
-		,IsTest 
-		,RequestIDLst 
-		,DecidedByLst 
-		,RequestByLst 
-		,VoidByLst 
-		,ReasonLst 
-		,KickOffTime 
-		,LeagueName
-		,HomeName 
-		,AwayName 
-		,HalfTimeHomeScore 
-		,HalfTimeAwayScore 
-		,FullTimeHomeScore 
-		,FullTimeAwayScore 
-		,TypeNameLst 
-		,TotalTickets 
-		,CreditSiteLst 
-		,DepositSiteLst 
-		,Content_en 
-		,Content_cs
-		,MinWinlostDate 
-		,MaxWinlostDate 
-		,UsernameLst
-		,IssueTypeId
-		,IsParlay	
-		,matchId
-		,'' AS CheckMsg
-	FROM tmp_MsgHeader;
+	CREATE TEMPORARY TABLE tmp_CopyMsgHeader
+	AS SELECT * FROM tmp_MsgHeader;
     
 	DROP TEMPORARY TABLE IF EXISTS tmp_MsgDetail;
 	CREATE TEMPORARY TABLE IF NOT EXISTS tmp_MsgDetail (VoidingHistoryCollectionId INT, MessageId INT);
@@ -348,30 +252,35 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 		
 	DROP TEMPORARY TABLE IF EXISTS tmp_DuplicatedInfo;
 	CREATE TEMPORARY TABLE IF NOT EXISTS tmp_DuplicatedInfo (
-		VoidingHistoryCollectionId INT, CustId INT, Username VARCHAR(30), Status VARCHAR(10) CHARACTER SET utf8mb4, CurrencyName VARCHAR(50) CHARACTER SET utf8mb4
-		,OrgTransId BIGINT, VoidedTransId BIGINT, odds VARCHAR(20), TransInfo TEXT
+		Id INT NOT NULL AUTO_INCREMENT, VoidingHistoryCollectionId INT, CustId INT, Username VARCHAR(30), Status VARCHAR(10) CHARACTER SET utf8mb4, CurrencyName VARCHAR(50) CHARACTER SET utf8mb4
+		,OrgTransId BIGINT, VoidedTransId BIGINT, TransInfo TEXT, Stake DECIMAL(20,4) ,IsParlay TINYINT, PRIMARY KEY (Id)
 	);
 	
-	INSERT INTO tmp_DuplicatedInfo (VoidingHistoryCollectionId, CustId, Username, OrgTransId, VoidedTransId, odds, Status, CurrencyName, TransInfo)
-	SELECT VoidingHistoryCollectionId, CustId, Username, OrgTransId, VoidedTransId, odds, Status, CurrencyName, TransInfo
+	INSERT INTO tmp_DuplicatedInfo (VoidingHistoryCollectionId, CustId, Username, OrgTransId, VoidedTransId, Status, CurrencyName, Stake, TransInfo)
+	SELECT VoidingHistoryCollectionId, CustId, Username, IFNULL(OrgTransId, 0), VoidedTransId, Status, CurrencyName, Stake, TransInfo
 	FROM 
 		JSON_TABLE
 		(
-			messageDetail
+			duplicatedInfo
 			,"$[*]"
 			COLUMNS
 			(
-				VoidingHistoryCollectionId 	INT 		PATH "$.VoidingHistoryCollectionId"
-				,CustId						INT 		PATH "$.CustId"
-				,Username					VARCHAR(30) PATH "$.Username"	 
-				,OrgTransId					BIGINT 		PATH "$.OrgTransId"
-				,VoidedTransId				BIGINT 		PATH "$.VoidedTransId"
-				,Status						VARCHAR(10) CHARACTER SET utf8mb4 PATH "$.Status" 
-				,CurrencyName				VARCHAR(50) CHARACTER SET utf8mb4 PATH "$.CurrencyName"
-				,TransInfo					TEXT        PATH "$.TransInfo"
+				VoidingHistoryCollectionId 	INT 			PATH "$.VoidingHistoryCollectionId"
+				,CustId						INT 			PATH "$.CustId"
+				,Username					VARCHAR(30) 	PATH "$.Username"	 
+				,OrgTransId					BIGINT 			PATH "$.OrgTransId"
+				,VoidedTransId				BIGINT 			PATH "$.VoidedTransId"
+				,Status						VARCHAR(10)   	CHARACTER SET utf8mb4 PATH "$.Status" 
+				,CurrencyName				VARCHAR(50)   	CHARACTER SET utf8mb4 PATH "$.CurrencyName"
+				,Stake						DECIMAL(20,4) 	PATH "$.Stake"
+				,TransInfo					TEXT          	PATH "$.TransInfo"
 			)
 		) AS t;
     
+	UPDATE tmp_DuplicatedInfo d 
+		INNER JOIN tmp_MsgHeader m ON m.VoidingHistoryCollectionId = d.VoidingHistoryCollectionId
+	SET d.IsParlay = m.IsParlay;
+	
 	/*Abnormal bet (15), Ab real member (11)*/
     #Update Content_Detail
 	UPDATE tmp_MsgHeader
@@ -383,11 +292,11 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 			IsParlay = 0
 			,CONCAT
 			(
-				'Event Start Time: ', KickOffTime
+				'Event Start Time: ', IFNULL(KickOffTime, '')
 				,'\r\n'
-				,'League: ', LeagueName
+				,'League: ', IFNULL(LeagueName, '')
 				,'\r\n'
-				,'Match: ', HomeName , ' - vs - ' , AwayName
+				,'Match: ', IFNULL(HomeName, '') , ' - vs - ' , IFNULL(AwayName, '')
 				,'\r\n', '\r\n'
 			)
 			,''
@@ -396,11 +305,11 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
         ,'\r\n'
         ,'**Affected Licensee sites:', CASE WHEN DepositSiteLst > '' THEN CONCAT(' ', DepositSiteLst, '**') ELSE '**' END
         ,'\r\n', '\r\n'
-        ,'Bettype: ', TypeNameLst
+        ,'Bettype: ', IFNULL(TypeNameLst, '')
         ,'\r\n'
         ,'Total: ', IFNULL(CONVERT(TotalTickets USING latin1), '')
         ,'\r\n'
-        ,'Reason: ', ReasonLst
+        ,'Reason: ', IFNULL(ReasonLst, '')
         ,'\r\n'
         ,IF
 		(
@@ -418,9 +327,9 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
         ,'\r\n'
         ,'Voided by: ', VoidByLst
         ,'\r\n', '\r\n'
-        ,IFNULL(Content_en, '')
+        ,IFNULL(REPLACE(Content_en, '@@', ''), '')
         ,'\r\n', '\r\n'
-        ,IFNULL(Content_cs, '')
+        ,IFNULL(REPLACE(Content_cs, '@@', ''), '')
         )
 	WHERE IssueTypeId IN (11, 15);
     
@@ -441,9 +350,9 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
         ,'\r\n'
         ,'Voided by: ', VoidByLst
         ,'\r\n', '\r\n'
-        ,IFNULL(Content_en, '')
+        ,IFNULL(REPLACE(Content_en, '@@', ''), '')
         ,'\r\n', '\r\n'
-        ,IFNULL(Content_cs, '')
+        ,IFNULL(REPLACE(Content_cs, '@@', ''), '')
         )
 	WHERE IssueTypeId = 13;
 	
@@ -456,17 +365,18 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 			,CONCAT
 			(
 				'Request No: ', RequestIDLst
-				,'\r\n','\r\n'
+				,'\r\n'
 				,IF(IsParlay = 0,CONCAT('Match ID:	', IFNULL(CONVERT(matchid USING latin1), ''),'\r\n'),'')
+				,'\r\n'
 				,'Affected Credit sites: ', CreditSiteLst
 				,'\r\n'
-				,'Affected Licensee sites:	', DepositSiteLst
+				,'Affected Licensee sites: ', DepositSiteLst
 				,'\r\n','\r\n'
-				,'Total:	', IFNULL(CONVERT(TotalTickets USING latin1), '')
+				,'Total: ', IFNULL(CONVERT(TotalTickets USING latin1), '')
 				,'\r\n'
-				,'Decided by:	',DecidedByLst
+				,'Decided by: ',DecidedByLst
 				,'\r\n'
-				,'Requested by:	', RequestByLst
+				,'Requested by: ', RequestByLst
 				,'\r\n'
 				,'Voided by: ', VoidByLst
 				,'\r\n','\r\n'
@@ -475,36 +385,33 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 			) AS Content
 			,CONCAT
 			(	
-				'\r\n','\r\n'
-				,Content_en
+				IFNULL(REPLACE(Content_en, '@@', ''), '')
 				,'\r\n','\r\n'
-				,Content_cs
+				,IFNULL(REPLACE(Content_cs, '@@', ''), '')
 			) AS Message
 		FROM tmp_CopyMsgHeader
         WHERE IssueTypeId = 20 
-		GROUP BY VoidingHistoryCollectionId
 	),CTE_TicketsDetail AS
 	(
 		SELECT 
 			VoidingHistoryCollectionId
-			,OrgTransId
-			,Username
+			,IFNULL(OrgTransId, 0) AS OrgTransId
+			,IFNULL(Username, '') AS Username
 			,COUNT(1) AS TotalTickets
 			,GROUP_CONCAT(
 				CONCAT
 				(
-					IFNULL(TransInfo, '')
+					IF(IsParlay = 0, CONCAT(IFNULL(TransInfo, ''), '\r\n'), '')
+					,IF(IsParlay = 1, CONCAT('Ref no: ', CONVERT(CASE WHEN VoidedTransId = 0 THEN '' ELSE VoidedTransId END USING latin1), '\r\n'), '')
+					,'Stake: ', IFNULL(CONVERT(Stake USING latin1), ''), ' ', CurrencyName
 					,'\r\n'
-					,'Stake: ', IFNULL(CONVERT(Stake USING latin1), ''), '(', CurrencyName, ')'
-					,'\r\n'
-					,'Status:	', Status
-                    ,'\r\n'
+					,'Status: ', Status
+                    ,'\r\n','\r\n'
 				) 
 				ORDER BY Status ASC SEPARATOR ''
 			) AS ContentDetail
-		FROM tmp_CopyMsgHeader
-        WHERE IssueTypeId = 20 
-		GROUP BY VoidingHistoryCollectionId, OrgTransId, Username
+		FROM tmp_DuplicatedInfo
+		GROUP BY VoidingHistoryCollectionId, IFNULL(OrgTransId, 0), Username, CASE WHEN IFNULL(OrgTransId, 0) = 0 THEN Id ELSE 0 END  
 	),CTE_Tickets AS
 	(
 		SELECT 
@@ -512,14 +419,14 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 			,GROUP_CONCAT(
 				CONCAT
 				(
-					'- System ID: ', Username
+					'- System ID: ', IFNULL(Username, '')
 					,'\r\n'
 					,'- Remained ticket:'
 					,'\r\n'
-					,'Ref No: ', IFNULL(CONVERT(OrgTransId USING latin1), '')
+					,'Ref No: ', CONVERT(IF(OrgTransId = 0, '', OrgTransId) USING latin1)
 					,'\r\n'
 					,'- Voided ticket: ', IFNULL(CONVERT(TotalTickets USING latin1), '0')
-					,'\r\n'
+					,'\r\n', '\r\n'
 					,ContentDetail
 				)
 				ORDER BY Username ASC SEPARATOR ''
@@ -530,7 +437,8 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 	UPDATE tmp_MsgHeader h 
 		LEFT JOIN CTE_CommonInfo e ON e.VoidingHistoryCollectionId = h.VoidingHistoryCollectionId
 		LEFT JOIN CTE_Tickets s ON s.VoidingHistoryCollectionId = h.VoidingHistoryCollectionId
-	SET h.Content_Detail = CONCAT(e.Content, s.content, e.Message);
+	SET h.Content_Detail = CONCAT(IFNULL(e.Content, ''), IFNULL(s.content, ''), IFNULL(e.Message, ''))
+	WHERE h.IssueTypeId = 20;
     
 	/*Step 2: Parse JSON data for message template notification type*/
 	SELECT Value INTO templateNotifcationType
@@ -547,11 +455,12 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 		,IsTest 				TINYINT
 		,StatusID 				TINYINT UNSIGNED
 		,Status 				VARCHAR(10)
-		,Type 					TINYINT UNSIGNED PRIMARY KEY
+		,IssueTypeId 			TINYINT UNSIGNED
+		,IsParlay				TINYINT 
 	);
   
-	INSERT INTO tmp_MsgContentTypeTemplate (Type, NotificationTypeID, NotificationTemplateID, IsTest)
-	SELECT t.Type, t.NotificationTypeID, t.NotificationTemplateID, t.IsTest
+	INSERT INTO tmp_MsgContentTypeTemplate (IssueTypeId, IsParlay, NotificationTypeID, NotificationTemplateID, IsTest)
+	SELECT t.IssueTypeId, t.IsParlay, t.NotificationTypeID, t.NotificationTemplateID, t.IsTest
 	FROM 
 		JSON_TABLE
 		(
@@ -559,7 +468,8 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 			,"$[*]"
 			COLUMNS
 			(
-  				Type 					TINYINT  PATH "$.Type" 
+  				IssueTypeId 			TINYINT  PATH "$.IssueTypeId" 
+				,IsParlay 				TINYINT  PATH "$.IsParlay" 
   				,NotificationTypeID 	INT 	 PATH "$.NotificationTypeID" 
   				,NotificationTemplateID INT      PATH "$.NotificationTemplateID" 
   				,IsTest     			TINYINT  PATH "$.IsTest"
@@ -657,7 +567,7 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 	INSERT INTO tmp_NotificationRecipientList(VoidingHistoryCollectionId, RecipientID, ConversationGroupID, ChatGroupTypeID, StatusID, Status, ChannelId)
     SELECT h.VoidingHistoryCollectionId, r.RecipientID, gr.ConversationGroupID, ngt.ChatGroupTypeID, tpl.StatusID, tpl.Status, g.ChannelId
       FROM tmp_MsgHeader h
-        INNER JOIN tmp_MsgContentTypeTemplate tpl ON h.Type = tpl.Type
+        INNER JOIN tmp_MsgContentTypeTemplate tpl ON h.IssueTypeId = tpl.IssueTypeId AND h.IsParlay = tpl.IsParlay
         INNER JOIN NotificationChatGroupType ngt ON tpl.NotificationTypeID = ngt.NotificationTypeID
         INNER JOIN ConversationGroupExtraInfo gri ON ngt.ChatGroupTypeID = gri.ChatGroupTypeID
         INNER JOIN ConversationGroupRecipient gr ON gri.ConversationGroupID = gr.ConversationGroupID
@@ -689,7 +599,7 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 			INSERT INTO Notification(NotificationTypeID, Title, Content, ConfigSendTime, SendImmediately, CreatorID, CreatedDate, Status, StatusID, ChannelId)
 			SELECT DISTINCT ct.NotificationTypeID, ct.TemplateTitle, REPLACE(REPLACE(ct.TemplateContent, '{General Info}', h.Content_Detail), '@@', '') AS Content, startTime, 0 AS SendImmediately, STARIXIT_CUSTID, CreatedDate, CREATING_NOTIFICATION_STATUS, CREATING_NOTIFICATION_STATUSID, ccChannelId
 			FROM tmp_MsgHeader h
-			INNER JOIN tmp_MsgContentTypeTemplate ct ON ct.Type = h.Type 
+			INNER JOIN tmp_MsgContentTypeTemplate ct ON h.IssueTypeId = ct.IssueTypeId AND h.IsParlay = ct.IsParlay 
 			WHERE h.VoidingHistoryCollectionId = ccVoidingHistoryCollectionId;
 
 			SELECT LAST_INSERT_ID() INTO ccNotificationID;

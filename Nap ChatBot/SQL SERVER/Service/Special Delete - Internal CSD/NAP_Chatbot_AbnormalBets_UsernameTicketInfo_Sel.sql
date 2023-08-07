@@ -165,7 +165,7 @@ BEGIN
 	UPDATE d
 		SET d.Status = z.status,d.Stake = z.stake, d.CustId = z.custid
 	FROM #DupliactedTickets d
-		INNER JOIN zzzbettrans z WITH(NOLOCK) ON d.VoidedTransId = z.transid
+		INNER JOIN zzzbettrans z WITH(NOLOCK) ON d.VoidedTransId = z.transid AND d.VoidingHistoryId = z.VoidingHistoryId
 	WHERE z.SiteDBGroupID = @SiteDBGroupID
 
 	DELETE #DupliactedTickets WHERE CustId IS NULL

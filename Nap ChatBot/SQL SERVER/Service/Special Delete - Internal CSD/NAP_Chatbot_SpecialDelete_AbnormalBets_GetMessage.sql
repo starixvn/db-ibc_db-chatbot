@@ -66,7 +66,7 @@ BEGIN
 		INNER JOIN dbo.TicketVoiding_VoidingHistory vh WITH(NOLOCK) ON vh.VoidingHistoryId = r.VoidingHistoryId
 		INNER JOIN dbo.TicketVoiding_Request rq WITH(NOLOCK) ON vh.RequestId = rq.RequestId 
 		OUTER APPLY (
-			SELECT TOP(1) CASE WHEN r.IssueTypeId IN (11, 20) THEN FilterBy ELSE 0 END AS FilterBy, Usernames, CASE WHEN rq.IssueTypeId = 20 THEN rd.TransIds ELSE NULL END AS DuplicatedTickets
+			SELECT TOP(1) CASE WHEN rq.IssueTypeId IN (11, 20) THEN FilterBy ELSE 0 END AS FilterBy, Usernames, CASE WHEN rq.IssueTypeId = 20 THEN rd.TransIds ELSE NULL END AS DuplicatedTickets
 			FROM dbo.TicketVoIding_RequestDetail rd WITH(NOLOCK) 
 			WHERE rd.RequestId = vh.RequestId
 		) AS n(FilterBy, Usernames, DuplicatedTickets)
