@@ -12,6 +12,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_MsgSetting_SpecialDelete_Sel
         Revisions:
 				- 20191211@Dominic: First Commit
                 - 20201029@Percy: Add more setting PostTime [RedmineID: #144274]
+				- 20230731@Malcolm: Incorporate voiding duplicated bet tickets with TVS [RedmineId : #191355]
         
     */
 )
@@ -41,25 +42,12 @@ BEGIN
 	FROM SystemSetting ss
     WHERE ss.ID = 17;
 	
-    DROP TEMPORARY TABLE IF EXISTS tmp_MsgContentType;
-    CREATE TEMPORARY TABLE IF NOT EXISTS tmp_MsgContentType(
-            MsgContentsType INT
-            );
-            
-   SET iLoop = 0;
-   WHILE (JSON_EXTRACT(templateContentType, CONCAT('$[',iLoop, '].MsgContentsType'))  IS NOT NULL) DO 
-		INSERT INTO tmp_MsgContentType(MsgContentsType)
-        VALUES (
-			JSON_UNQUOTE(JSON_EXTRACT(templateContentType, CONCAT('$[', iLoop, '].MsgContentsType')))
-		);
-        
-        SET iLoop := iLoop + 1;
-    END WHILE;    
-    
-	
-    SELECT GROUP_CONCAT(  mct.MsgContentsType  ORDER BY  mct.MsgContentsType SEPARATOR ',') 
+	SELECT GROUP_CONCAT(DISTINCT MsgContentsType ORDER BY MsgContentsType SEPARATOR ',') 
 	INTO msgContentTypeLst
-    FROM tmp_MsgContentType mct;
+	FROM JSON_TABLE(
+		templateContentType
+		,'$[*]' COLUMNS (MsgContentsType INT PATH '$.MsgContentsType')
+	) AS t;
     
     SELECT previousMaxMsgID AS MaxMessageID, batchSize AS BatchSize, msgContentTypeLst AS MsgContentsTypeLst, lastPostTime AS LastPostTime;
 END;

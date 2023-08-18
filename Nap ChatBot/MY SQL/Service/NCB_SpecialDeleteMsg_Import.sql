@@ -159,7 +159,7 @@ NCB_SpecialDeleteMsg_Import:BEGIN
 		,NotificationTypeID 	 INT
 		,NotificationTemplateID  INT
 		,TemplateTitle 	         VARCHAR(300)
-		,TemplateContent 		 MEDIUMTEXT
+		,TemplateContent 		 MEDIUMTEXT 
 		,TemplateRequiredParams  TEXT
 		,IsTest 				 TINYINT
 		,IssueType				 TINYINT UNSIGNED
@@ -168,7 +168,7 @@ NCB_SpecialDeleteMsg_Import:BEGIN
    );
    
    INSERT INTO tmp_MsgContentTypeTemplate (MsgContentsType, NotificationTypeID, NotificationTemplateID, IsTest, IssueType, TemplateRequiredParams)
-   SELECT t.MsgContentsType, t.NotificationTypeID, t.NotificationTemplateID, t.IsTest, IFNULL(t.IssueType, 0) AS IssueType, TemplateRequiredParams
+   SELECT t.MsgContentsType, t.NotificationTypeID, t.NotificationTemplateID, t.IsTest, IFNULL(t.IssueType, 0) AS IssueType, CONCAT('[{"z":', '[' , REPLACE(REPLACE(TemplateRequiredParams, '{', '"{'), '}', '}"') , ']}]') TemplateRequiredParams
     FROM 
 		JSON_TABLE
 		(
@@ -196,6 +196,10 @@ NCB_SpecialDeleteMsg_Import:BEGIN
 	INNER JOIN NotificationTemplate nt ON tmp.NotificationTemplateID = nt.NotificationTemplateID
 	SET tmp.TemplateContent = nt.Content
 		,tmp.TemplateTitle = nt.Title;
+		
+	DROP TEMPORARY TABLE IF EXISTS tmp_CopyMsgContentTypeTemplate;
+    CREATE TEMPORARY TABLE IF NOT EXISTS tmp_CopyMsgContentTypeTemplate
+    SELECT * FROM tmp_MsgContentTypeTemplate;
 	
     #Check if there are any template IDs are not existing
     IF  EXISTS(SELECT 1 FROM tmp_MsgContentTypeTemplate nt WHERE nt.TemplateContent IS NULL) THEN
@@ -213,22 +217,22 @@ NCB_SpecialDeleteMsg_Import:BEGIN
 	
 	WITH CTE_RequiredParams AS
 	(
-		SELECT m.NotificationTemplateID, k.RequiredParam
+		SELECT m.NotificationTemplateID, k.RequiredParam AS RequiredParam
 		FROM tmp_MsgContentTypeTemplate m 
 		LEFT JOIN LATERAL (
 			SELECT *
 			FROM JSON_TABLE(
 				m.TemplateRequiredParams, 
-				'$[*]' COLUMNS(NESTED PATH '$.z[*]' COLUMNS (RequiredParam VARCHAR(10000) PATH '$'))
-			) AS t
+				'$[*]' COLUMNS(NESTED PATH '$.z[*]' COLUMNS (RequiredParam TEXT PATH '$'))
+			) AS t	
 		) AS k  ON 1 = 1
 	)
 	SELECT COUNT(1) INTO pCount
-	FROM tmp_MsgContentTypeTemplate t 
-		LEFT JOIN CTE_RequiredParams p ON p.NotificationTemplateID = t.NotificationTemplateID AND t.Content LIKE CONCAT('%', RequiredParam, '%')
+	FROM tmp_CopyMsgContentTypeTemplate t 
+		LEFT JOIN CTE_RequiredParams p ON p.NotificationTemplateID = t.NotificationTemplateID AND t.TemplateContent COLLATE utf8mb4_general_ci LIKE CONCAT('%', RequiredParam, '%')
 	WHERE p.NotificationTemplateID IS NULL;
 
-	IF pCount > O THEN 
+	IF pCount > 0 THEN 
 		WITH CTE_RequiredParams AS
 		(
 			SELECT m.NotificationTemplateID, k.RequiredParam
@@ -237,14 +241,14 @@ NCB_SpecialDeleteMsg_Import:BEGIN
 				SELECT *
 				FROM JSON_TABLE(
 					m.TemplateRequiredParams, 
-					'$[*]' COLUMNS(NESTED PATH '$.z[*]' COLUMNS (RequiredParam VARCHAR(10000) PATH '$'))
+					'$[*]' COLUMNS(NESTED PATH '$.z[*]' COLUMNS (RequiredParam TEXT PATH '$'))
 				) AS t
 			) AS k  ON 1 = 1
 		)
 		SELECT GROUP_CONCAT(DISTINCT t.NotificationTemplateID ORDER BY t.NotificationTemplateID SEPARATOR ', ')
 		INTO errCode
-		FROM tmp_MsgContentTypeTemplate t 
-			LEFT JOIN CTE_RequiredParams p ON p.NotificationTemplateID = t.NotificationTemplateID AND t.Content LIKE CONCAT('%', RequiredParam, '%')
+		FROM tmp_CopyMsgContentTypeTemplate t 
+			LEFT JOIN CTE_RequiredParams p ON p.NotificationTemplateID = t.NotificationTemplateID AND t.TemplateContent COLLATE utf8mb4_general_ci LIKE CONCAT('%', RequiredParam, '%')
 		WHERE p.NotificationTemplateID IS NULL;
 		
 		SET errMsg = CONCAT('Notification template is not existing (IDs): ' , errMsg);

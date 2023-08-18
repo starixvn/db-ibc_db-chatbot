@@ -35,7 +35,7 @@ AS
 			</root>
 		+ @DuplicatedInfo 
 			<root>
-				<r VoidingHistoryCollectionId="1" VoidingHistoryId="1" CustId="1232" OrgTransId="1" VoidedTransId="1" Status="Running" Stake="200" IsParlay="1"/>
+				<r VoidingHistoryCollectionId="1" VoidingHistoryId="1" CustId="1232" OrgTransId="1" VoidedTransId="1" Status="Running" Stake="200" IsParlay="1" Transdate="2023-01-01"/>
 			</root>
 */
 
@@ -66,11 +66,11 @@ BEGIN
 
 	--Duplicated Tickets
 	CREATE TABLE #DuplicatedInfo (
-		VoidingHistoryCollectionId INT, VoidingHistoryId INT, CustId INT, OrgTransId BIGINT, VoidedTransId BIGINT
-		,Status NVARCHAR(10), Stake MONEY, IsParlay BIT
+		VoidingHistoryCollectionId INT, VoidingHistoryId INT, CustId INT, OrgTransId BIGINT, VoidedTransId BIGINT, MessageId INT
+		,Status NVARCHAR(10), Stake MONEY, IsParlay BIT, Transdate DATETIME
 	)
 
-	INSERT INTO #DuplicatedInfo (VoidingHistoryCollectionId, VoidingHistoryId, CustId, OrgTransId, VoidedTransId, Status, Stake, IsParlay)
+	INSERT INTO #DuplicatedInfo (VoidingHistoryCollectionId, VoidingHistoryId, CustId, OrgTransId, VoidedTransId, Status, Stake, IsParlay, Transdate)
 	SELECT
 		t.c.value('@VoidingHistoryCollectionId', 'INT') AS VoidingHistoryCollectionId
 		,t.c.value('@VoidingHistoryId', 'INT') AS VoidingHistoryId
@@ -80,8 +80,14 @@ BEGIN
 		,t.c.value('@Status', 'NVARCHAR(10)') AS Status
 		,t.c.value('@Stake', 'MONEY') AS Stake
 		,t.c.value('@IsParlay', 'BIT') AS IsParlay
+		,t.c.value('@Transdate', 'DATETIME') AS Transdate
 	FROM @DuplicatedInfo.nodes('root/r') AS t(c)
 	OPTION (OPTIMIZE FOR ( @DuplicatedInfo = NULL))
+
+	UPDATE d
+		SET d.MessageId = vh.MessageId
+	FROM #DuplicatedInfo d
+		INNER JOIN bodb02.dbo.TicketVoiding_VoidingHistory vh WITH(NOLOCK) ON vh.VoidingHistoryId = d.VoidingHistoryId
 
 	CREATE TABLE #VoidingHistoryCollection (VoidingHistoryCollectionId INT PRIMARY KEY, IsParlay BIT)
 	INSERT INTO #VoidingHistoryCollection (VoidingHistoryCollectionId, IsParlay)
@@ -100,12 +106,6 @@ BEGIN
 		,MaxWinlostdate DATETIME, Usernames NVARCHAR(MAX) DEFAULT NULL, IssueTypeId TINYINT, IsParlay TINYINT DEFAULT(0), MatchId INT
 	)
 
-	;WITH CTE_TotalDuplicatedTicket AS
-	(
-		SELECT VoidingHistoryCollectionId, VoidingHistoryId, COUNT(1) AS TotalTicket
-		FROM #DuplicatedInfo
-		GROUP BY VoidingHistoryCollectionId, VoidingHistoryId
-	)
 	INSERT INTO #AbnormalInfo 
 	(
 		VoidingHistoryCollectionId
@@ -129,7 +129,7 @@ BEGIN
 		,vh.MessageId
 		,vh.ReasonId
 		,vh.UserId AS VoIdById
-		,ISNULL(e.TotalTicket, t.TotalTicket)
+		,ISNULL(t.TotalTicket, 0)
 		,vh.MinWinlostdate
 		,vh.MaxWinlostdate
 		,hc.IsParlay
@@ -141,7 +141,6 @@ BEGIN
 		INNER JOIN dbo.TicketVoIding_Request r WITH(NOLOCK) ON r.RequestId = vh.RequestId
 		INNER JOIN #VoidingHistoryCollection hc ON hc.VoidingHistoryCollectionId = vcd.VoidingHistoryCollectionId
 		LEFT JOIN #AbnormalAccountsInfo u ON u.VoidingHistoryCollectionId = vcd.VoidingHistoryCollectionId AND u.VoidingHistoryId = vh.VoidingHistoryId
-		LEFT JOIN CTE_TotalDuplicatedTicket e ON e.VoidingHistoryCollectionId = vcd.VoidingHistoryCollectionId AND e.VoidingHistoryId = vcd.VoidingHistoryId
 		OUTER APPLY (
 			SELECT COUNT(DISTINCT value) AS TotalTicket FROM STRING_SPLIT(vh.TransIds, ',') f WHERE f.value <> ''
 		) t
@@ -303,27 +302,11 @@ BEGIN
 				INNER JOIN dbo.Site st WITH(NOLOCK) ON st.site = c.site
 				LEFT JOIN dbo.Dep_CustSuper s WITH (NOLOCK) ON c.srecommend = s.custId
 		)
-		,CTE_DuplicatedTickets_Site AS
-		(
-			SELECT DISTINCT 
-				d.VoidingHistoryCollectionId
-				,CASE WHEN ISNULL(st.SiteLabel, '') = '789y' THEN  '789y'
-					  WHEN s.custId IS NULL AND c.site <> 'CN88' THEN 'NV88'   
-				 ELSE c.site END AS site
-				,CASE WHEN s.custId IS NULL THEN 0 ELSE 1 END AS isDeposit
-				,CASE WHEN c.currency = 20 THEN 1 ELSE 0 END AS IsTest
-			FROM #DuplicatedInfo d
-				INNER JOIN dbo.Customer c WITH(NOLOCK) ON c.custid = d.CustId
-				INNER JOIN dbo.Site st WITH(NOLOCK) ON st.site = c.site
-				LEFT JOIN dbo.Dep_CustSuper s WITH(NOLOCK) ON s.custid = c.srecommend
-		)
 		,CTE_site AS
 		(
 			SELECT VoidingHistoryCollectionId, Username, site, isDeposit, IsTest FROM CTE_AbnormalAccounts_Site
 			UNION ALL 
 			SELECT VoidingHistoryCollectionId, NULL AS Username, Site, isDeposit, IsTest FROM CTE_AbnormalBets_Site
-			UNION ALL
-			SELECT VoidingHistoryCollectionId, NULL AS Username, Site, isDeposit, IsTest FROM CTE_DuplicatedTickets_Site
 		)
 		,CTE_MsgSite AS
 		(
@@ -338,8 +321,8 @@ BEGIN
 		)
 		SELECT
 			r.VoidingHistoryCollectionId
-			,CONVERT(BIT, s.IsTest) AS IsTest
-			,t.TotalTickets
+			,ISNULL(CONVERT(BIT, s.IsTest), 0) AS IsTest
+			,ISNULL(t.TotalTickets, 0) AS TotalTickets
 			,ISNULL(r.RequestIdLst, '') RequestIdLst
 			,ISNULL(r.DecIdedByLst, '') DecIdedByLst
 			,ISNULL(r.RequestByLst, '') RequestByLst
@@ -374,9 +357,26 @@ BEGIN
 			INNER JOIN dbo.TicketVoiding_VoidingHistory vh WITH(NOLOCK) ON vh.VoidingHistoryId = vcd.VoidingHistoryId
 		WHERE EXISTS (SELECT 1 FROM #VoidingHistoryCollection hc WHERE hc.VoidingHistoryCollectionId = c.VoidingHistoryCollectionId) 
 
-		SELECT d.VoidingHistoryCollectionId, d.OrgTransId, d.VoidedTransId, c.Custid, c.Username, e.currency AS CurrencyName, d.Status, d.Stake
+		SELECT 
+			d.VoidingHistoryCollectionId
+			,d.MessageId
+			,ISNULL(d.OrgTransId, 0) AS OrgTransId
+			,d.VoidedTransId
+			,c.Custid
+			,c.Username
+			,e.currency AS CurrencyName
+			,d.Status
+			,d.Stake
+			,d.Transdate
+			,CASE WHEN ISNULL(st.SiteLabel, '') = '789y' THEN  '789y'
+				  WHEN s.custId IS NULL AND c.site <> 'CN88' THEN 'NV88'   
+			 ELSE c.site END AS SiteName
+			,CONVERT(BIT, CASE WHEN s.custId IS NULL THEN 0 ELSE 1 END) AS IsDeposit
+			,CONVERT(BIT, CASE WHEN c.currency = 20 THEN 1 ELSE 0 END) AS IsTest
 		FROM #DuplicatedInfo d
-			LEFT JOIN bodb02.dbo.custInfo c WITH(NOLOCK) ON c.custid = d.CustId
+			INNER JOIN bodb02.dbo.Customer c WITH(NOLOCK) ON c.custid = d.CustId
+			INNER JOIN dbo.Site st WITH(NOLOCK) ON st.site = c.site
+			LEFT JOIN dbo.Dep_CustSuper s WITH(NOLOCK) ON s.custid = c.srecommend
 			LEFT JOIN bodb02.dbo.Exchange e WITH(NOLOCK) ON e.ExchangeId = c.currency
 	END
 

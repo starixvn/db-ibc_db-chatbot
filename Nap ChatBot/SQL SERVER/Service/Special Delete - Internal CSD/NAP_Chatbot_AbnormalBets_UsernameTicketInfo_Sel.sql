@@ -2,7 +2,7 @@
 CREATE PROCEDURE [dbo].[NAP_Chatbot_AbnormalBets_UsernameTicketInfo_Sel]
 	@AbnormalBetsInfo		XML
 	,@AbnormalAccountsInfo	XML
-	,@DupliactedTickets 	XML
+	,@DuplicatedTickets 	XML
 	,@SiteDBGroupID			SMALLINT
 AS
 /*
@@ -25,7 +25,7 @@ AS
 			<root>
 				<r VoidingHistoryCollectionId="1" VoidingHistoryId="1" Usernames="xxx,u1"/>
 			</root>
-		+ @DupliactedTickets:
+		+ @DuplicatedTickets:
 			<root>
 				<r VoidingHistoryCollectionId="1" VoidingHistoryId="1" DuplicatedTickets="" FilterBy="0" IssueTypeId="20"/>
 			</root>
@@ -72,10 +72,10 @@ BEGIN
 		OPTION (OPTIMIZE FOR (@AbnormalBetsInfo = NULL))
 
 		--Duplicated Tickets
-		CREATE TABLE #DupliactedTickets (VoidingHistoryCollectionId INT, VoidingHistoryId INT, CustId INT, OrgTransId BIGINT, VoidedTransId BIGINT, Status NVARCHAR(10)
-			,Stake MONEY, IssueTypeId TINYINT, FilterBy TINYINT)
+		CREATE TABLE #DuplicatedTickets (VoidingHistoryCollectionId INT, VoidingHistoryId INT, CustId INT, OrgTransId BIGINT, VoidedTransId BIGINT, Status NVARCHAR(10)
+			,Stake MONEY, IssueTypeId TINYINT, FilterBy TINYINT, Transdate DATETIME)
 		
-		INSERT INTO #DupliactedTickets (VoidingHistoryCollectionId, VoidingHistoryId, IssueTypeId, FilterBy, OrgTransId, VoidedTransId)
+		INSERT INTO #DuplicatedTickets (VoidingHistoryCollectionId, VoidingHistoryId, IssueTypeId, FilterBy, OrgTransId, VoidedTransId)
 		SELECT DISTINCT 
 			t.c.value('@VoidingHistoryCollectionId', 'INT') AS VoidingHistoryCollectionId
 			,t.c.value('@VoidingHistoryId', 'INT') AS VoidingHistoryId		
@@ -83,14 +83,14 @@ BEGIN
 			,t.c.value('@FilterBy', 'TINYINT') AS FilterBy	
 			,n.OrgTransId 
 			,n.VoidedTransId 
-		FROM @DupliactedTickets.nodes('root/r') AS t(c)
+		FROM @DuplicatedTickets.nodes('root/r') AS t(c)
 		CROSS APPLY (
 			SELECT CONVERT(XML, t.c.value('@DuplicatedTickets', 'VARCHAR(MAX)')) AS tickets
 		) AS d
 		CROSS APPLY
 		(
 			SELECT 
-				TRY_CONVERT(BIGINT, g.c.value('@OrgTransIds', 'VARCHAR(MAX)')) AS OrgTransId
+				TRY_CONVERT(BIGINT, g.c.value('@OrgTransIds', 'VARCHAR(4000)')) AS OrgTransId
 				,r.VoidedTransId 
 			FROM d.tickets.nodes('root/r') g(c)
 				CROSS APPLY(
@@ -99,7 +99,7 @@ BEGIN
 				WHERE r.value <> ''
 			) AS r 
 		) AS n
-		OPTION (OPTIMIZE FOR (@DupliactedTickets = NULL))
+		OPTION (OPTIMIZE FOR (@DuplicatedTickets = NULL))
 
 		CREATE CLUSTERED INDEX Ix_VoidingHistory ON #AbnormalAccountsInfoTmp (VoidingHistoryId, VoidingHistoryCollectionId)
 	END
@@ -163,12 +163,12 @@ BEGIN
 
 	/*Get data for duplicated ticket*/
 	UPDATE d
-		SET d.Status = z.status,d.Stake = z.stake, d.CustId = z.custid
-	FROM #DupliactedTickets d
+		SET d.Status = z.status,d.Stake = z.stake, d.CustId = z.custid, d.Transdate = z.transdate
+	FROM #DuplicatedTickets d
 		INNER JOIN zzzbettrans z WITH(NOLOCK) ON d.VoidedTransId = z.transid AND d.VoidingHistoryId = z.VoidingHistoryId
 	WHERE z.SiteDBGroupID = @SiteDBGroupID
 
-	DELETE #DupliactedTickets WHERE CustId IS NULL
+	DELETE #DuplicatedTickets WHERE CustId IS NULL
 
 	/*Result*/
 	BEGIN
@@ -186,14 +186,14 @@ BEGIN
 		GROUP BY VoidingHistoryCollectionId, VoidingHistoryId
 		ORDER BY VoidingHistoryCollectionId ASC, VoidingHistoryId ASC
 
-		SELECT VoidingHistoryCollectionId, VoidingHistoryId, CustId, OrgTransId, VoidedTransId, Status, Stake, ISNULL(FilterBy, 0) AS IsParlay
-		FROM #DupliactedTickets 
+		SELECT VoidingHistoryCollectionId, VoidingHistoryId, CustId, OrgTransId, VoidedTransId, Status, Stake, transdate, ISNULL(FilterBy, 0) AS IsParlay
+		FROM #DuplicatedTickets 
 		ORDER BY VoidingHistoryCollectionId, VoidingHistoryId
 	END
 	
 	DROP TABLE #AbnormalAccountsInfoTmp
 	DROP TABLE #AbnormalBetsInfoTmp
 	DROP TABLE #VoidedMember
-	DROP TABLE #DupliactedTickets
+	DROP TABLE #DuplicatedTickets
 END
 GO

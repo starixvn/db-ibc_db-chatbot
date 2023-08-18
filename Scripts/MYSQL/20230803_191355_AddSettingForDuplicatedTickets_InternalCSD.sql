@@ -99,17 +99,34 @@ SET Value = CONCAT(
     },
     {
         "IsTest": 0,
-        "MsgContentsType": 103,
+        "MsgContentsType": 101,
         "NotificationTypeID": ',@NotificationTypeID_DuplicatedTickets,',
         "NotificationTemplateID": ',@NotificationTemplateID_DuplicatedTickets,',
         "TemplateRequiredParams": "{General Info}",
 		"IssueTypeId": "20",
 		"IsParlay":"0"
-    }
-    ,
+    },
     {
         "IsTest": 0,
-        "MsgContentsType": 103,
+        "MsgContentsType": 101,
+        "NotificationTypeID": ',@NotificationTypeID_DuplicatedTickets,',
+        "NotificationTemplateID": ',@NotificationTemplateID_DuplicatedTickets,',
+        "TemplateRequiredParams": "{General Info}",
+        "IssueTypeId": "20",
+		"IsParlay":"1"
+    },
+    {
+        "IsTest": 0,
+        "MsgContentsType": 102,
+        "NotificationTypeID": ',@NotificationTypeID_DuplicatedTickets,',
+        "NotificationTemplateID": ',@NotificationTemplateID_DuplicatedTickets,',
+        "TemplateRequiredParams": "{General Info}",
+		"IssueTypeId": "20",
+		"IsParlay":"0"
+    },
+    {
+        "IsTest": 0,
+        "MsgContentsType": 102,
         "NotificationTypeID": ',@NotificationTypeID_DuplicatedTickets,',
         "NotificationTemplateID": ',@NotificationTemplateID_DuplicatedTickets,',
         "TemplateRequiredParams": "{General Info}",

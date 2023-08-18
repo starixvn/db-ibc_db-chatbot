@@ -21,7 +21,6 @@ AS
 		- 20211012@Malcolm: Rescan messageid <= @MessageId [RedmineID: #162825]
 		- 20220223@Malcolm: Remove SABA text out of the league name for China View platform [RedmineID: #168798]
 		- 20230515@Roy: Database - HA DB061/DB062 [RedmineID: #169643]
-		- 20230731@Malcolm: Incorporate voiding duplicated bet tickets with TVS [RedmineId : #191355]
 	
 	@SiteAsJSON
 		[
