@@ -4,12 +4,12 @@ DROP PROCEDURE IF EXISTS NCB_SettingConfiguration_Mapping_Upd;
 DELIMITER //
 
 CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_SettingConfiguration_Mapping_Upd`(
-    IN      notificationTypeId         INT
+    IN      newnotificationTypeId      INT
     ,IN     jobId                      INT
-    ,IN     notificationTemplateId     INT
-    ,IN     msgContentsType            INT
-    ,IN     requiredParam              VARCHAR (300)
-    ,IN     isTest                     BIT
+    ,IN     NewnotificationTemplateId  INT
+    ,IN     newmsgContentsType         INT
+    ,IN     newrequiredParam           VARCHAR (300)
+    ,IN     newisTest                  BIT
     ,IN     oldMsgContentsType         INT
     ,IN     oldNotificationTypeId      INT
     ,IN     oldNotificationTemplateId  INT
@@ -24,6 +24,7 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_SettingConfiguration_Mapping_U
         Revisions:
             - 20200423@Merlin: Update mapping - RedmineID: #132039
 			- 20210722@Malcolm: Change msg content type for abnormal accounts [RedmineId : #158723] 
+            - 20230831@Malcolm: Don't update setting for msgcontenttype = 101, 102 [RedmineId : #191355] 
     */
 )
 SQL SECURITY DEFINER
@@ -33,6 +34,7 @@ BEGIN
     DECLARE duration                INT;							
     DECLARE logContent              TEXT CHARACTER SET utf8mb4;
     DECLARE jsonValue               JSON;
+	DECLARE jsonValueResult         JSON;
     DECLARE jsonSettingTypeValue	JSON;
     DECLARE msgContentsTypeName     VARCHAR (60);
     DECLARE iLoop 		            INT DEFAULT 0;
@@ -47,89 +49,104 @@ BEGIN
     FROM SystemSetting ss
     WHERE ss.Description LIKE '%Notification Template ID / MsgContentsType / NotificationType%'
         AND ss.JobIdentify = jobId;
+		
+	SELECT ss.value INTO jsonSettingTypeValue
+	FROM SystemSetting ss
+	WHERE ss.ID = 9999;
+	
+	SELECT Name INTO msgContentsTypeName
+	FROM JSON_TABLE
+		(
+			jsonSettingTypeValue
+			,"$[*]"
+			COLUMNS
+			(
+				MsgContentsType INT  PATH "$.MsgContentsType" 
+  				,Name VARCHAR(60)  PATH "$.Name" 
+			)
+		) AS t
+	WHERE t.MsgContentsType = newmsgContentsType;
 
     DROP TEMPORARY TABLE IF EXISTS MappingSettingTable;
     CREATE TEMPORARY TABLE MappingSettingTable (
-        RowIndex INT
-        ,IsTest INT
+       IsTest INT
         ,MsgContentsType INT
         ,NotificationTemplateID INT
         ,NotificationTypeID INT
         ,TemplateRequiredParams VARCHAR (300)
+        ,IssueTypeId INT
+        ,IsParlay INT
+        ,IsProtected INT
     );
-
-    WHILE (
-		JSON_EXTRACT(jsonValue, CONCAT('$[', iLoop, '].NotificationTypeID')) IS NOT NULL
-	) DO
-        INSERT INTO MappingSettingTable (
-            RowIndex
-            ,IsTest
-            ,MsgContentsType
-            ,NotificationTemplateID
-            ,NotificationTypeID
-            ,TemplateRequiredParams
-        )
-        SELECT
-            iLoop
-            ,JSON_EXTRACT(jsonValue, CONCAT('$[', iLoop, '].IsTest'))
-            ,JSON_EXTRACT(jsonValue, CONCAT('$[', iLoop, '].MsgContentsType'))
-            ,JSON_EXTRACT(jsonValue, CONCAT('$[', iLoop, '].NotificationTemplateID'))
-            ,JSON_EXTRACT(jsonValue, CONCAT('$[', iLoop, '].NotificationTypeID'))
-            ,JSON_UNQUOTE(JSON_EXTRACT(jsonValue, CONCAT('$[', iLoop, '].TemplateRequiredParams')));
-            
-		SET iLoop = iLoop + 1;
-    END WHILE;
+    
+    INSERT INTO MappingSettingTable (MsgContentsType, IssueTypeId, IsParlay, NotificationTypeID, NotificationTemplateID, IsTest, IsProtected, TemplateRequiredParams)
+	SELECT DISTINCT t.MsgContentsType, t.IssueTypeId, t.IsParlay, t.NotificationTypeID, t.NotificationTemplateID, t.IsTest, t.IsProtected, t.TemplateRequiredParams
+	FROM 
+		JSON_TABLE
+		(
+			jsonValue
+			,"$[*]"
+			COLUMNS
+			(
+				MsgContentsType 		INT  PATH "$.MsgContentsType" 
+  				,IssueTypeId 			INT  PATH "$.IssueTypeId" 
+				,IsParlay 				INT  PATH "$.IsParlay" 
+  				,NotificationTypeID 	INT  PATH "$.NotificationTypeID" 
+  				,NotificationTemplateID INT  PATH "$.NotificationTemplateID" 
+  				,IsTest     			INT  PATH "$.IsTest"
+                ,IsProtected     		INT  PATH "$.IsProtected"
+                ,TemplateRequiredParams VARCHAR(300)  PATH "$.TemplateRequiredParams"
+			)
+		) AS t;
+		
+	IF EXISTS (SELECT 1 FROM MappingSettingTable m WHERE m.IsProtected = 1 AND m.MsgContentsType = NewmsgContentsType) THEN
+		SELECT 1 INTO errCode;
+		SELECT CONCAT('The ', msgContentsTypeName, ' has been mapped.') INTO errMsg;
+	END IF;
 
     IF NOT EXISTS (
         SELECT 1 FROM MappingSettingTable mst
         WHERE mst.MsgContentsType = oldMsgContentsType AND mst.NotificationTypeID = oldNotificationTypeID AND mst.NotificationTemplateID = oldNotificationTemplateID
     ) THEN
-        SELECT 1 INTO errCode;
+        SELECT 2 INTO errCode;
         SELECT CONCAT('The mapping setting not exists') INTO errMsg;
     ELSE
-        SELECT mst.RowIndex INTO rowIndex
-        FROM MappingSettingTable mst
-        WHERE mst.MsgContentsType = oldMsgContentsType AND mst.NotificationTypeID = oldNotificationTypeID AND mst.NotificationTemplateID = oldNotificationTemplateID;
-
-        DELETE FROM MappingSettingTable mst
-        WHERE mst.RowIndex = rowIndex;
+        UPDATE MappingSettingTable m	
+		SET m.MsgContentsType = newmsgContentsType, m.NotificationTemplateID = newnotificationTemplateId, m.NotificationTypeID = newnotificationTypeId, m.TemplateRequiredParams = newrequiredParam, m.IsTest = newisTest
+		WHERE IFNULL(m.IsProtected, 0) = 0 AND m.MsgContentsType = oldMsgContentsType AND m.NotificationTypeID = oldNotificationTypeId AND m.NotificationTemplateID = oldNotificationTemplateId;
     END IF;
 
     IF EXISTS (
-        SELECT 1 FROM MappingSettingTable mst
-        WHERE mst.MsgContentsType = msgContentsType
+        SELECT 1 
+        FROM MappingSettingTable m
+		WHERE IFNULL(m.IsProtected, 0) = 0
+        GROUP BY m.MsgContentsType, IFNULL(m.IssueTypeId, 0), IFNULL(m.IsParlay, 0)
+        HAVING COUNT(1) > 1
     ) THEN
-        SET iLoop = 0;
-        SELECT ss.Value INTO jsonSettingTypeValue
-        FROM SystemSetting ss
-        WHERE ss.Id = 9999;
-
-        myLoop: WHILE (
-            JSON_EXTRACT(jsonSettingTypeValue, CONCAT('$[', iLoop, '].MsgContentsType')) IS NOT NULL
-        ) DO
-            IF (JSON_EXTRACT(jsonSettingTypeValue, CONCAT('$[', iLoop, '].MsgContentsType')) = msgContentsType) THEN
-                SET msgContentsTypeName = JSON_UNQUOTE(JSON_EXTRACT(jsonSettingTypeValue, CONCAT('$[', iLoop, '].Name')));
-
-                LEAVE myLoop;
-            ELSE
-                SET iLoop = iLoop + 1;
-            END IF;
-        END WHILE myLoop;
-
-        SELECT 2 INTO errCode;
+        SELECT 3 INTO errCode;
         SELECT CONCAT('The ', msgContentsTypeName, ' has been mapped.') INTO errMsg;
     END IF;
     
     IF (errCode = 0) THEN
-	    SET isTest2Int = isTest;
+
+		SELECT JSON_ARRAYAGG(
+			JSON_REMOVE(JSON_OBJECT
+            (
+				'IsTest', m.IsTest
+				,IF(m.IssueTypeId IS NULL, 'null__', 'IssueTypeId'), m.IssueTypeId
+				,IF(m.IsParlay IS NULL, 'null__', 'IsParlay'), m.IsParlay
+				,'MsgContentsType', m.MsgContentsType
+				,'NotificationTypeID', m.NotificationTypeID
+				,'NotificationTemplateID', m.NotificationTemplateID
+				,'TemplateRequiredParams', m.TemplateRequiredParams
+				,IF(m.IsProtected IS NULL, 'null__', 'IsProtected'), m.IsProtected
+			), '$.null__')
+		)
+		INTO jsonValueResult
+		FROM MappingSettingTable m;
     
         UPDATE SystemSetting ss
-        SET Value = JSON_SET(jsonValue,
-            CONCAT('$[', rowIndex, '].IsTest'), isTest2Int
-            ,CONCAT('$[', rowIndex, '].MsgContentsType'), msgContentsType
-            ,CONCAT('$[', rowIndex, '].NotificationTemplateID'), notificationTemplateId
-            ,CONCAT('$[', rowIndex, '].NotificationTypeID'), notificationTypeId
-            ,CONCAT('$[', rowIndex, '].TemplateRequiredParams'), requiredParam)
+        SET Value = jsonValueResult
         WHERE ss.Description LIKE '%Notification Template ID / MsgContentsType / NotificationType%'
             AND ss.JobIdentify = jobId;
 
@@ -139,11 +156,11 @@ BEGIN
         #Get Log Content, JSON format
         SELECT json_object(
 			'jobId', jobId
-            ,'isTest', isTest2Int
-            ,'msgContentsType', msgContentsType
-            ,'notificationTemplateId', notificationTemplateId
-            ,'notificationTypeId', notificationTypeId
-            ,'requiredParam', requiredParam
+            ,'isTest', NewisTest
+            ,'msgContentsType', NewmsgContentsType
+            ,'notificationTemplateId', NewnotificationTemplateId
+            ,'notificationTypeId', NewnotificationTypeId
+            ,'requiredParam', NewrequiredParam
             ,'oldMsgContentsType', oldMsgContentsType
         )
         INTO logContent;

@@ -186,7 +186,7 @@ BEGIN
 		GROUP BY VoidingHistoryCollectionId, VoidingHistoryId
 		ORDER BY VoidingHistoryCollectionId ASC, VoidingHistoryId ASC
 
-		SELECT VoidingHistoryCollectionId, VoidingHistoryId, CustId, OrgTransId, VoidedTransId, Status, Stake, transdate, ISNULL(FilterBy, 0) AS IsParlay
+		SELECT VoidingHistoryCollectionId, VoidingHistoryId, CustId, OrgTransId, VoidedTransId, Status, Stake, Transdate, ISNULL(FilterBy, 0) AS IsParlay
 		FROM #DuplicatedTickets 
 		ORDER BY VoidingHistoryCollectionId, VoidingHistoryId
 	END

@@ -98,38 +98,44 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 	/*Step 1: Parse JSON data for message header*/	
 	DROP TEMPORARY TABLE IF EXISTS tmp_DuplicatedInfo;
 	CREATE TEMPORARY TABLE IF NOT EXISTS tmp_DuplicatedInfo (
-		Id INT NOT NULL AUTO_INCREMENT, VoidingHistoryCollectionId INT, CustId INT, Username VARCHAR(30), Status VARCHAR(10) CHARACTER SET utf8mb4, CurrencyName VARCHAR(50) CHARACTER SET utf8mb4,OrgTransId BIGINT, VoidedTransId BIGINT, TransInfo TEXT, Stake DECIMAL(20,4) ,IsParlay TINYINT, SiteName VARCHAR(50), IsDeposit TINYINT, IsTest TINYINT, Transdate DATETIME, RowIdOfBatch INT, BatchId INT, PRIMARY KEY (Id)
+		Id INT NOT NULL, VoidingHistoryCollectionId INT, CustId INT, Username VARCHAR(30), Status VARCHAR(10) CHARACTER SET utf8mb4, CurrencyName VARCHAR(50) CHARACTER SET utf8mb4,OrgTransId BIGINT, VoidedTransId BIGINT, TransInfo TEXT, Stake DECIMAL(20,4) ,IsParlay TINYINT, SiteName VARCHAR(50), IsDeposit TINYINT, IsTest TINYINT, Transdate DATETIME, MessageId INT, BatchId INT
 	);
 	
-	INSERT INTO tmp_DuplicatedInfo (VoidingHistoryCollectionId, CustId, Username, OrgTransId, VoidedTransId, Status, CurrencyName, Stake, TransInfo, SiteName, IsDeposit, Transdate, RowIdOfBatch)
-	SELECT VoidingHistoryCollectionId, CustId, Username, IFNULL(OrgTransId, 0), VoidedTransId, Status, CurrencyName, Stake, TransInfo, SiteName, IsDeposit, Transdate
-		,ROW_NUMBER() OVER(ORDER BY VoidingHistoryCollectionId, OrgTransId) AS RowIdOfBatch
-	FROM 
-		JSON_TABLE
-		(
-			duplicatedInfo
-			,"$[*]"
-			COLUMNS
+	INSERT INTO tmp_DuplicatedInfo (VoidingHistoryCollectionId, CustId, Username, OrgTransId, VoidedTransId, Status, CurrencyName, Stake, TransInfo, SiteName, IsTest, IsDeposit, Transdate, MessageId, Id)
+	WITH CTE_DuplicatedInfo AS
+	(
+		SELECT VoidingHistoryCollectionId, CustId, Username, IFNULL(OrgTransId, 0) AS OrgTransId, VoidedTransId, Status, CurrencyName, Stake, TransInfo, SiteName, IsTest, IsDeposit, Transdate, MessageId
+			,ROW_NUMBER() OVER(ORDER BY VoidingHistoryCollectionId, OrgTransId) AS rn
+		FROM 
+			JSON_TABLE
 			(
-				VoidingHistoryCollectionId 	INT 			PATH "$.VoidingHistoryCollectionId"
-				,CustId						INT 			PATH "$.CustId"
-				,Username					VARCHAR(30) 	PATH "$.Username"	 
-				,OrgTransId					BIGINT 			PATH "$.OrgTransId"
-				,VoidedTransId				BIGINT 			PATH "$.VoidedTransId"
-				,Status						VARCHAR(10)   	CHARACTER SET utf8mb4 PATH "$.Status" 
-				,CurrencyName				VARCHAR(50)   	CHARACTER SET utf8mb4 PATH "$.CurrencyName"
-				,Stake						DECIMAL(20,4) 	PATH "$.Stake"
-				,TransInfo					TEXT          	PATH "$.TransInfo"
-				,SiteName					VARCHAR(50)     PATH "$.SiteName" -- IsDeposit
-				,IsDeposit					TINYINT     	PATH "$.IsDeposit"
-				,IsTest						TINYINT     	PATH "$.IsTest"
-				,Transdate					DATETIME     	PATH "$.Transdate"
-			)
-		) AS t
-	ORDER BY VoidingHistoryCollectionId, OrgTransId;
+				duplicatedInfo
+				,"$[*]"
+				COLUMNS
+				(
+					VoidingHistoryCollectionId 	INT 			PATH "$.VoidingHistoryCollectionId"
+					,CustId						INT 			PATH "$.CustId"
+					,Username					VARCHAR(30) 	PATH "$.Username"	 
+					,OrgTransId					BIGINT 			PATH "$.OrgTransId"
+					,VoidedTransId				BIGINT 			PATH "$.VoidedTransId"
+					,Status						VARCHAR(10)   	CHARACTER SET utf8mb4 PATH "$.Status" 
+					,CurrencyName				VARCHAR(50)   	CHARACTER SET utf8mb4 PATH "$.CurrencyName"
+					,Stake						DECIMAL(20,4) 	PATH "$.Stake"
+					,TransInfo					TEXT          	PATH "$.TransInfo"
+					,SiteName					VARCHAR(50)     PATH "$.SiteName" -- IsDeposit
+					,IsDeposit					TINYINT     	PATH "$.IsDeposit"
+					,IsTest						TINYINT     	PATH "$.IsTest"
+					,Transdate					DATETIME     	PATH "$.Transdate"
+					,MessageId				    INT     		PATH "$.MessageId"
+				)
+			) AS t
+	)
+	SELECT VoidingHistoryCollectionId, CustId, Username, OrgTransId, VoidedTransId, Status, CurrencyName, Stake, TransInfo, SiteName, IsTest, IsDeposit, Transdate, MessageId
+		,DENSE_RANK() OVER(ORDER BY VoidingHistoryCollectionId, OrgTransId, IF(OrgTransId = 0, rn, 0)) AS Id
+	FROM CTE_DuplicatedInfo;
 	
 	UPDATE tmp_DuplicatedInfo
-		SET BatchId = (RowIdOfBatch - 1)/NumberRowOfBatch;
+	SET BatchId = FLOOR((Id - 1)/NumberRowOfBatch);
 	
 	/*Get All messageId and VoidingHistoryCollectionId*/
 	DROP TEMPORARY TABLE IF EXISTS tmp_MsgDetail;
@@ -159,7 +165,7 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 		INSERT INTO tmp_MsgDetail (VoidingHistoryCollectionId, MessageId, BatchId)
 		WITH CTE_Message AS
 		(
-			SELECT VoidingHistoryCollectionId, BatchId, MessageId FROM tmp_DuplicatedInfo GROUP BY VoidingHistoryCollectionId, BatchId
+			SELECT VoidingHistoryCollectionId, BatchId, MessageId FROM tmp_DuplicatedInfo GROUP BY VoidingHistoryCollectionId, BatchId, MessageId
 		)
 		SELECT VoidingHistoryCollectionId, MessageId, BatchId
 		FROM CTE_Message;
@@ -444,14 +450,16 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 			,IFNULL(OrgTransId, 0) AS OrgTransId
 			,IFNULL(Username, '') AS Username
 			,COUNT(1) AS TotalTickets
+			,MAX(TransInfo) AS TransInfo
+			,MAX(Stake) AS Stake
+			,MAX(CurrencyName) AS CurrencyName
+			,MAX(IsParlay) AS IsParlay
 			,GROUP_CONCAT(
 				CONCAT
 				(
-					IF(IsParlay = 1, '[Voided] Ref No: ', '[Voided] ')
-					,IF(IsParlay = 0, CONCAT(IFNULL(TransInfo, ''), '\r\n'), '')
-					,IF(IsParlay = 1, CONCAT(CONVERT(CASE WHEN VoidedTransId = 0 THEN '' ELSE VoidedTransId END USING latin1), '\r\n'), '')
-					,'Stake: ', IFNULL(CONVERT(FORMAT(Stake, 0) USING latin1), ''), ' ', CurrencyName
+					'[Voided] Ref No: ', VoidedTransId
 					,'\r\n'
+					,IF(IsParlay = 0, CONCAT('Transtime: ', DATE_FORMAT(Transdate, "%c/%e/%Y %l:%i:%s %p"), '\r\n'), '')
 					,'Status: ', CONCAT(UPPER(SUBSTRING(Status, 1, 1)), LOWER(SUBSTRING(Status, 2, 10))) 
                     ,'\r\n','\r\n'
 				) 
@@ -470,6 +478,9 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 					'System ID: ', IFNULL(Username, '')
 					,'\r\n'
 					,'[Remained] Ref No: ', CONVERT(IF(OrgTransId = 0, '', OrgTransId) USING latin1)
+					,'\r\n'
+					,IF(IsParlay = 0, CONCAT(IFNULL(TransInfo, ''), '\r\n'), '')
+					,'Stake: ', IFNULL(CONVERT(FORMAT(Stake, 0) USING latin1), ''), ' ', CurrencyName
 					,'\r\n'
 					,'Voided ticket: ', IFNULL(CONVERT(TotalTickets USING latin1), '0')
 					,'\r\n', '\r\n'
@@ -639,7 +650,7 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 	WHILE (EXISTS (SELECT 1 FROM tmp_MsgHeader WHERE Id = iLoop)) DO
 		SELECT VoidingHistoryCollectionId, IsTest, BatchId INTO ccVoidingHistoryCollectionId, ccIsTest, ccBatchId FROM tmp_MsgHeader WHERE Id = iLoop;
 
-		WHILE EXISTS(SELECT 1 FROM tmpMessageChannel m WHERE m.VoidingHistoryCollectionId = ccVoidingHistoryCollectionId) DO
+		WHILE EXISTS(SELECT 1 FROM tmpMessageChannel m WHERE m.VoidingHistoryCollectionId = ccVoidingHistoryCollectionId AND m.BatchId = ccBatchId) DO
 			SELECT ChannelId INTO ccChannelId FROM tmpMessageChannel m WHERE m.VoidingHistoryCollectionId = ccVoidingHistoryCollectionId AND m.BatchId = ccBatchId LIMIT 1; 
 
 			# Insert Notification

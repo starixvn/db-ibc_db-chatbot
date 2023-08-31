@@ -64,7 +64,7 @@ VALUES (@NotificationTypeID_DuplicatedTickets, @RecipientTypeID);
 SELECT Value INTO @Setting FROM SystemSetting WHERE id = 4;
 	
  SELECT JSON_ARRAYAGG(JSON_OBJECT('IsTest', IsTest, 'MsgContentsType', MsgContentsType, 'NotificationTypeID', NotificationTypeID
-	 ,'NotificationTemplateID', NotificationTemplateID, 'TemplateRequiredParams', TemplateRequiredParams, 'IssueType', IssueType)) 
+	 ,'NotificationTemplateID', NotificationTemplateID, 'TemplateRequiredParams', TemplateRequiredParams, 'IssueTypeId', IssueTypeId, 'IsProtected', IsProtected)) 
  INTO @NewSetting 
  FROM (
 	SELECT 
@@ -73,7 +73,9 @@ SELECT Value INTO @Setting FROM SystemSetting WHERE id = 4;
         ,NotificationTypeID 	
         ,NotificationTemplateID
         ,TemplateRequiredParams
-        ,0 AS IssueType
+        ,0 AS IssueTypeId
+		,CASE WHEN MsgContentsType IN (101, 102) THEN 1 ELSE 0 END AS IsProtected
+		
     FROM 
 		JSON_TABLE
 		(
@@ -90,10 +92,10 @@ SELECT Value INTO @Setting FROM SystemSetting WHERE id = 4;
 		) AS t
 	UNION ALL
     SELECT 0 AS IsTest,101 AS MsgContentsType, @NotificationTypeID_DuplicatedTickets AS NotificationTypeID, @NotificationTemplateID_DuplicatedTickets AS NotificationTemplateID
-		, '{EN Announcement},{CN Announcement}' AS TemplateRequiredParams, 20 AS IssueType
+		, '{EN Announcement},{CN Announcement}' AS TemplateRequiredParams, 20 AS IssueTypeId, 1 AS IsProtected
     UNION ALL
     SELECT 0 AS IsTest,102 AS MsgContentsType, @NotificationTypeID_DuplicatedTickets AS NotificationTypeID, @NotificationTemplateID_DuplicatedTickets AS NotificationTemplateID
-		, '{EN Announcement},{CN Announcement}' AS TemplateRequiredParams, 20 AS IssueType
+		, '{EN Announcement},{CN Announcement}' AS TemplateRequiredParams, 20 AS IssueTypeId, 1 AS IsProtected
 ) AS l;
 
 UPDATE SystemSetting

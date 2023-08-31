@@ -180,7 +180,7 @@ NCB_SpecialDeleteMsg_Import:BEGIN
 				NotificationTypeID 		INT 	 		 PATH "$.NotificationTypeID", 
 				NotificationTemplateID 	INT      		 PATH "$.NotificationTemplateID", 
 				IsTest     				TINYINT  		 PATH "$.IsTest",
-				IssueType 				TINYINT UNSIGNED PATH "$.IssueType",
+				IssueType 				TINYINT UNSIGNED PATH "$.IssueTypeId",
 				TemplateRequiredParams  TEXT             PATH "$.TemplateRequiredParams"
 			)
 		) AS t;    
