@@ -15,6 +15,7 @@ AS
 		- 20230221@Johnson: get product from ProductSettingDetail with settingstatus = 0 [redmine:#184137]	
 		- 20221121@Eden: Unify RNG Lottery Customer Settings [RedmineID: #180640]
 		- 20230414@Eden: Scale out DBTRANS for Credit [Redmine: #181595]
+		- 20230728@Eden: Simplify Live Casino Customer Setting [RedmineID: #189389]
 		
 	-Parameter's Explanation:
 		@Banlance_Data = '[
@@ -79,11 +80,13 @@ BEGIN
 	WHERE t.SettingName = 'Win Loss Limit'
 
 	UPDATE t 
-	SET t.BettypeRefSetting = ISNULL(mt.BettypeRefWinlossLimit,t.bettype) 
+	SET t.BettypeRefSetting = ISNULL(d.BetType,t.bettype) 
 	FROM #tmpData t
 		LEFT JOIN SportBettypeSettingMatrix mt WITH(NOLOCK) 
 			ON t.bettype = mt.bettype
 			AND mt.isLicensee = 0 AND mt.Site = 'ALL'
+		LEFT JOIN #ProductSettingDetail d  
+			ON mt.BettypeRefWinlossLimit  = d.BetType
 	
 	;WITH Tmp AS (
 	SELECT t.custid, t.bettype, 
