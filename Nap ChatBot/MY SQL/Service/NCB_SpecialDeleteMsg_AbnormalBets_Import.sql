@@ -105,7 +105,7 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 	WITH CTE_DuplicatedInfo AS
 	(
 		SELECT VoidingHistoryCollectionId, CustId, Username, IFNULL(OrgTransId, 0) AS OrgTransId, VoidedTransId, Status, CurrencyName, Stake, TransInfo, SiteName, IsTest, IsDeposit, Transdate, MessageId
-			,ROW_NUMBER() OVER(ORDER BY VoidingHistoryCollectionId, OrgTransId) AS rn
+			,ROW_NUMBER() OVER(ORDER BY VoidingHistoryCollectionId, OrgTransId, CustId, VoidedTransId) AS Id
 		FROM 
 			JSON_TABLE
 			(
@@ -130,8 +130,7 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 				)
 			) AS t
 	)
-	SELECT VoidingHistoryCollectionId, CustId, Username, OrgTransId, VoidedTransId, Status, CurrencyName, Stake, TransInfo, SiteName, IsTest, IsDeposit, Transdate, MessageId
-		,DENSE_RANK() OVER(ORDER BY VoidingHistoryCollectionId, OrgTransId, IF(OrgTransId = 0, rn, 0)) AS Id
+	SELECT VoidingHistoryCollectionId, CustId, Username, OrgTransId, VoidedTransId, Status, CurrencyName, Stake, TransInfo, SiteName, IsTest, IsDeposit, Transdate, MessageId, Id 
 	FROM CTE_DuplicatedInfo;
 	
 	UPDATE tmp_DuplicatedInfo
