@@ -163,12 +163,22 @@ BEGIN
 
 	/*Get data for duplicated ticket*/
 	UPDATE d
-		SET d.Status = z.status,d.Stake = z.stake, d.CustId = z.custid, d.Transdate = z.transdate
+		SET d.Status = z.status,d.Stake = z.stake, d.CustId = z.custid
 	FROM #DuplicatedTickets d
-		INNER JOIN zzzbettrans z WITH(NOLOCK) ON d.VoidedTransId = z.transid AND d.VoidingHistoryId = z.VoidingHistoryId
+		INNER JOIN dbo.zzzbettrans z WITH(NOLOCK) ON d.VoidedTransId = z.transid AND d.VoidingHistoryId = z.VoidingHistoryId
 	WHERE z.SiteDBGroupID = @SiteDBGroupID
 
 	DELETE #DuplicatedTickets WHERE CustId IS NULL
+
+	UPDATE d
+		SET d.Transdate = b.transdate
+	FROM #DuplicatedTickets d 
+		INNER JOIN dbo.bettrans b WITH(NOLOCK) ON b.TransId = d.VoidedTransId
+
+	UPDATE d
+		SET d.Transdate = b.transdate
+	FROM #DuplicatedTickets d 
+		INNER JOIN dbo.bettrans14 b WITH(NOLOCK) ON b.TransId = d.VoidedTransId
 
 	/*Result*/
 	BEGIN

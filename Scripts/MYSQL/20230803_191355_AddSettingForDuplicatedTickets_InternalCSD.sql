@@ -39,7 +39,7 @@ SELECT NotificationTypeID INTO @NotificationTypeID_DuplicatedTickets FROM Notifi
 
 SELECT NotificationTemplateID INTO @NotificationTemplateID_DuplicatedTickets FROM NotificationTemplate WHERE NotificationTemplateName = '[Internal CSD] Voiding Duplicate Tickets Template';
 
-SELECT NotificationTypeID INTO @NotificationTypeID_AbnormalBets FROM NotificationType WHERE NotificationTypeName = '[Internal CSD] Abnormal Bet Announcement';
+SELECT NotificationTypeID INTO @NotificationTypeID_AbnormalBets FROM NotificationType WHERE NotificationTypeName = '[Internal CSD] Abnormal Bet Announcement';
 
 SELECT NotificationTemplateID INTO @NotificationTemplateID_AbnormalBest FROM NotificationTemplate WHERE NotificationTemplateName = '[Internal CSD] Voiding Abnormal Bet Template';
 
