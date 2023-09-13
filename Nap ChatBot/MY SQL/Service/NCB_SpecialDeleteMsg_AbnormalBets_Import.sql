@@ -101,10 +101,11 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 		Id INT NOT NULL, VoidingHistoryCollectionId INT, CustId INT, Username VARCHAR(30), Status VARCHAR(10) CHARACTER SET utf8mb4, CurrencyName VARCHAR(50) CHARACTER SET utf8mb4,OrgTransId BIGINT, VoidedTransId BIGINT, TransInfo TEXT, Stake DECIMAL(20,4) ,IsParlay TINYINT, SiteName VARCHAR(50), IsDeposit TINYINT, IsTest TINYINT, Transdate DATETIME, MessageId INT, BatchId INT
 	);
 	
-	INSERT INTO tmp_DuplicatedInfo (VoidingHistoryCollectionId, CustId, Username, OrgTransId, VoidedTransId, Status, CurrencyName, Stake, TransInfo, SiteName, IsTest, IsDeposit, Transdate, MessageId, Id)
+	INSERT INTO tmp_DuplicatedInfo (VoidingHistoryCollectionId, CustId, Username, OrgTransId, VoidedTransId, Status, CurrencyName, Stake, TransInfo, SiteName, IsTest, IsDeposit, MessageId, Transdate, Id)
 	WITH CTE_DuplicatedInfo AS
 	(
-		SELECT VoidingHistoryCollectionId, CustId, Username, IFNULL(OrgTransId, 0) AS OrgTransId, VoidedTransId, Status, CurrencyName, Stake, TransInfo, SiteName, IsTest, IsDeposit, Transdate, MessageId
+		SELECT VoidingHistoryCollectionId, CustId, Username, IFNULL(OrgTransId, 0) AS OrgTransId, VoidedTransId, Status, CurrencyName, Stake, TransInfo, SiteName, IsTest, IsDeposit, MessageId
+			,LEFT(Transdate, IF(LOCATE('.', Transdate) = 0, 100, LOCATE('.', Transdate) - 1)) AS Transdate
 			,ROW_NUMBER() OVER(ORDER BY VoidingHistoryCollectionId, OrgTransId, CustId, VoidedTransId) AS Id
 		FROM 
 			JSON_TABLE
@@ -125,12 +126,12 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 					,SiteName					VARCHAR(50)     PATH "$.SiteName" -- IsDeposit
 					,IsDeposit					TINYINT     	PATH "$.IsDeposit"
 					,IsTest						TINYINT     	PATH "$.IsTest"
-					,Transdate					DATETIME     	PATH "$.Transdate"
 					,MessageId				    INT     		PATH "$.MessageId"
+					,Transdate					VARCHAR(100)    PATH "$.Transdate"
 				)
 			) AS t
 	)
-	SELECT VoidingHistoryCollectionId, CustId, Username, OrgTransId, VoidedTransId, Status, CurrencyName, Stake, TransInfo, SiteName, IsTest, IsDeposit, Transdate, MessageId, Id
+	SELECT VoidingHistoryCollectionId, CustId, Username, OrgTransId, VoidedTransId, Status, CurrencyName, Stake, TransInfo, SiteName, IsTest, IsDeposit, MessageId, Transdate, Id
 	FROM CTE_DuplicatedInfo;
 	
 	UPDATE tmp_DuplicatedInfo
