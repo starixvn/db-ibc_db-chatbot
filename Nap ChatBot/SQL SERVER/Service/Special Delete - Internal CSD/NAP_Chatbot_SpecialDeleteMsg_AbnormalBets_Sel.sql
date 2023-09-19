@@ -14,7 +14,8 @@ AS
 		- 20200701@Percy: Enhance mechaism to get new MessageId - Phase 2 [RedmineId: #135686]
 		- 20200804@Percy: Add RequestId for Ticket Voiding Abnormal Bets - Phase 3 [RedmineId: #135686]
 		- 20220728@Malcolm: Scale out DBTRANS [RedmineId: #175878]
-		- 20230128@Malcolm: Scale for ChatBot [RedmineId : #181907] 
+		- 20230128@Malcolm: Scale for ChatBot [RedmineId : #181907]
+		- 20230731@Malcolm: Incorporate voiding duplicated bet tickets with TVS [RedmineId : #191355]		
 
 	Param's Explanation:
 		@MessageIdLst:
@@ -30,7 +31,7 @@ BEGIN
 	CREATE TABLE #Message (VoidingHistoryCollectionId INT, MessageId INT)
 	INSERT INTO  #Message (VoidingHistoryCollectionId, MessageId)
 	SELECT
-		t.c.value('@VoidingHistoryCollectionId', 'INT') AS MessageId
+		t.c.value('@VoidingHistoryCollectionId', 'INT') AS VoidingHistoryCollectionId
 		,t.c.value('@MessageId', 'INT') AS MessageId
 	FROM @MessageIdLst.nodes('root/r') AS t(c)
 	OPTION (OPTIMIZE FOR (@MessageIdLst = NULL))

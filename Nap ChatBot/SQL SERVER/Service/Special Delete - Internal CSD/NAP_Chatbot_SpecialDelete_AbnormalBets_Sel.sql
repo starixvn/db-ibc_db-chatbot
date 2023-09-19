@@ -1,7 +1,8 @@
 /*<info serverAlias="DBACC-bodb02" executers="bodbAdminNet" isFunction="0" isNested="0"></info>*/
 ALTER PROCEDURE [dbo].[NAP_Chatbot_SpecialDelete_AbnormalBets_Sel]
-	@TicketInfo    XML
-	,@UsernameLst  XML
+	@TicketInfo    		XML
+	,@UsernameLst  		XML
+	,@DuplicatedInfo 	XML
 AS
 
 /*
@@ -21,6 +22,7 @@ AS
 		- 20220728@Malcolm: Scale out ChatBot [RedmineId: #175878]
 		- 20230322@Roy: Chatbot - Missing text (N) for the team name [RedmineID: #185414]
 		- 20230207@Malcolm: Split 789y site [RedmineId: #182692]
+		- 20230731@Malcolm: Incorporate voiding duplicated bet tickets with TVS [RedmineId : #191355]
 
 	Param's Explanation:
 		+ @TicketInfo:
@@ -30,6 +32,10 @@ AS
 		+ @UsernameLst
 			<root>
 				<r VoidingHistoryCollectionId="1" VoidingHistoryId="1" Usernames="Supertest01"/>
+			</root>
+		+ @DuplicatedInfo 
+			<root>
+				<r VoidingHistoryCollectionId="1" VoidingHistoryId="1" CustId="1232" OrgTransId="1" VoidedTransId="1" Status="Running" Stake="200" IsParlay="1" Transdate="2023-01-01"/>
 			</root>
 */
 
@@ -58,6 +64,31 @@ BEGIN
 	FROM @UsernameLst.nodes('root/r') AS t(c)
 	OPTION (OPTIMIZE FOR (@UsernameLst = NULL)) 
 
+	--Duplicated Tickets
+	CREATE TABLE #DuplicatedInfo (
+		VoidingHistoryCollectionId INT, VoidingHistoryId INT, CustId INT, OrgTransId BIGINT, VoidedTransId BIGINT, MessageId INT
+		,Status NVARCHAR(10), Stake MONEY, IsParlay BIT, Transdate DATETIME
+	)
+
+	INSERT INTO #DuplicatedInfo (VoidingHistoryCollectionId, VoidingHistoryId, CustId, OrgTransId, VoidedTransId, Status, Stake, IsParlay, Transdate)
+	SELECT
+		t.c.value('@VoidingHistoryCollectionId', 'INT') AS VoidingHistoryCollectionId
+		,t.c.value('@VoidingHistoryId', 'INT') AS VoidingHistoryId
+		,t.c.value('@CustId', 'INT') AS CustId
+		,t.c.value('@OrgTransId', 'BIGINT') AS OrgTransId	
+		,t.c.value('@VoidedTransId', 'BIGINT') AS VoidedTransId
+		,t.c.value('@Status', 'NVARCHAR(10)') AS Status
+		,t.c.value('@Stake', 'MONEY') AS Stake
+		,t.c.value('@IsParlay', 'BIT') AS IsParlay
+		,t.c.value('@Transdate', 'DATETIME') AS Transdate
+	FROM @DuplicatedInfo.nodes('root/r') AS t(c)
+	OPTION (OPTIMIZE FOR ( @DuplicatedInfo = NULL))
+
+	UPDATE d
+		SET d.MessageId = vh.MessageId
+	FROM #DuplicatedInfo d
+		INNER JOIN bodb02.dbo.TicketVoiding_VoidingHistory vh WITH(NOLOCK) ON vh.VoidingHistoryId = d.VoidingHistoryId
+
 	CREATE TABLE #VoidingHistoryCollection (VoidingHistoryCollectionId INT PRIMARY KEY, IsParlay BIT)
 	INSERT INTO #VoidingHistoryCollection (VoidingHistoryCollectionId, IsParlay)
 	SELECT VoidingHistoryCollectionId, MAX(CONVERT(TINYINT, IsParlay)) AS IsParlay
@@ -65,12 +96,14 @@ BEGIN
 		SELECT VoidingHistoryCollectionId, IsParlay FROM #AbnormalBetsInfo 
 		UNION ALL 
 		SELECT VoidingHistoryCollectionId, 0 AS IsParlay FROM #AbnormalAccountsInfo 
+		UNION ALL
+		SELECT VoidingHistoryCollectionId, IsParlay FROM #DuplicatedInfo  
 	) n
 	GROUP BY VoidingHistoryCollectionId
 
 	CREATE TABLE #AbnormalInfo (
-		VoidingHistoryCollectionId INT, VoidingHistoryId INT, RequestId INT, MessageId INT, ReasonId INT, VoIdById INT, TotalTicket INT, MinWinlostdate DATETIME, 
-		MaxWinlostdate DATETIME, Usernames NVARCHAR(MAX) DEFAULT NULL, IssueTypeId TINYINT, FilterBy TINYINT DEFAULT(0)
+		VoidingHistoryCollectionId INT, VoidingHistoryId INT, RequestId INT, MessageId INT, ReasonId INT, VoIdById INT, TotalTicket INT, MinWinlostdate DATETIME
+		,MaxWinlostdate DATETIME, Usernames NVARCHAR(MAX) DEFAULT NULL, IssueTypeId TINYINT, IsParlay TINYINT DEFAULT(0), MatchId INT
 	)
 
 	INSERT INTO #AbnormalInfo 
@@ -84,9 +117,10 @@ BEGIN
 		,TotalTicket
 		,MinWinlostdate
 		,MaxWinlostdate
-		,FilterBy
+		,IsParlay
 		,IssueTypeId
 		,Usernames
+		,MatchId 
 	)
 	SELECT
 		vcd.VoidingHistoryCollectionId
@@ -95,12 +129,13 @@ BEGIN
 		,vh.MessageId
 		,vh.ReasonId
 		,vh.UserId AS VoIdById
-		,t.TotalTicket
+		,ISNULL(t.TotalTicket, 0)
 		,vh.MinWinlostdate
 		,vh.MaxWinlostdate
 		,hc.IsParlay
 		,r.IssueTypeId
 		,u.Usernames
+		,CASE WHEN hc.IsParlay = 0 AND r.IssueTypeId = 20 THEN rd.MatchId ELSE 0 END AS MatchId
 	FROM dbo.VoidingHistoryCollectionDetail vcd WITH(NOLOCK)
 		INNER JOIN dbo.TicketVoIding_VoIdingHistory vh WITH (NOLOCK) ON vh.VoidingHistoryId = vcd.VoidingHistoryId
 		INNER JOIN dbo.TicketVoIding_Request r WITH(NOLOCK) ON r.RequestId = vh.RequestId
@@ -109,37 +144,35 @@ BEGIN
 		OUTER APPLY (
 			SELECT COUNT(DISTINCT value) AS TotalTicket FROM STRING_SPLIT(vh.TransIds, ',') f WHERE f.value <> ''
 		) t
+		OUTER APPLY (
+			SELECT TOP(1) MatchId FROM dbo.TicketVoiding_RequestDetail rd WITH(NOLOCK) WHERE rd.RequestId = r.RequestId
+		) AS rd
 
 	-- Request Info
 	BEGIN
 		CREATE TABLE #tblRequestInfo (
 			VoidingHistoryCollectionId INT, RequestId INT, DecidedBy NVARCHAR(50), RequestBy NVARCHAR(200), VoidBy NVARCHAR(50), ReasonLst NVARCHAR(MAX)
-			,[Type] TINYINT, MinWinlostdate	DATETIME, MaxWinlostdate DATETIME
+			,IssueTypeId TINYINT, IsParlay TINYINT, MinWinlostdate DATETIME, MaxWinlostdate DATETIME, MatchId INT
 		)
 		
 		;WITH CTE_Request AS
 		(
-			SELECT VoidingHistoryCollectionId, RequestId, ReasonId, VoIdById, MAX(FilterBy) AS FilterBy
+			SELECT VoidingHistoryCollectionId, RequestId, ReasonId, VoIdById, IssueTypeId, MAX(MatchId) AS MatchId, MAX(IsParlay) AS IsParlay
 			FROM #AbnormalInfo
-			GROUP BY VoidingHistoryCollectionId, RequestId, ReasonId, VoIdById
+			GROUP BY VoidingHistoryCollectionId, RequestId, ReasonId, VoIdById, IssueTypeId
 		)
-		INSERT INTO #tblRequestInfo (VoidingHistoryCollectionId, RequestId, DecidedBy, RequestBy, VoIdBy, ReasonLst, [Type])
+		INSERT INTO #tblRequestInfo (VoidingHistoryCollectionId, RequestId, DecidedBy, RequestBy, VoIdBy, IssueTypeId, MatchId, IsParlay, ReasonLst)
 		SELECT 
-			vh.VoidingHistoryCollectionId, rq.RequestId, rq.DecidedBy, rb.username AS RequestBy, vb.username AS VoIdBy
+			vh.VoidingHistoryCollectionId, rq.RequestId, rq.DecidedBy, rb.username AS RequestBy, vb.username AS VoIdBy, vh.IssueTypeId, vh.MatchId, IsParlay
 			,STUFF((SELECT DISTINCT N', ' + rs.SubIssueTypeName
 					FROM dbo.TicketVoIding_RequestDetail rqd WITH (NOLOCK)
 						INNER JOIN dbo.TicketVoIding_SubIssueType rs WITH (NOLOCK) ON rqd.SubIssueTypeId = rs.SubIssueTypeId
 					WHERE rq.RequestId = rqd.RequestId
 					FOR XML PATH('')), 1, 2, '') AS ReasonLst
-			,CASE WHEN rq.IssueTypeId = 11 AND vh.FilterBy = 1 THEN 3 -- Parlay
-				  WHEN rq.IssueTypeId IN (11, 15) THEN 1 	
-			      WHEN rq.IssueTypeId = 13 THEN 2 
-		     ELSE NULL END AS [Type]
 		FROM CTE_Request vh
 			INNER JOIN dbo.TicketVoIding_Request rq WITH (NOLOCK) ON rq.RequestId = vh.RequestId
 			LEFT JOIN dbo.Customer rb WITH (NOLOCK) ON rq.UserId = rb.custId
 			LEFT JOIN dbo.Customer vb WITH (NOLOCK) ON vh.VoIdById = vb.custId
-		WHERE rq.IssueTypeId IN (11, 13, 15) -- Abnormal Bets, Abnormal Accounts, AB (real member)
 	END
 
 	-- Event Info
@@ -161,7 +194,16 @@ BEGIN
 			,FullTimeHomeScore
 			,FullTimeAwayScore
 		)
-		SELECT DISTINCT vh.VoidingHistoryCollectionId, FORMAT(DATEADD(HOUR, 12, GlobalShowTime), N'h:mm tt') AS KickOffTime, l.LeagueName, h.TeamName + (CASE WHEN m.IsNeutral = 1 THEN ' (N)' ELSE '' END) AS HomeName, a.TeamName AS AwayName, m.hthomescore, m.htawayscore, m.finalhomescore, m.finalawayscore
+		SELECT DISTINCT 
+			vh.VoidingHistoryCollectionId
+			,FORMAT(DATEADD(HOUR, 12, GlobalShowTime), N'h:mm tt') AS KickOffTime
+			,l.LeagueName
+			,h.TeamName + (CASE WHEN m.IsNeutral = 1 THEN ' (N)' ELSE '' END) AS HomeName
+			,a.TeamName AS AwayName
+			,m.hthomescore
+			,m.htawayscore
+			,m.finalhomescore
+			,m.finalawayscore
 		FROM #AbnormalInfo vh
 			INNER JOIN dbo.TicketVoIding_RequestDetail rd WITH (NOLOCK) ON rd.RequestId = vh.RequestId
 			CROSS APPLY (
@@ -186,7 +228,9 @@ BEGIN
 		(
 			SELECT
 				r1.VoidingHistoryCollectionId
-				,MAX(r1.Type) AS [Type]
+				,MAX(r1.IssueTypeId) AS IssueTypeId
+				,MAX(r1.IsParlay)	 AS IsParlay
+				,MAX(r1.matchid)	 AS Matchid
 				,STUFF((SELECT DISTINCT N', ' + CONVERT(NVARCHAR(20), r2.RequestId)		FROM #tblRequestInfo r2 WHERE r1.VoidingHistoryCollectionId = r2.VoidingHistoryCollectionId FOR XML PATH ('')), 1, 1, '') AS RequestIdLst
 				,STUFF((SELECT DISTINCT N', ' + CONVERT(NVARCHAR(200), r2.DecidedBy)	FROM #tblRequestInfo r2 WHERE r1.VoidingHistoryCollectionId = r2.VoidingHistoryCollectionId FOR XML PATH ('')), 1, 1, '') AS DecidedByLst
 				,STUFF((SELECT DISTINCT N', ' + CONVERT(NVARCHAR(50), r2.RequestBy)		FROM #tblRequestInfo r2 WHERE r1.VoidingHistoryCollectionId = r2.VoidingHistoryCollectionId FOR XML PATH ('')), 1, 1, '') AS RequestByLst
@@ -232,11 +276,9 @@ BEGIN
 			SELECT 
 				vh.VoidingHistoryCollectionId
 				,f.value AS Username 
-				,CASE WHEN s.custId IS NULL AND c.site <> 'CN88' AND ISNULL(st.SiteLabel, '') <> '789y' THEN 'NV88' 
-				 ELSE 
-					CASE WHEN ISNULL(st.SiteLabel, '') = '789y' THEN  '789y'
-					ELSE c.site END 
-				 END AS site
+				,CASE WHEN ISNULL(st.SiteLabel, '') = '789y' THEN  '789y'
+					  WHEN s.custId IS NULL AND c.site <> 'CN88' THEN 'NV88'   
+				 ELSE c.site END AS site
 				,CASE WHEN s.custId IS NULL THEN 0 ELSE 1 END AS isDeposit
 				,CASE WHEN c.currency = 20 THEN 1 ELSE 0 END AS IsTest
 			FROM #AbnormalInfo vh
@@ -248,20 +290,19 @@ BEGIN
 		)
 		,CTE_AbnormalBets_Site AS
 		(
-			SELECT 
+			SELECT DISTINCT
 				t.VoidingHistoryCollectionId
-				,CASE WHEN s.custId IS NULL AND c.site <> 'CN88' AND ISNULL(st.SiteLabel, '') <> '789y' THEN 'NV88' 
-				 ELSE 
-					CASE WHEN ISNULL(st.SiteLabel, '') = '789y' THEN  '789y'
-					ELSE c.site END 
-				 END AS site
+				,CASE WHEN ISNULL(st.SiteLabel, '') = '789y' THEN  '789y'
+					  WHEN s.custId IS NULL AND c.site <> 'CN88' THEN 'NV88'   
+				 ELSE c.site END AS site
 				,CASE WHEN s.custId IS NULL THEN 0 ELSE 1 END AS isDeposit
 				,CASE WHEN c.currency = 20 THEN 1 ELSE 0 END AS IsTest
 			FROM #AbnormalBetsInfo t
-				INNER JOIN dbo.Customer c WITH (NOLOCK) ON t.recommend = c.custId
+				INNER JOIN dbo.Customer c WITH(NOLOCK) ON t.recommend = c.custId
 				INNER JOIN dbo.Site st WITH(NOLOCK) ON st.site = c.site
 				LEFT JOIN dbo.Dep_CustSuper s WITH (NOLOCK) ON c.srecommend = s.custId
-		),CTE_site AS
+		)
+		,CTE_site AS
 		(
 			SELECT VoidingHistoryCollectionId, Username, site, isDeposit, IsTest FROM CTE_AbnormalAccounts_Site
 			UNION ALL 
@@ -280,28 +321,30 @@ BEGIN
 		)
 		SELECT
 			r.VoidingHistoryCollectionId
-			, CONVERT(BIT, s.IsTest) AS IsTest
-			, t.TotalTickets
-			, ISNULL(r.RequestIdLst, '') RequestIdLst
-			, ISNULL(r.DecIdedByLst, '') DecIdedByLst
-			, ISNULL(r.RequestByLst, '') RequestByLst
-			, ISNULL(r.VoIdByLst, '') VoIdByLst
-			, ISNULL(r.ReasonLst, '') ReasonLst
-			, ISNULL(s.UsernameLst, '') AS UsernameLst
-			, ISNULL(e.KickOffTime, '') KickOffTime
-			, ISNULL(e.LeagueName, '') LeagueName
-			, ISNULL(e.HomeName, '') HomeName
-			, ISNULL(e.AwayName, '') AwayName
-			, e.HalfTimeHomeScore 
-			, e.HalfTimeAwayScore
-			, e.FullTimeHomeScore
-			, e.FullTimeAwayScore
-			, ISNULL(b.TypeNameLst, '') TypeNameLst
-			, ISNULL(s.CreditSiteLst, '') CreditSiteLst
-			, ISNULL(s.DepositSiteLst, '') DepositSiteLst
-			, t.MinWinlostdate
-			, t.MaxWinlostdate 
-			,r.[Type]
+			,ISNULL(CONVERT(BIT, s.IsTest), 0) AS IsTest
+			,ISNULL(t.TotalTickets, 0) AS TotalTickets
+			,ISNULL(r.RequestIdLst, '') RequestIdLst
+			,ISNULL(r.DecIdedByLst, '') DecIdedByLst
+			,ISNULL(r.RequestByLst, '') RequestByLst
+			,ISNULL(r.VoIdByLst, '') VoIdByLst
+			,ISNULL(r.ReasonLst, '') ReasonLst
+			,ISNULL(s.UsernameLst, '') AS UsernameLst
+			,ISNULL(e.KickOffTime, '') KickOffTime
+			,ISNULL(e.LeagueName, '') LeagueName
+			,ISNULL(e.HomeName, '') HomeName
+			,ISNULL(e.AwayName, '') AwayName
+			,e.HalfTimeHomeScore 
+			,e.HalfTimeAwayScore
+			,e.FullTimeHomeScore
+			,e.FullTimeAwayScore
+			,ISNULL(b.TypeNameLst, '') TypeNameLst
+			,ISNULL(s.CreditSiteLst, '') CreditSiteLst
+			,ISNULL(s.DepositSiteLst, '') DepositSiteLst
+			,t.MinWinlostdate
+			,t.MaxWinlostdate 
+			,r.Matchid
+			,r.IssueTypeId
+			,r.IsParlay
 		FROM CTE_RequestInfo r
 			LEFT JOIN #tblEventInfo e ON r.VoidingHistoryCollectionId = e.VoidingHistoryCollectionId
 			LEFT JOIN CTE_TotalTickets t ON r.VoidingHistoryCollectionId = t.VoidingHistoryCollectionId
@@ -313,6 +356,28 @@ BEGIN
 			INNER JOIN dbo.VoidingHistoryCollectionDetail vcd WITH(NOLOCK) ON vcd.VoidingHistoryCollectionId = c.VoidingHistoryCollectionId
 			INNER JOIN dbo.TicketVoiding_VoidingHistory vh WITH(NOLOCK) ON vh.VoidingHistoryId = vcd.VoidingHistoryId
 		WHERE EXISTS (SELECT 1 FROM #VoidingHistoryCollection hc WHERE hc.VoidingHistoryCollectionId = c.VoidingHistoryCollectionId) 
+
+		SELECT 
+			d.VoidingHistoryCollectionId
+			,d.MessageId
+			,ISNULL(d.OrgTransId, 0) AS OrgTransId
+			,d.VoidedTransId
+			,c.Custid
+			,c.Username
+			,e.currency AS CurrencyName
+			,d.Status
+			,d.Stake
+			,d.Transdate
+			,CASE WHEN ISNULL(st.SiteLabel, '') = '789y' THEN  '789y'
+				  WHEN s.custId IS NULL AND c.site <> 'CN88' THEN 'NV88'   
+			 ELSE c.site END AS SiteName
+			,CONVERT(BIT, CASE WHEN s.custId IS NULL THEN 0 ELSE 1 END) AS IsDeposit
+			,CONVERT(BIT, CASE WHEN c.currency = 20 THEN 1 ELSE 0 END) AS IsTest
+		FROM #DuplicatedInfo d
+			INNER JOIN bodb02.dbo.Customer c WITH(NOLOCK) ON c.custid = d.CustId
+			INNER JOIN dbo.Site st WITH(NOLOCK) ON st.site = c.site
+			LEFT JOIN dbo.Dep_CustSuper s WITH(NOLOCK) ON s.custid = c.srecommend
+			LEFT JOIN bodb02.dbo.Exchange e WITH(NOLOCK) ON e.ExchangeId = c.currency
 	END
 
 	DROP TABLE #AbnormalInfo
@@ -321,5 +386,6 @@ BEGIN
 	DROP TABLE #VoidingHistoryCollection
 	DROP TABLE #tblEventInfo
 	DROP TABLE #tblRequestInfo
+	DROP TABLE #DuplicatedInfo
 END
 GO

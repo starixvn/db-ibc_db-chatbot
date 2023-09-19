@@ -15,8 +15,8 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_SpecialDeleteMsg_Import(
         Param:
 				-  @MessageHeader:
 							[  
-								{ "MessageID":885128, "MsgContentsType":101, "Content_en":"Attn:[Soccer] Due to bets er...", "Content_cs":"請注意:[籃球] 由於中文隊名顯示.." }
-								, { "MessageID":885131,"MsgContentsType":101,"Content_en":"Attn:[Soccer] Due to bets er...", "Content_cs":"請注意:[籃球] 由於中文隊名顯示..."}
+								{ "MessageID":885128, "MsgContentsType":101, "Content_en":"Attn:[Soccer] Due to bets er...", "Content_cs":"請注意:[籃球] 由於中文隊名顯示..", "PostTime":"2023-08-17", "IsNew":"0", "IssueType":"20"}
+								,{ "MessageID":885131,"MsgContentsType":101,"Content_en":"Attn:[Soccer] Due to bets er...", "Content_cs":"請注意:[籃球] 由於中文隊名顯示...", "PostTime":"2023-08-17", "IsNew":"0", "IssueType":"0"}
 							]
 				- @MessageDetail
 							[  
@@ -32,6 +32,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_SpecialDeleteMsg_Import(
 				- 20201029@Percy: Remove sent recipients for rescan messages [RedmineID: #144274]
 				- 20210513@Malcolm: Integrate Telegram [RedmineID: #151807]
 				- 20220223@Malcolm: Remove SABA text out of the league name for China View platform [RedmineID: #168798]
+				- 20230731@Malcolm: Incorporate voiding duplicated bet tickets with TVS [RedmineId : #191355]
     */
 )
 SQL SECURITY DEFINER
@@ -47,6 +48,7 @@ NCB_SpecialDeleteMsg_Import:BEGIN
     DECLARE maxMessageID 	INT;
     DECLARE lastPostTime 	DATETIME;
     DECLARE ccIsNew 		TINYINT;
+	DECLARE pCount			INT DEFAULT 0;
 
     DECLARE createdDate DATETIME(3);
     DECLARE ccMessageID INT;
@@ -91,14 +93,15 @@ NCB_SpecialDeleteMsg_Import:BEGIN
             Content_cs 		TEXT,
             PostTime 		TEXT,
 			IsNew 			TINYINT,
+			IssueType		TINYINT UNSIGNED,
             CheckMsg 		TEXT,
             CheckMsgDetail 	TEXT,
             PRIMARY KEY (Id),
             UNIQUE INDEX Index_MessageID(MessageID)
     );
     
-	INSERT INTO tmp_MsgHeader (MessageID, MsgContentsType, Content_en, Content_cs, PostTime, IsNew, CheckMsg)
-	SELECT t.MessageID, t.MsgContentsType, t.Content_en, t.Content_cs, t.PostTime, t.IsNew, ''
+	INSERT INTO tmp_MsgHeader (MessageID, MsgContentsType, Content_en, Content_cs, PostTime, IsNew, IssueType, CheckMsg)
+	SELECT t.MessageID, t.MsgContentsType, t.Content_en, t.Content_cs, t.PostTime, t.IsNew, t.IssueType, ''
     FROM 
 		JSON_TABLE
         (
@@ -106,12 +109,13 @@ NCB_SpecialDeleteMsg_Import:BEGIN
             "$[*]"
             COLUMNS
             (
-				MessageID 		INT 	PATH "$.MessageID", 
-				MsgContentsType INT 	PATH "$.MsgContentsType", 
-				Content_en 		TEXT 	PATH "$.Content_en", 
-				Content_cs      TEXT 	PATH "$.Content_cs", 
-				PostTime 		TEXT 	PATH "$.PostTime", 
-				IsNew 			TINYINT PATH "$.IsNew"
+				MessageID 		INT 			 PATH "$.MessageID", 
+				MsgContentsType INT 			 PATH "$.MsgContentsType", 
+				Content_en 		TEXT 			 PATH "$.Content_en", 
+				Content_cs      TEXT 			 PATH "$.Content_cs", 
+				PostTime 		TEXT 			 PATH "$.PostTime", 
+				IsNew 			TINYINT 		 PATH "$.IsNew",
+				IssueType 		TINYINT UNSIGNED PATH "$.IssueType"
             )
         ) AS t;
 
@@ -155,14 +159,16 @@ NCB_SpecialDeleteMsg_Import:BEGIN
 		,NotificationTypeID 	 INT
 		,NotificationTemplateID  INT
 		,TemplateTitle 	         VARCHAR(300)
-		,TemplateContent 		 MEDIUMTEXT
+		,TemplateContent 		 MEDIUMTEXT 
+		,TemplateRequiredParams  TEXT
 		,IsTest 				 TINYINT
+		,IssueType				 TINYINT UNSIGNED
 		,StatusID 				 TINYINT UNSIGNED
 	    ,Status 				 VARCHAR(10) 
    );
    
-   INSERT INTO tmp_MsgContentTypeTemplate (MsgContentsType, NotificationTypeID, NotificationTemplateID, IsTest)
-   SELECT t.MsgContentsType, t.NotificationTypeID, t.NotificationTemplateID, t.IsTest
+   INSERT INTO tmp_MsgContentTypeTemplate (MsgContentsType, NotificationTypeID, NotificationTemplateID, IsTest, IssueType, TemplateRequiredParams)
+   SELECT t.MsgContentsType, t.NotificationTypeID, t.NotificationTemplateID, t.IsTest, IFNULL(t.IssueType, 0) AS IssueType, CONCAT('[{"z":', '[' , REPLACE(REPLACE(TemplateRequiredParams, '{', '"{'), '}', '}"') , ']}]') TemplateRequiredParams
     FROM 
 		JSON_TABLE
 		(
@@ -170,78 +176,101 @@ NCB_SpecialDeleteMsg_Import:BEGIN
 			"$[*]"
 			COLUMNS
 			(
-				MsgContentsType 		INT 	 PATH "$.MsgContentsType", 
-				NotificationTypeID 		INT 	 PATH "$.NotificationTypeID", 
-				NotificationTemplateID 	INT      PATH "$.NotificationTemplateID", 
-				IsTest     				TINYINT  PATH "$.IsTest"
+				MsgContentsType 		INT 	 		 PATH "$.MsgContentsType", 
+				NotificationTypeID 		INT 	 		 PATH "$.NotificationTypeID", 
+				NotificationTemplateID 	INT      		 PATH "$.NotificationTemplateID", 
+				IsTest     				TINYINT  		 PATH "$.IsTest",
+				IssueType 				TINYINT UNSIGNED PATH "$.IssueTypeId",
+				TemplateRequiredParams  TEXT             PATH "$.TemplateRequiredParams"
 			)
 		) AS t;    
     
     #Update Default status: if IsTest=1 then 'Draft', else 'Planned'
     UPDATE tmp_MsgContentTypeTemplate t
-    SET t.StatusID = CASE WHEN t.IsTest = 1 THEN  DRAFT_NOTIFICATION_STATUSID ELSE PLANNED_NOTIFICATION_STATUSID END
-    , Status = CASE WHEN t.IsTest = 1 THEN   DRAFT_NOTIFICATION_STATUS ELSE PLANNED_NOTIFICATION_STATUS END;
+    SET t.StatusID = CASE WHEN t.IsTest = 1 THEN DRAFT_NOTIFICATION_STATUSID ELSE PLANNED_NOTIFICATION_STATUSID END
+		,Status = CASE WHEN t.IsTest = 1 THEN DRAFT_NOTIFICATION_STATUS ELSE PLANNED_NOTIFICATION_STATUS END;
     
-/*Step 3: Validate templates*/
+	/*Step 3: Validate templates*/
     #Get template content
     UPDATE tmp_MsgContentTypeTemplate tmp
-    INNER JOIN NotificationTemplate nt ON tmp.NotificationTemplateID = nt.NotificationTemplateID
+	INNER JOIN NotificationTemplate nt ON tmp.NotificationTemplateID = nt.NotificationTemplateID
 	SET tmp.TemplateContent = nt.Content
-			, tmp.TemplateTitle = nt.Title;
-    
+		,tmp.TemplateTitle = nt.Title;
+		
+	DROP TEMPORARY TABLE IF EXISTS tmp_CopyMsgContentTypeTemplate;
+    CREATE TEMPORARY TABLE IF NOT EXISTS tmp_CopyMsgContentTypeTemplate
+    SELECT * FROM tmp_MsgContentTypeTemplate;
+	
     #Check if there are any template IDs are not existing
-    IF  EXISTS(SELECT 1 
-									FROM tmp_MsgContentTypeTemplate  nt
-                                    WHERE nt.TemplateContent IS NULL ) THEN
+    IF  EXISTS(SELECT 1 FROM tmp_MsgContentTypeTemplate nt WHERE nt.TemplateContent IS NULL) THEN
 		SET errCode = 1801;
-		SELECT GROUP_CONCAT( DISTINCT nt.NotificationTemplateID  ORDER BY nt.NotificationTemplateID SEPARATOR ', ') 
-        INTO errMsg
-        FROM tmp_MsgContentTypeTemplate  nt
+		SELECT GROUP_CONCAT(DISTINCT nt.NotificationTemplateID  ORDER BY nt.NotificationTemplateID SEPARATOR ', ') 
+		INTO errMsg
+        FROM tmp_MsgContentTypeTemplate nt
 		WHERE nt.TemplateContent IS NULL;
         
 		SET errMsg = CONCAT('Notification template is not existing (IDs): ' , errMsg);
-        LEAVE NCB_SpecialDeleteMsg_Import;
-        
+        LEAVE NCB_SpecialDeleteMsg_Import;   
 	END IF;
-    
-    #Check if there are any template IDs which do not have required params
-     IF  EXISTS(SELECT 1 
-									FROM tmp_MsgContentTypeTemplate  nt
-                                    WHERE nt.TemplateContent NOT LIKE '%{EN Announcement}%' 
-										OR nt.TemplateContent NOT LIKE '%{CN Announcement}%'  ) THEN
-		SET errCode = 1802;
-		SELECT GROUP_CONCAT( DISTINCT nt.NotificationTemplateID  ORDER BY nt.NotificationTemplateID SEPARATOR ', ') 
-        INTO errMsg
-        FROM tmp_MsgContentTypeTemplate  nt
-		WHERE nt.TemplateContent NOT LIKE '%{EN Announcement}%' 
-										OR nt.TemplateContent NOT LIKE '%{CN Announcement}%' ;
-        
+	
+	#Check if there are any template IDs which do not have required params
+	
+	WITH CTE_RequiredParams AS
+	(
+		SELECT m.NotificationTemplateID, k.RequiredParam AS RequiredParam
+		FROM tmp_MsgContentTypeTemplate m 
+		LEFT JOIN LATERAL (
+			SELECT *
+			FROM JSON_TABLE(
+				m.TemplateRequiredParams, 
+				'$[*]' COLUMNS(NESTED PATH '$.z[*]' COLUMNS (RequiredParam TEXT PATH '$'))
+			) AS t	
+		) AS k  ON 1 = 1
+	)
+	SELECT COUNT(1) INTO pCount
+	FROM tmp_CopyMsgContentTypeTemplate t 
+		LEFT JOIN CTE_RequiredParams p ON p.NotificationTemplateID = t.NotificationTemplateID AND t.TemplateContent COLLATE utf8mb4_general_ci LIKE CONCAT('%', RequiredParam, '%')
+	WHERE p.NotificationTemplateID IS NULL;
+
+	IF pCount > 0 THEN 
+		WITH CTE_RequiredParams AS
+		(
+			SELECT m.NotificationTemplateID, k.RequiredParam
+			FROM tmp_MsgContentTypeTemplate m 
+			LEFT JOIN LATERAL (
+				SELECT *
+				FROM JSON_TABLE(
+					m.TemplateRequiredParams, 
+					'$[*]' COLUMNS(NESTED PATH '$.z[*]' COLUMNS (RequiredParam TEXT PATH '$'))
+				) AS t
+			) AS k  ON 1 = 1
+		)
+		SELECT GROUP_CONCAT(DISTINCT t.NotificationTemplateID ORDER BY t.NotificationTemplateID SEPARATOR ', ')
+		INTO errCode
+		FROM tmp_CopyMsgContentTypeTemplate t 
+			LEFT JOIN CTE_RequiredParams p ON p.NotificationTemplateID = t.NotificationTemplateID AND t.TemplateContent COLLATE utf8mb4_general_ci LIKE CONCAT('%', RequiredParam, '%')
+		WHERE p.NotificationTemplateID IS NULL;
+		
 		SET errMsg = CONCAT('Notification template is not existing (IDs): ' , errMsg);
-        LEAVE NCB_SpecialDeleteMsg_Import;
-        
+		
+		LEAVE NCB_SpecialDeleteMsg_Import;
 	END IF;
     
-/*Step 4: Update flag to 'running'*/
+	/*Step 4: Update flag to 'running'*/
     UPDATE SystemSetting 
     SET Value = VALUE_4_RUNNING
     WHERE ID = 1 AND Value = VALUE_4_DONE;
     
-     IF ROW_COUNT()  = 0 THEN
+    IF ROW_COUNT()  = 0 THEN
         LEAVE NCB_SpecialDeleteMsg_Import;
     END IF;
      
- /*Step 5: Check unsupported MsgContentsType*/
+	/*Step 5: Check unsupported MsgContentsType*/
 	#Check unsupported MsgContensType
     UPDATE tmp_MsgHeader h
-    SET h.CheckMsgDetail = h.MsgContentsType
-    WHERE h.MsgContentsType NOT IN (SELECT tpl.MsgContentsType FROM tmp_MsgContentTypeTemplate tpl);
-    
-	UPDATE   tmp_MsgHeader h
-    SET h.CheckMsg = CONCAT(h.CheckMsg, CONCAT('- Unsupported MsgContentsType value: ' , h.CheckMsgDetail),  '\r\n')
-    WHERE h.CheckMsgDetail  IS NOT NULL;
-    
-     UPDATE tmp_MsgHeader h
-    SET h.CheckMsgDetail = NULL;
+		LEFT JOIN tmp_MsgContentTypeTemplate tpl ON tpl.MsgContentsType = h.MsgContentsType AND tpl.IssueType = h.IssueType
+    SET h.CheckMsg = CONCAT('- Unsupported MsgContentsType value: ', h.MsgContentsType, 'Issue Type value: ', h.IssueType, '\r\n')
+    WHERE tpl.MsgContentsType IS NULL;
  
   /*Step 6: Check if there are any sites which can not be mapped with any recipients*/
 	#Get RecipientID
@@ -249,7 +278,7 @@ NCB_SpecialDeleteMsg_Import:BEGIN
     INNER JOIN Licensee l ON l.RegisteredLicenseeName = tmp.Site
     INNER JOIN Recipient r ON r.SourceID = l.LicenseeId AND r.RecipientTypeID = RECIPIENT_TYPE_LICENSEE
 	SET tmp.RecipientID = r.RecipientID,
-      tmp.LicenseeStatusID = l.LicenseeStatusID;
+        tmp.LicenseeStatusID = l.LicenseeStatusID;
     
     UPDATE tmp_MsgHeader h
     SET h.CheckMsgDetail = (
@@ -260,7 +289,7 @@ NCB_SpecialDeleteMsg_Import:BEGIN
     
     UPDATE   tmp_MsgHeader h
     SET h.CheckMsg = CONCAT(h.CheckMsg, '- Can not map to any Recipient(s): ' , h.CheckMsgDetail, '\r\n')
-    WHERE h.CheckMsgDetail  IS NOT NULL;
+    WHERE h.CheckMsgDetail IS NOT NULL;
     
     UPDATE tmp_MsgHeader h
     SET h.CheckMsgDetail = NULL;
@@ -271,30 +300,33 @@ NCB_SpecialDeleteMsg_Import:BEGIN
     CREATE TEMPORARY TABLE IF NOT EXISTS tmp_NotificationRecipientList
 	(
 		MessageID INT
-        , Site TEXT
-		, RecipientID INT
-        , ConversationGroupID INT
-        , ChatGroupTypeID SMALLINT
-        , StatusID TINYINT UNSIGNED
-        , Status VARCHAR(10)
-        , LicenseeStatusID INT
-		, ChannelID TINYINT UNSIGNED
-		, IsRemoveSABA BIT
-        , INDEX Index_MessageID(MessageID)
+        ,Site TEXT
+		,RecipientID INT
+        ,ConversationGroupID INT
+        ,ChatGroupTypeID SMALLINT
+        ,StatusID TINYINT UNSIGNED
+        ,Status VARCHAR(10)
+        ,LicenseeStatusID INT
+		,ChannelID TINYINT UNSIGNED
+		,IsRemoveSABA BIT
+        ,INDEX Index_MessageID(MessageID)
       );
             
 	INSERT INTO tmp_NotificationRecipientList(MessageID, Site, RecipientID, ConversationGroupID, ChatGroupTypeID, StatusID, Status, LicenseeStatusID, ChannelID, IsRemoveSABA)       
-    SELECT DISTINCT d.MessageID, d.Site, d.RecipientID
-					, gri.ConversationGroupID
-					, gri.ChatGroupTypeID
-          , tpl.StatusID
-          , tpl.Status
-          , d.LicenseeStatusID
-		  , g.ChannelID
-		  , CASE WHEN d.LeagueGroupID IN (42, 74, 108) AND d.IsChinaView = 1 THEN 1 ELSE 0 END AS IsRemoveSABA
+    SELECT DISTINCT 
+		d.MessageID
+		,d.Site
+		,d.RecipientID
+		,gri.ConversationGroupID
+		,gri.ChatGroupTypeID
+        ,tpl.StatusID
+        ,tpl.Status
+        ,d.LicenseeStatusID
+		,g.ChannelID
+		,CASE WHEN d.LeagueGroupID IN (42, 74, 108) AND d.IsChinaView = 1 THEN 1 ELSE 0 END AS IsRemoveSABA
     FROM tmp_MsgHeader h
         INNER JOIN tmp_MsgDetail d ON d.MessageID = h.MessageID
-        INNER JOIN  tmp_MsgContentTypeTemplate tpl ON tpl.MsgContentsType = h.MsgContentsType
+        INNER JOIN  tmp_MsgContentTypeTemplate tpl ON tpl.MsgContentsType = h.MsgContentsType AND tpl.IssueType = h.IssueType
         INNER JOIN NotificationChatGroupType ngt ON ngt.NotificationTypeID = tpl.NotificationTypeID
 		INNER JOIN ConversationGroupRecipient gr  ON d.RecipientID = gr.RecipientID
         INNER JOIN ConversationGroup g ON g.ConversationGroupID = gr.ConversationGroupID
@@ -367,7 +399,7 @@ NCB_SpecialDeleteMsg_Import:BEGIN
               , '沙巴', CASE WHEN ccIsRemoveSABA = 1 THEN '' ELSE '沙巴' END) Content
     	 ,startTime, 0, STARIXIT_CUSTID, CreatedDate, CREATING_NOTIFICATION_STATUS, CREATING_NOTIFICATION_STATUSID, ccChannelId
         FROM tmp_MsgHeader h
-        INNER JOIN tmp_MsgContentTypeTemplate ct ON ct.MsgContentsType = h.MsgContentsType 
+        INNER JOIN tmp_MsgContentTypeTemplate ct ON ct.MsgContentsType = h.MsgContentsType AND ct.IssueType = h.IssueType
         WHERE MessageID = ccMessageID;
     
         SELECT LAST_INSERT_ID() INTO ccNotificationID;

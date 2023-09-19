@@ -16,6 +16,7 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_SettingConfiguration_MappingLi
         Revisions:
             - 20200417@Merlin: Select list mapping - RedmineID: #132039
             - 20211130@Malcolm: get distinct template for abnormal bets - RedmineID: #163777
+			- 20230731@Malcolm: Incorporate voiding duplicated bet tickets with TVS [RedmineId : #191355]
     */
 )
 SQL SECURITY DEFINER
@@ -38,10 +39,11 @@ BEGIN
         ,NotificationTemplateID INT
         ,NotificationTypeID     INT
         ,TemplateRequiredParams VARCHAR (4000)
+		,IsProtected			INT
     );
     
-    INSERT INTO MappingSettingConfigurationTable (IsTest, MsgContentsType, NotificationTemplateID, NotificationTypeID, TemplateRequiredParams)
-    SELECT DISTINCT t.IsTest, t.MsgContentsType, t.NotificationTemplateID, t.NotificationTypeID, t.TemplateRequiredParams
+    INSERT INTO MappingSettingConfigurationTable (IsTest, MsgContentsType, NotificationTemplateID, NotificationTypeID, TemplateRequiredParams, IsProtected)
+    SELECT DISTINCT t.IsTest, t.MsgContentsType, t.NotificationTemplateID, t.NotificationTypeID, t.TemplateRequiredParams, t.IsProtected
     FROM 
 		JSON_TABLE 
         (
@@ -53,7 +55,8 @@ BEGIN
 				MsgContentsType INT PATH "$.MsgContentsType",
 				NotificationTemplateID INT PATH "$.NotificationTemplateID",
 				NotificationTypeID INT PATH "$.NotificationTypeID",
-				TemplateRequiredParams VARCHAR(4000) PATH "$.TemplateRequiredParams"
+				TemplateRequiredParams VARCHAR(4000) PATH "$.TemplateRequiredParams",
+				IsProtected INT PATH "$.IsProtected"
             )
         ) AS t;
         
@@ -88,6 +91,7 @@ BEGIN
     
     SELECT
 		msct.IsTest
+		,msct.IsProtected
         ,stt.MsgContentsType
         ,stt.Name AS MsgContentsName
         ,nte.NotificationTemplateID
