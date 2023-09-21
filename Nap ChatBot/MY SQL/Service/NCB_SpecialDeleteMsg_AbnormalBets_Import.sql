@@ -44,6 +44,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_SpecialDeleteMsg_AbnormalBets
       - 20211123@Malcolm: Voiding abnormalbet for Mix parlay [RedmineID: #163777]
 	  - 20230117@Malcolm: Scale out for ChatBot [RedmineID: #181907]
 	  - 20230731@Malcolm: Incorporate voiding duplicated bet tickets with TVS [RedmineId : #191355]
+	  - 20230921@Malcolm: Change Content for duplicated ticket content [RedmineId : #191355]
 	  
 	Param's Explanation:
 		- IssueTypeId = 15 : AB real member, 13 : Abnormal Account, 11: Abnormal Bet, 20: Duplicated Tickets
@@ -415,7 +416,9 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 			,BatchId
 			,CONCAT
 			(
-				'Request No: ', RequestIDLst
+				'**VOID DUPLICATE TICKET ENTRY**'
+				,'\r\n','\r\n'
+				,'Request No: ', RequestIDLst
 				,'\r\n'
 				,IF(IsParlay = 0,CONCAT('Match ID:	', IFNULL(CONVERT(matchid USING latin1), ''),'\r\n'),'')
 				,'\r\n'
@@ -430,8 +433,6 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 				,'Requested by: ', RequestByLst
 				,'\r\n'
 				,'Voided by: ', VoidByLst
-				,'\r\n','\r\n'
-				,'VOID Duplicate Ticket Entry'
 				,'\r\n','\r\n'
 			) AS Content
 			,CONCAT
