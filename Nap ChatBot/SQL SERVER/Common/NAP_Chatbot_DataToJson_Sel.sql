@@ -8,7 +8,8 @@ AS
 	DB: DBACC.bodb02
 
 	Revisions:
-		20230515@Roy: Database - HA DB061/DB062 (#169643)
+		- 20230515@Roy: Database - HA DB061/DB062 (#169643)
+		- 20230829@Malcolm: Remove SABA text out of the league name for Jollysports platform (#193252)
 	
 	Output JSON object as format
 		[
@@ -21,6 +22,7 @@ AS
 			  "CustId":791080,
 			  "site":"12Bet",
 			  "Currency":3
+			  "SpecialPlatform":2
 		   }
 		]
 */
@@ -50,6 +52,7 @@ BEGIN
 			SELECT Site
 				,isDeposit
 				,ISNULL(IsChinaView, 0) AS IsChinaView
+				,ISNULL(SpecialPlatfrom, 0) AS SpecialPlatform
 			FROM bodb02.dbo.Site WITH (NOLOCK)
 			FOR JSON AUTO
 		)

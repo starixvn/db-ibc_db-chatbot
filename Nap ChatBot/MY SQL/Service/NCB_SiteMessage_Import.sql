@@ -21,10 +21,10 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_SiteMessage_Import(
 							]
       - @MessageDetail
 							[  
-								{ "MessageID":1234, "SiteName":"IBO", "LeagueGroupID":"8" ,"IsChinaView":"0"}
-								, { "MessageID":1234, "SiteName":"XTD3", "LeagueGroupID":"10" ,"IsChinaView":"0"}
-								, { "MessageID":1235, "SiteName":"mansion88", "LeagueGroupID":"18","IsChinaView":"0"}
-								, { "MessageID":1236, "SiteName":"haifa", "LeagueGroupID":"28","IsChinaView":"0"}
+								{ "MessageID":1234, "SiteName":"IBO", "LeagueGroupID":"8" ,"IsChinaView":"0", "SpecialPlatform":"0"}
+								, { "MessageID":1234, "SiteName":"XTD3", "LeagueGroupID":"10" ,"IsChinaView":"0", "SpecialPlatform":"0"}
+								, { "MessageID":1235, "SiteName":"mansion88", "LeagueGroupID":"18","IsChinaView":"0", "SpecialPlatform":"0"}
+								, { "MessageID":1236, "SiteName":"haifa", "LeagueGroupID":"28","IsChinaView":"0", "SpecialPlatform":"2"}
 							]
     Revisions :
       - 20200305@Percy: Initiliaze SP [RedmineID: #126143]
@@ -33,6 +33,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_SiteMessage_Import(
       - 20200715@Percy: Add Invalid status for invalid match [RedmineID: #135686]
 	  - 20210513@Malcolm: Integrate Telegram [RedmineID: #151807]
 	  - 20220223@Malcolm: Remove SABA text out of the league name for China View platform [RedmineID: #168798]
+	  - 20230919@Malcolm: Remove SABA text out of the league name for Jollysports platform [RedmineId : #193252]
 
   */
 )
@@ -205,11 +206,12 @@ NCB_SiteMessage_Import:BEGIN
 	  LicenseeStatusID 	INT,
 	  LeagueGroupID 	SMALLINT UNSIGNED,
 	  IsChinaView 		TINYINT,
+	  SpecialPlatform 	TINYINT UNSIGNED,
 	  INDEX Index_MessageID(MessageID)
    );
     
-  INSERT INTO tmp_MsgDetail (MessageID, SiteName, LeagueGroupID, IsChinaView)
-  SELECT t.MessageID, t.SiteName, t.LeagueGroupID, t.IsChinaView
+  INSERT INTO tmp_MsgDetail (MessageID, SiteName, LeagueGroupID, IsChinaView, SpecialPlatform)
+  SELECT t.MessageID, t.SiteName, t.LeagueGroupID, t.IsChinaView, t.SpecialPlatform
   FROM 
 	JSON_TABLE
     (
@@ -220,7 +222,8 @@ NCB_SiteMessage_Import:BEGIN
 			MessageID 		INT 		 		PATH "$.MessageID", 
 			SiteName 		TEXT 	     		PATH "$.SiteName", 
 			LeagueGroupID 	SMALLINT UNSIGNED 	PATH "$.LeagueGroupID", 
-			IsChinaView     TINYINT 	     	PATH "$.IsChinaView"
+			IsChinaView     TINYINT 	     	PATH "$.IsChinaView",
+			SpecialPlatform TINYINT UNSIGNED    PATH "$.SpecialPlatform"
         )
      ) AS t;
 
@@ -425,7 +428,7 @@ NCB_SiteMessage_Import:BEGIN
 		   ,tpl.StatusID
 		   ,tpl.Status
 		   ,d.LicenseeStatusID
-		   ,g.ChannelId, CASE WHEN d.LeagueGroupID IN (42, 74, 108) AND d.IsChinaView = 1 THEN 1 ELSE 0 END AS IsRemoveSABA
+		   ,g.ChannelId, CASE WHEN d.LeagueGroupID IN (42, 74, 108, 113, 122, 151) AND (d.IsChinaView = 1 OR IFNULL(d.SpecialPlatform, 0) <> 0) THEN 1 ELSE 0 END AS IsRemoveSABA
       FROM tmp_MsgHeader h
         INNER JOIN tmp_MsgDetail d ON d.MessageID = h.MessageID
         INNER JOIN tmp_MsgContentTypeTemplate tpl ON h.MsgContentsType = tpl.MsgContentsType
@@ -489,9 +492,9 @@ NCB_SiteMessage_Import:BEGIN
 	  SELECT DISTINCT
 	    ct.NotificationTypeID
 	    ,ct.TemplateTitle
-	    ,REPLACE(
-			REPLACE(
-				REPLACE(
+	    ,REGEXP_REPLACE(
+			REGEXP_REPLACE(
+				REGEXP_REPLACE(
 					REPLACE(
 						REPLACE(
 							REPLACE(
@@ -508,13 +511,13 @@ NCB_SiteMessage_Import:BEGIN
 							, '{League Name EN CN}', IFNULL(CONCAT(h.LeagueNameEN, ' [', h.LeagueNameCS, ']'), ''))
 						, '{Team Name EN CN}', IFNULL(CONCAT('***', h.HomeNameEN, ' - vs - ' , h.AwayNameEN, ' [',h.HomeNameCS, ' - vs - ' , h.AwayNameCS, ']', '***'), ''))
 					, '@@', '')
-				, 'SABA ', CASE WHEN ccIsRemoveSABA = 1 THEN '' ELSE 'SABA ' END)
-			, 'SABA', CASE WHEN ccIsRemoveSABA = 1 THEN '' ELSE 'SABA' END)
-		, '沙巴', CASE WHEN ccIsRemoveSABA = 1 THEN '' ELSE '沙巴' END) Content
+				, CASE WHEN ccIsRemoveSABA = 1 THEN 'saba ' ELSE REPEAT('z', 1000) END, CASE WHEN ccIsRemoveSABA = 1 THEN '' ELSE REPEAT('z', 1000) END, 1, 0, 'i')
+			, CASE WHEN ccIsRemoveSABA = 1 THEN 'saba' ELSE REPEAT('z', 1000) END, CASE WHEN ccIsRemoveSABA = 1 THEN '' ELSE REPEAT('z', 1000) END, 1, 0, 'i')
+		,CASE WHEN ccIsRemoveSABA = 1 THEN '沙巴' ELSE REPEAT('z', 1000) END, CASE WHEN ccIsRemoveSABA = 1 THEN '' ELSE REPEAT('z', 1000) END, 1, 0, 'i') Content
 	    ,startTime, 0 SendImmediately, STARIXIT_CUSTID, CreatedDate, CREATING_NOTIFICATION_STATUS, CREATING_NOTIFICATION_STATUSID, ccChannelId
-	    FROM tmp_MsgHeader h
-	  	INNER JOIN tmp_MsgContentTypeTemplate ct ON ct.MsgContentsType = h.MsgContentsType
-	    WHERE h.MessageID = ccMessageID;
+	  FROM tmp_MsgHeader h
+		INNER JOIN tmp_MsgContentTypeTemplate ct ON ct.MsgContentsType = h.MsgContentsType
+	  WHERE h.MessageID = ccMessageID;
 	  
 	  SELECT LAST_INSERT_ID() INTO ccNotificationID;
 	  
@@ -627,14 +630,15 @@ NCB_SiteMessage_Import:BEGIN
 						
   #Write User Log
   IF EXISTS (SELECT 1 FROM tmp_MsgHeader) THEN
-	  CALL NCB_UserLog_RunSP_Ins(
-													ACTION_ID #actionID
-													, -1  #referenceID
-													, STARIXIT_CUSTID #UserID
-													, logContent #LogContent
-													, startTime #logtime
-													, duration	#Duration
-													);
+	  CALL NCB_UserLog_RunSP_Ins
+	  (
+			ACTION_ID #actionID
+			,-1  #referenceID
+			,STARIXIT_CUSTID #UserID
+			,logContent #LogContent
+			,startTime #logtime
+			,duration	#Duration
+	 );
     END IF;
 END;
 

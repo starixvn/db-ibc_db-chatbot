@@ -21,6 +21,7 @@ AS
 		- 20211012@Malcolm: Rescan messageid <= @MessageId [RedmineID: #162825]
 		- 20220223@Malcolm: Remove SABA text out of the league name for China View platform [RedmineID: #168798]
 		- 20230515@Roy: Database - HA DB061/DB062 [RedmineID: #169643]
+		- 20230829@Malcolm: Remove SABA text out of the league name for Jollysports platform [RedmineID: #193252]
 */
 
 BEGIN
@@ -36,18 +37,20 @@ BEGIN
 	SET @XML = N'<root><r>' + REPLACE(@MsgContentsTypeLst, ',', '</r><r>') + '</r></root>'
 	
 	INSERT INTO #MsgContentsTypeLst(MsgContentsType)
-	SELECT r.value('.', 'NVARCHAR(15)') AS MsgContentsType
+	SELECT DISTINCT r.value('.', 'NVARCHAR(15)') AS MsgContentsType
 	FROM @xml.nodes('//root/r') AS RECORDS(r)
 	WHERE LEN(ISNULL(r.value('.', 'NVARCHAR(15)'), '')) > 0
 
-	DECLARE @DepositSite TABLE (SiteName VARCHAR(50), IsChinaView BIT, PRIMARY KEY (SiteName))
-	INSERT INTO @DepositSite (SiteName, IsChinaView)
+	DECLARE @DepositSite TABLE (SiteName VARCHAR(50), IsChinaView BIT, SpecialPlatform TINYINT, PRIMARY KEY (SiteName))
+	INSERT INTO @DepositSite (SiteName, IsChinaView, SpecialPlatform)
 	SELECT DISTINCT Site
 		,ISNULL(IsChinaView, 0)
+		,ISNULL(SpecialPlatform, 0)
 	FROM OPENJSON(@SiteAsJSON) WITH (
 			Site VARCHAR(50) '$.Site'
 			,isDeposit BIT '$.isDeposit'
 			,IsChinaView BIT '$.IsChinaView'
+			,SpecialPlatform TINYINT '$.SpecialPlatform'
 		)--OPENJSON case-sensitive
 	WHERE isDeposit = 1
 
@@ -116,7 +119,7 @@ BEGIN
 	FROM @Msg
 	ORDER BY MessageId
 
-	SELECT mt.MessageId, mt.TargetId, ms.SiteName, m.LeagueGroupID, ds.IsChinaView
+	SELECT mt.MessageId, mt.TargetId, ms.SiteName, m.LeagueGroupID, ds.IsChinaView, ds.SpecialPlatform
 	FROM dbo.MsgTarget mt WITH (NOLOCK)
 		INNER JOIN @Msg m ON mt.MessageId = m.MessageId
 		INNER JOIN dbo.MsgSite ms WITH (NOLOCK) ON mt.TargetId = ms.SiteId
