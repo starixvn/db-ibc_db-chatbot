@@ -21,18 +21,21 @@ AS
 		- 20211012@Malcolm: Rescan messageid <= @MessageId [RedmineID: #162825]
 		- 20220223@Malcolm: Remove SABA text out of the league name for China View platform [RedmineID: #168798]
 		- 20230515@Roy: Database - HA DB061/DB062 [RedmineID: #169643]
+		- 20230829@Malcolm: Remove SABA text out of the league name for Jollysports platform [RedmineID: #193252]
 	
 	@SiteAsJSON
 		[
 		   {
 			  "site":"033333",
 			  "isDeposit":false,
-			  "IsChinaView":false
+			  "IsChinaView":false,
+			  "SpecialPlatform": 0
 		   },
 		   {
 			  "site":"0sServices",
 			  "isDeposit":true,
-			  "IsChinaView":false
+			  "IsChinaView":false,
+			  "SpecialPlatform": 2
 		   }
 		]
 	@DepCustSAsJSON
@@ -61,6 +64,7 @@ BEGIN
 	CREATE TABLE #tmpSite (
 		Site VARCHAR(50)
 		,IsChinaView BIT
+		,SpecialPlatform TINYINT
 	)
 	
 	CREATE TABLE #tmpDepCustSuper (
@@ -74,19 +78,22 @@ BEGIN
 	SET @XML = N'<root><r>' + REPLACE(@MsgContentsTypeLst, ',', '</r><r>') + '</r></root>'
 	
 	INSERT INTO #MsgContentsTypeLst(MsgContentsType)
-	SELECT r.value('.', 'NVARCHAR(15)') AS MsgContentsType
+	SELECT DISTINCT r.value('.', 'NVARCHAR(15)') AS MsgContentsType
 	FROM @xml.nodes('//root/r') AS RECORDS(r)
 	WHERE LEN(ISNULL(r.value('.', 'NVARCHAR(15)'), '')) > 0
 	
 	INSERT INTO #tmpSite (
 		Site
 		,IsChinaView
+		,SpecialPlatform
 	)
 	SELECT DISTINCT Site
 		,ISNULL(IsChinaView, 0)
+		,ISNULL(SpecialPlatform, 0)
 	FROM OPENJSON(@SiteAsJSON) WITH (
 			Site VARCHAR(50) '$.Site'
 			,IsChinaView BIT '$.IsChinaView'
+			,SpecialPlatform TINYINT '$.SpecialPlatform'
 		)--OPENJSON case-sensitive
 		
 	INSERT INTO #tmpDepCustSuper (
@@ -103,13 +110,14 @@ BEGIN
 			,Currency INT '$.Currency'
 		)--OPENJSON case-sensitive
 	
-	DECLARE @DepositSuper TABLE (CustId INT, site VARCHAR(50), IsChinaView BIT)
-	INSERT INTO @DepositSuper (CustId, site, IsChinaView)
-	SELECT CustId, site, ISNULL(IsChinaView, 0)
+	DECLARE @DepositSuper TABLE (CustId INT, site VARCHAR(50), IsChinaView BIT, SpecialPlatform TINYINT)
+	INSERT INTO @DepositSuper (CustId, site, IsChinaView, SpecialPlatform)
+	SELECT CustId, site, ISNULL(IsChinaView, 0), SpecialPlatform
 	FROM (
 		SELECT d.CustId
 			,d.site
 			,ISNULL(s.IsChinaView, 0) AS IsChinaView
+			,ISNULL(s.SpecialPlatform, 0) AS SpecialPlatform
 		FROM #tmpDepCustSuper AS d
 			LEFT JOIN #tmpSite AS s ON s.site = d.site
 		WHERE d.site IN ('spondemo','Athena000')
@@ -177,7 +185,7 @@ BEGIN
 	ORDER BY MessageId
 
 	--2nd dataset: message detail
-	SELECT mt.MessageId, mt.TargetId, ds.site, m.LeagueGroupID, ds.IsChinaView AS IsChinaView
+	SELECT mt.MessageId, mt.TargetId, ds.site, m.LeagueGroupID, ds.IsChinaView AS IsChinaView, ds.SpecialPlatform
 	FROM dbo.MsgTarget mt WITH (NOLOCK)
 		INNER JOIN @Msg m ON mt.MessageId = m.MessageId
 		INNER JOIN @DepositSuper ds ON mt.TargetId = ds.CustId
@@ -191,7 +199,7 @@ BEGIN
 				AND mc.JobIdentify = 1
 				AND mc.Environment = @Environment
 		)
-	GROUP BY mt.MessageId, mt.TargetId, ds.site, m.LeagueGroupID, ds.IsChinaView
+	GROUP BY mt.MessageId, mt.TargetId, ds.site, m.LeagueGroupID, ds.IsChinaView, ds.SpecialPlatform
 	ORDER BY mt.MessageId, ds.site
 	
 	DROP TABLE #MsgContentsTypeLst

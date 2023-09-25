@@ -20,10 +20,10 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_SpecialDeleteMsg_Import(
 							]
 				- @MessageDetail
 							[  
-								{ "MessageID":885128, "Site":"IBO" , "LeagueGroupID":"8" ,"IsChinaView":"0"}
-								, { "MessageID":885128, "Site":"XTD3" , "LeagueGroupID":"8" ,"IsChinaView":"0"}
-								, { "MessageID":885131,"Site":"mansion88", "LeagueGroupID":"8" ,"IsChinaView":"0"}
-								, { "MessageID":885131, "Site":"haifa", "LeagueGroupID":"8" ,"IsChinaView":"0"}
+								{ "MessageID":885128, "Site":"IBO" , "LeagueGroupID":"8" ,"IsChinaView":"0", "SpecialPlatform":"0"}
+								, { "MessageID":885128, "Site":"XTD3" , "LeagueGroupID":"8" ,"IsChinaView":"0", "SpecialPlatform":"0"}
+								, { "MessageID":885131,"Site":"mansion88", "LeagueGroupID":"8" ,"IsChinaView":"0", "SpecialPlatform":"0"}
+								, { "MessageID":885131, "Site":"haifa", "LeagueGroupID":"8" ,"IsChinaView":"0", "SpecialPlatform":"2"}
 							]
         Revisions:
 				- 20191211@Dominic: First Commit
@@ -33,6 +33,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_SpecialDeleteMsg_Import(
 				- 20210513@Malcolm: Integrate Telegram [RedmineID: #151807]
 				- 20220223@Malcolm: Remove SABA text out of the league name for China View platform [RedmineID: #168798]
 				- 20230731@Malcolm: Incorporate voiding duplicated bet tickets with TVS [RedmineId : #191355]
+				- 20230919@Malcolm: Remove SABA text out of the league name for Jollysports platform [RedmineId : #193252]
     */
 )
 SQL SECURITY DEFINER
@@ -128,11 +129,12 @@ NCB_SpecialDeleteMsg_Import:BEGIN
             LicenseeStatusID INT,
 			LeagueGroupID    SMALLINT UNSIGNED,
 			IsChinaView      TINYINT,
+			SpecialPlatform	 TINYINT UNSIGNED,
             INDEX Index_MessageID(MessageID)
     );
     
-	INSERT INTO tmp_MsgDetail (MessageID, Site, LeagueGroupID, IsChinaView)
-	SELECT t.MessageID, t.Site, t.LeagueGroupID, t.IsChinaView
+	INSERT INTO tmp_MsgDetail (MessageID, Site, LeagueGroupID, IsChinaView, SpecialPlatform)
+	SELECT t.MessageID, t.Site, t.LeagueGroupID, t.IsChinaView, t.SpecialPlatform
     FROM 
 		JSON_TABLE
         (
@@ -143,7 +145,8 @@ NCB_SpecialDeleteMsg_Import:BEGIN
 				MessageID 		INT 		 		PATH "$.MessageID", 
 				Site 			TEXT 		 		PATH "$.Site", 
 				LeagueGroupID 	SMALLINT UNSIGNED 	PATH "$.LeagueGroupID", 
-				IsChinaView     TINYINT 		 	PATH "$.IsChinaView"
+				IsChinaView     TINYINT 		 	PATH "$.IsChinaView",
+				SpecialPlatform TINYINT UNSIGNED	PATH "$.SpecialPlatform"
             )
         ) AS t;
     
@@ -323,7 +326,7 @@ NCB_SpecialDeleteMsg_Import:BEGIN
         ,tpl.Status
         ,d.LicenseeStatusID
 		,g.ChannelID
-		,CASE WHEN d.LeagueGroupID IN (42, 74, 108) AND d.IsChinaView = 1 THEN 1 ELSE 0 END AS IsRemoveSABA
+		,CASE WHEN d.LeagueGroupID IN (42, 74, 108, 113, 122, 151) AND (d.IsChinaView = 1 OR IFNULL(d.SpecialPlatform, 0) <> 0) THEN 1 ELSE 0 END AS IsRemoveSABA
     FROM tmp_MsgHeader h
         INNER JOIN tmp_MsgDetail d ON d.MessageID = h.MessageID
         INNER JOIN  tmp_MsgContentTypeTemplate tpl ON tpl.MsgContentsType = h.MsgContentsType AND tpl.IssueType = h.IssueType
@@ -384,20 +387,20 @@ NCB_SpecialDeleteMsg_Import:BEGIN
         # Insert Notification
         INSERT INTO Notification(NotificationTypeID, Title, Content, ConfigSendTime, SendImmediately, CreatorID, CreatedDate, Status, StatusID, ChannelID)
         SELECT DISTINCT 
-    	ct.NotificationTypeID
-    	,ct.TemplateTitle
-    	,REPLACE(
-			REPLACE(
-				REPLACE(
-					REPLACE(
+			ct.NotificationTypeID
+			,ct.TemplateTitle
+			,REGEXP_REPLACE(
+				REGEXP_REPLACE(
+					REGEXP_REPLACE(
 						REPLACE(
-							REPLACE(ct.TemplateContent, '{EN Announcement}', h.Content_en)
-							,'{CN Announcement}', h.Content_cs)
-						, '@@', '')
-					, 'SABA ', CASE WHEN ccIsRemoveSABA = 1 THEN '' ELSE 'SABA ' END) 
-                , 'SABA', CASE WHEN ccIsRemoveSABA = 1 THEN '' ELSE 'SABA' END) 
-              , '沙巴', CASE WHEN ccIsRemoveSABA = 1 THEN '' ELSE '沙巴' END) Content
-    	 ,startTime, 0, STARIXIT_CUSTID, CreatedDate, CREATING_NOTIFICATION_STATUS, CREATING_NOTIFICATION_STATUSID, ccChannelId
+							REPLACE(
+								REPLACE(ct.TemplateContent, '{EN Announcement}', h.Content_en)
+								,'{CN Announcement}', h.Content_cs)
+							, '@@', '')
+					,CASE WHEN ccIsRemoveSABA = 1 THEN 'saba ' ELSE REPEAT('z', 1000) END, CASE WHEN ccIsRemoveSABA = 1 THEN '' ELSE REPEAT('z', 1000) END, 1, 0, 'i')
+				,CASE WHEN ccIsRemoveSABA = 1 THEN 'saba' ELSE REPEAT('z', 1000) END, CASE WHEN ccIsRemoveSABA = 1 THEN '' ELSE REPEAT('z', 1000) END, 1, 0, 'i')
+			,CASE WHEN ccIsRemoveSABA = 1 THEN '沙巴' ELSE REPEAT('z', 1000) END, CASE WHEN ccIsRemoveSABA = 1 THEN '' ELSE REPEAT('z', 1000) END, 1, 0, 'i') Content
+			,startTime, 0, STARIXIT_CUSTID, CreatedDate, CREATING_NOTIFICATION_STATUS, CREATING_NOTIFICATION_STATUSID, ccChannelId
         FROM tmp_MsgHeader h
         INNER JOIN tmp_MsgContentTypeTemplate ct ON ct.MsgContentsType = h.MsgContentsType AND ct.IssueType = h.IssueType
         WHERE MessageID = ccMessageID;
@@ -478,11 +481,11 @@ NCB_SpecialDeleteMsg_Import:BEGIN
      
      #Return Bot, Chatgroup
      SELECT g.ConversationID AS ChatGroupConversationID
-	 			, g.ServiceUrl
-                 , g.ChannelID
-				 , cc.ChannelName
-                 , b.ConversationID AS BotConversationID 
-                 , b.Name AS BotName
+	 		,g.ServiceUrl
+            ,g.ChannelID
+		    ,cc.ChannelName
+            ,b.ConversationID AS BotConversationID 
+            ,b.Name AS BotName
      FROM ConversationGroup g
      INNER JOIN ConversationGroupBot gb ON g.ConversationGroupID = gb.ConversationGroupID
 	 INNER JOIN ConversationChannel cc ON cc.ChannelId = g.ChannelId
@@ -497,25 +500,22 @@ NCB_SpecialDeleteMsg_Import:BEGIN
      
 	  #Get Finish Time to calcualte execution duration
 	 SET finishTime = UTC_TIMESTAMP(3);
-	 SET duration =  TIMESTAMPDIFF(MICROSECOND
-	 																	, startTime
-	 																	, finishTime)  / 1000; 	#miliseconds
+	 SET duration =  TIMESTAMPDIFF(MICROSECOND, startTime, finishTime)  / 1000; 	#miliseconds
 	 
 	 #Get Log Content, JSON format
-	 SET logContent = json_object('MessageHeader', messageHeader
-	 									, 'MessageDetail', messageDetail
-	 				) ;
+	 SET logContent = json_object('MessageHeader', messageHeader, 'MessageDetail', messageDetail) ;
 	 				
 	 #Write User Log
 	 IF EXISTS (SELECT 1 FROM tmp_MsgHeader) THEN
-	 	CALL NCB_UserLog_RunSP_Ins(
-	 											ACTION_ID #actionID
-	 											, -1  #referenceID
-	 											, STARIXIT_CUSTID #UserID
-	 											, logContent #LogContent
-	 											, startTime #logtime
-	 											, duration	#Duration
-	 											);
+	 	CALL NCB_UserLog_RunSP_Ins
+		(
+			ACTION_ID #actionID
+			,-1  #referenceID
+			,STARIXIT_CUSTID #UserID
+			,logContent #LogContent
+			,startTime #logtime
+			,duration	#Duration
+		);
 	 END IF;
 END;
 
