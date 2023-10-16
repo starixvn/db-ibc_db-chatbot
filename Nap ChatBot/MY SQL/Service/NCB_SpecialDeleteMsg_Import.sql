@@ -15,8 +15,8 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_SpecialDeleteMsg_Import(
         Param:
 				-  @MessageHeader:
 							[  
-								{ "MessageID":885128, "MsgContentsType":101, "Content_en":"Attn:[Soccer] Due to bets er...", "Content_cs":"請注意:[籃球] 由於中文隊名顯示..", "PostTime":"2023-08-17", "IsNew":"0", "IssueType":"20"}
-								,{ "MessageID":885131,"MsgContentsType":101,"Content_en":"Attn:[Soccer] Due to bets er...", "Content_cs":"請注意:[籃球] 由於中文隊名顯示...", "PostTime":"2023-08-17", "IsNew":"0", "IssueType":"0"}
+								{ "MessageID":885128, "MsgContentsType":101, "Content_en":"Attn:[Soccer] Due to bets er...", "Content_cs":"請注意:[籃球] 由於中文隊名顯示..", "PostTime":"2023-08-17", "IsNew":"0", "IssueType":"20" ,"LeagueNameEN":"LeagueNameEN","LeagueNameCS":"LeagueNameCS"}
+								,{ "MessageID":885131,"MsgContentsType":101,"Content_en":"Attn:[Soccer] Due to bets er...", "Content_cs":"請注意:[籃球] 由於中文隊名顯示...", "PostTime":"2023-08-17", "IsNew":"0", "IssueType":"0","LeagueNameEN":"LeagueNameEN","LeagueNameCS":"LeagueNameCS"}
 							]
 				- @MessageDetail
 							[  
@@ -34,6 +34,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_SpecialDeleteMsg_Import(
 				- 20220223@Malcolm: Remove SABA text out of the league name for China View platform [RedmineID: #168798]
 				- 20230731@Malcolm: Incorporate voiding duplicated bet tickets with TVS [RedmineId : #191355]
 				- 20230919@Malcolm: Remove SABA text out of the league name for Jollysports platform [RedmineId : #193252]
+				- 20230925@Malcolm: Hardcode to display Currency for Jollysports market [RedmineId : #193252]
     */
 )
 SQL SECURITY DEFINER
@@ -97,12 +98,42 @@ NCB_SpecialDeleteMsg_Import:BEGIN
 			IssueType		TINYINT UNSIGNED,
             CheckMsg 		TEXT,
             CheckMsgDetail 	TEXT,
+			LeagueNameEN 	TEXT,
+			LeagueNameCS 	TEXT,
+			LeagueNameENRemovedSABA TEXT,
+			LeagueNameCSRemovedSABA TEXT,
             PRIMARY KEY (Id),
             UNIQUE INDEX Index_MessageID(MessageID)
     );
     
-	INSERT INTO tmp_MsgHeader (MessageID, MsgContentsType, Content_en, Content_cs, PostTime, IsNew, IssueType, CheckMsg)
-	SELECT t.MessageID, t.MsgContentsType, t.Content_en, t.Content_cs, t.PostTime, t.IsNew, t.IssueType, ''
+	INSERT INTO tmp_MsgHeader 
+	(
+		MessageID
+		,MsgContentsType
+		,Content_en
+		,Content_cs
+		,PostTime
+		,IsNew
+		,IssueType
+		,CheckMsg
+		,LeagueNameEN
+		,LeagueNameCS
+		,LeagueNameENRemovedSABA
+		,LeagueNameCSRemovedSABA
+	)
+	SELECT 
+		t.MessageID
+		,t.MsgContentsType
+		,t.Content_en
+		,t.Content_cs
+		,t.PostTime
+		,t.IsNew
+		,t.IssueType
+		,'' AS CheckMsg
+		,IFNULL(t.LeagueNameEN, '') AS LeagueNameEN
+		,IFNULL(t.LeagueNameCS, '') AS LeagueNameCS
+		,IFNULL(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(t.LeagueNameEN, 'saba ', '', 1, 0, 'i'), 'saba', '', 1, 0, 'i'),'沙巴', '', 1, 0, 'i'), '') AS LeagueNameENRemovedSABA
+		,IFNULL(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(t.LeagueNameCS, 'saba ', '', 1, 0, 'i'), 'saba', '', 1, 0, 'i'),'沙巴', '', 1, 0, 'i'), '') AS LeagueNameCSRemovedSABA
     FROM 
 		JSON_TABLE
         (
@@ -116,7 +147,9 @@ NCB_SpecialDeleteMsg_Import:BEGIN
 				Content_cs      TEXT 			 PATH "$.Content_cs", 
 				PostTime 		TEXT 			 PATH "$.PostTime", 
 				IsNew 			TINYINT 		 PATH "$.IsNew",
-				IssueType 		TINYINT UNSIGNED PATH "$.IssueType"
+				IssueType 		TINYINT UNSIGNED PATH "$.IssueType",
+				LeagueNameEN 	TEXT 			 PATH "$.LeagueNameEN",
+				LeagueNameCS 	TEXT 			 PATH "$.LeagueNameCS"
             )
         ) AS t;
 
@@ -134,7 +167,7 @@ NCB_SpecialDeleteMsg_Import:BEGIN
     );
     
 	INSERT INTO tmp_MsgDetail (MessageID, Site, LeagueGroupID, IsChinaView, SpecialPlatform)
-	SELECT t.MessageID, t.Site, t.LeagueGroupID, t.IsChinaView, t.SpecialPlatform
+	SELECT t.MessageID, t.Site, IFNULL(t.LeagueGroupID, 0), t.IsChinaView, t.SpecialPlatform
     FROM 
 		JSON_TABLE
         (
@@ -389,17 +422,12 @@ NCB_SpecialDeleteMsg_Import:BEGIN
         SELECT DISTINCT 
 			ct.NotificationTypeID
 			,ct.TemplateTitle
-			,REGEXP_REPLACE(
-				REGEXP_REPLACE(
-					REGEXP_REPLACE(
-						REPLACE(
-							REPLACE(
-								REPLACE(ct.TemplateContent, '{EN Announcement}', h.Content_en)
-								,'{CN Announcement}', h.Content_cs)
-							, '@@', '')
-					,CASE WHEN ccIsRemoveSABA = 1 THEN 'saba ' ELSE REPEAT('z', 1000) END, CASE WHEN ccIsRemoveSABA = 1 THEN '' ELSE REPEAT('z', 1000) END, 1, 0, 'i')
-				,CASE WHEN ccIsRemoveSABA = 1 THEN 'saba' ELSE REPEAT('z', 1000) END, CASE WHEN ccIsRemoveSABA = 1 THEN '' ELSE REPEAT('z', 1000) END, 1, 0, 'i')
-			,CASE WHEN ccIsRemoveSABA = 1 THEN '沙巴' ELSE REPEAT('z', 1000) END, CASE WHEN ccIsRemoveSABA = 1 THEN '' ELSE REPEAT('z', 1000) END, 1, 0, 'i') Content
+			,REPLACE(
+				REPLACE(
+					REPLACE(ct.TemplateContent
+					,'{EN Announcement}', CASE WHEN ccIsRemoveSABA = 1 AND h.LeagueNameEN <> '' THEN REPLACE(h.Content_en, h.LeagueNameEN, h.LeagueNameENRemovedSABA) ELSE h.Content_en END)
+				,'{CN Announcement}', CASE WHEN ccIsRemoveSABA = 1 AND h.LeagueNameCS <> '' THEN REPLACE(h.Content_cs, h.LeagueNameCS, h.LeagueNameCSRemovedSABA) ELSE h.Content_cs END)
+			,'@@', '') Content
 			,startTime, 0, STARIXIT_CUSTID, CreatedDate, CREATING_NOTIFICATION_STATUS, CREATING_NOTIFICATION_STATUSID, ccChannelId
         FROM tmp_MsgHeader h
         INNER JOIN tmp_MsgContentTypeTemplate ct ON ct.MsgContentsType = h.MsgContentsType AND ct.IssueType = h.IssueType

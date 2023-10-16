@@ -16,7 +16,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_SiteMessage_Import(
       - @MessageHeader
 							[  
 								{ "MessageID":1234, "MsgContentsType":1, "Content_en":"abc", "Content_cs":"xyz", "MatchID":123, "IsTest":1, "SportType":1, "KickOffTime":"2020-03-03 23:59:59", "SportNameEN":"abc", "SportNameCS":"xyz", "LeagueNameEN":"abc", "LeagueNameCS":"xyz", "HomeNameEN":"abc", "HomeNameCS":"xyz", "AwayNameEN":"abc", "AwayNameCS":"xyz", "PostTime":"2020-06-30 10:00:51", "IsNew":0 }
-								, { "MessageID":1235, "MsgContentsType":2, "Content_en":"abc", "Content_cs":"xyz", "MatchID":124, "IsTest":0, "SportType":2, "KickOffTime":"2020-03-03 23:59:59", "SportNameEN":"abc", "SportNameCS":"xyz", "LeagueNameEN":"abc", "LeagueNameCS":"xyz", "HomeNameEN":"abc", "HomeNameCS":"xyz", "AwayNameEN":"abc", "AwayNameCS":"xyz", "PostTime":"2020-06-30 10:00:51", "IsNew":1 }
+								, { "MessageID":1235, "MsgContentsType":2, "Content_en":"abc", "Content_cs":"xyz", "MatchID":124, "IsTest":0, "SportType":2, "KickOffTime":"2020-03-03 23:59:59", "SportNameEN":"abc", "SportNameCS":"xyz", "LeagueNameEN":"\*\*abc", "LeagueNameCS":"\*\*xyz", "OrigLeagueNameEN":"**abc", "OrigLeagueNameCS":"**xyz", "HomeNameEN":"abc", "HomeNameCS":"xyz", "AwayNameEN":"abc", "AwayNameCS":"xyz", "PostTime":"2020-06-30 10:00:51", "IsNew":1 }
 								, { "MessageID":1236, "MsgContentsType":3, "Content_en":"abc", "Content_cs":"xyz", "PostTime":"2020-06-30 10:00:51", "IsNew":1 }
 							]
       - @MessageDetail
@@ -34,6 +34,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_SiteMessage_Import(
 	  - 20210513@Malcolm: Integrate Telegram [RedmineID: #151807]
 	  - 20220223@Malcolm: Remove SABA text out of the league name for China View platform [RedmineID: #168798]
 	  - 20230919@Malcolm: Remove SABA text out of the league name for Jollysports platform [RedmineId : #193252]
+	  - 20230925@Malcolm: Hardcode to display Currency for Jollysports market [RedmineId : #193252]
 
   */
 )
@@ -95,28 +96,32 @@ NCB_SiteMessage_Import:BEGIN
   DROP TEMPORARY TABLE IF EXISTS tmp_MsgHeader;
   CREATE TEMPORARY TABLE IF NOT EXISTS tmp_MsgHeader
   (
-		Id 				INT NOT NULL AUTO_INCREMENT,
-		MessageID 		INT,
-		MsgContentsType INT,
-		MatchID 		INT,
-		IsTest 			TINYINT,
-		SportType 		INT,
-		KickOffTime 	TEXT,
-		LeagueNameEN 	TEXT,
-		LeagueNameCS 	TEXT,
-		SportNameEN 	TEXT,
-		SportNameCS 	TEXT,
-		HomeNameEN 		TEXT,
-		HomeNameCS 		TEXT,
-		AwayNameEN 		TEXT,
-		AwayNameCS 		TEXT,
-		Content_en 		TEXT,
-		Content_cs 		TEXT,
-		PostTime 		TEXT,
-		IsNew 			TINYINT,
-		IsInvalid 		TINYINT,
-		CheckMsg 		TEXT,
-		CheckMsgDetail  TEXT,
+		Id 					INT NOT NULL AUTO_INCREMENT,
+		MessageID 			INT,
+		MsgContentsType 	INT,
+		MatchID 			INT,
+		IsTest 				TINYINT,
+		SportType 			INT,
+		KickOffTime 		TEXT,
+		LeagueNameEN 		TEXT,
+		LeagueNameCS 		TEXT,
+		OrigLeagueNameEN 	TEXT,
+		OrigLeagueNameCS 	TEXT,
+		SportNameEN 		TEXT,
+		SportNameCS 		TEXT,
+		HomeNameEN 			TEXT,
+		HomeNameCS 			TEXT,
+		AwayNameEN 			TEXT,
+		AwayNameCS 			TEXT,
+		Content_en 			TEXT,
+		Content_cs 			TEXT,
+		PostTime 			TEXT,
+		IsNew 				TINYINT,
+		IsInvalid 			TINYINT,
+		CheckMsg 			TEXT,
+		CheckMsgDetail  	TEXT,
+		LeagueNameENRemovedSABA TEXT,
+		LeagueNameCSRemovedSABA TEXT,
 		PRIMARY KEY     (Id),
 		UNIQUE INDEX    Index_MessageID(MessageID)
   );
@@ -131,6 +136,8 @@ NCB_SiteMessage_Import:BEGIN
 	 ,KickOffTime
 	 ,LeagueNameEN
 	 ,LeagueNameCS
+	 ,OrigLeagueNameEN
+	 ,OrigLeagueNameCS
 	 ,SportNameEN
 	 ,SportNameCS
 	 ,HomeNameEN
@@ -143,6 +150,8 @@ NCB_SiteMessage_Import:BEGIN
 	 ,IsNew
 	 ,IsInvalid
 	 ,CheckMsg
+	 ,LeagueNameENRemovedSABA
+	 ,LeagueNameCSRemovedSABA
  )   
  SELECT 
 	t.MessageID
@@ -151,8 +160,10 @@ NCB_SiteMessage_Import:BEGIN
 	,t.IsTest
 	,t.SportType
 	,t.KickOffTime
-	,t.LeagueNameEN
-	,t.LeagueNameCS
+	,IFNULL(t.LeagueNameEN, '')
+	,IFNULL(t.LeagueNameCS, '')
+	,IFNULL(OrigLeagueNameEN, '')
+	,IFNULL(OrigLeagueNameCS, '')
 	,t.SportNameEN
 	,t.SportNameCS
 	,t.HomeNameEN
@@ -163,8 +174,10 @@ NCB_SiteMessage_Import:BEGIN
 	,t.Content_cs
 	,t.PostTime
 	,t.IsNew
-	,0
-	,''
+	,0 AS IsInvalid
+	,'' AS CheckMsg 
+	,IFNULL(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(t.LeagueNameEN, 'saba ', '', 1, 0, 'i'), 'saba', '', 1, 0, 'i'),'沙巴', '', 1, 0, 'i'), '') AS LeagueNameENRemovedSABA
+	,IFNULL(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(t.LeagueNameCS, 'saba ', '', 1, 0, 'i'), 'saba', '', 1, 0, 'i'),'沙巴', '', 1, 0, 'i'), '') AS LeagueNameCSRemovedSABA
   FROM 
 	JSON_TABLE
     (
@@ -172,29 +185,31 @@ NCB_SiteMessage_Import:BEGIN
         "$[*]"
         COLUMNS
         (
-			MessageID 		INT 	PATH "$.MessageID",
-			MsgContentsType INT 	PATH "$.MsgContentsType",
-			MatchID 		INT 	PATH "$.MatchID",
-			IsTest 			TINYINT PATH "$.IsTest",
-			SportType 		INT 	PATH "$.SportType",
-			KickOffTime 	TEXT 	PATH "$.KickOffTime",
-			LeagueNameEN 	TEXT 	PATH "$.LeagueNameEN",
-			LeagueNameCS 	TEXT 	PATH "$.LeagueNameCS",
-			SportNameEN 	TEXT 	PATH "$.SportNameEN",
-			SportNameCS 	TEXT 	PATH "$.SportNameCS",
-			HomeNameEN 		TEXT 	PATH "$.HomeNameEN",
-			HomeNameCS 		TEXT 	PATH "$.HomeNameCS",
-			AwayNameEN 		TEXT 	PATH "$.AwayNameEN",
-			AwayNameCS 		TEXT 	PATH "$.AwayNameCS",
-			Content_en 		TEXT 	PATH "$.Content_en",
-			Content_cs 		TEXT 	PATH "$.Content_cs",
-			PostTime 		TEXT 	PATH "$.PostTime",
-			IsNew 			TINYINT PATH "$.IsNew"	
+			MessageID 			INT 	PATH "$.MessageID",
+			MsgContentsType 	INT 	PATH "$.MsgContentsType",
+			MatchID 			INT 	PATH "$.MatchID",
+			IsTest 				TINYINT PATH "$.IsTest",
+			SportType 			INT 	PATH "$.SportType",
+			KickOffTime 		TEXT 	PATH "$.KickOffTime",
+			LeagueNameEN 		TEXT 	PATH "$.LeagueNameEN",
+			LeagueNameCS 		TEXT 	PATH "$.LeagueNameCS",
+			OrigLeagueNameEN 	TEXT 	PATH "$.OrigLeagueNameEN",
+			OrigLeagueNameCS 	TEXT 	PATH "$.OrigLeagueNameCS",
+			SportNameEN 		TEXT 	PATH "$.SportNameEN",
+			SportNameCS 		TEXT 	PATH "$.SportNameCS",
+			HomeNameEN 			TEXT 	PATH "$.HomeNameEN",
+			HomeNameCS 			TEXT 	PATH "$.HomeNameCS",
+			AwayNameEN 			TEXT 	PATH "$.AwayNameEN",
+			AwayNameCS 			TEXT 	PATH "$.AwayNameCS",
+			Content_en 			TEXT 	PATH "$.Content_en",
+			Content_cs 			TEXT 	PATH "$.Content_cs",
+			PostTime 			TEXT 	PATH "$.PostTime",
+			IsNew 				TINYINT PATH "$.IsNew"	
         )
    ) AS t;
 
   UPDATE tmp_MsgHeader
-    SET KickOffTime = NULL, LeagueNameEN = NULL, LeagueNameCS = NULL, SportNameEN = NULL, SportNameCS = NULL, HomeNameEN = NULL, HomeNameCS = NULL, AwayNameEN = NULL, AwayNameCS = NULL
+    SET KickOffTime = NULL, SportNameEN = NULL, SportNameCS = NULL, HomeNameEN = NULL, HomeNameCS = NULL, AwayNameEN = NULL, AwayNameCS = NULL
   WHERE SportType = 0;
 
   DROP TEMPORARY TABLE IF EXISTS tmp_MsgDetail;
@@ -211,7 +226,7 @@ NCB_SiteMessage_Import:BEGIN
    );
     
   INSERT INTO tmp_MsgDetail (MessageID, SiteName, LeagueGroupID, IsChinaView, SpecialPlatform)
-  SELECT t.MessageID, t.SiteName, t.LeagueGroupID, t.IsChinaView, t.SpecialPlatform
+  SELECT t.MessageID, t.SiteName, IFNULL(t.LeagueGroupID, 0), t.IsChinaView, t.SpecialPlatform
   FROM 
 	JSON_TABLE
     (
@@ -428,7 +443,8 @@ NCB_SiteMessage_Import:BEGIN
 		   ,tpl.StatusID
 		   ,tpl.Status
 		   ,d.LicenseeStatusID
-		   ,g.ChannelId, CASE WHEN d.LeagueGroupID IN (42, 74, 108, 113, 122, 151) AND (d.IsChinaView = 1 OR IFNULL(d.SpecialPlatform, 0) <> 0) THEN 1 ELSE 0 END AS IsRemoveSABA
+		   ,g.ChannelId
+		   ,CASE WHEN d.LeagueGroupID IN (42, 74, 108, 113, 122, 151) AND (d.IsChinaView = 1 OR IFNULL(d.SpecialPlatform, 0) <> 0) THEN 1 ELSE 0 END AS IsRemoveSABA
       FROM tmp_MsgHeader h
         INNER JOIN tmp_MsgDetail d ON d.MessageID = h.MessageID
         INNER JOIN tmp_MsgContentTypeTemplate tpl ON h.MsgContentsType = tpl.MsgContentsType
@@ -492,28 +508,22 @@ NCB_SiteMessage_Import:BEGIN
 	  SELECT DISTINCT
 	    ct.NotificationTypeID
 	    ,ct.TemplateTitle
-	    ,REGEXP_REPLACE(
-			REGEXP_REPLACE(
-				REGEXP_REPLACE(
+	    ,REPLACE(
+			REPLACE(
+				REPLACE(
 					REPLACE(
 						REPLACE(
 							REPLACE(
 								REPLACE(
-									REPLACE(
-										REPLACE(
-											REPLACE(
-												REPLACE(ct.TemplateContent
-												, '{EN Announcement}', h.Content_en)
-											, '{CN Announcement}', h.Content_cs)
-										, '{Sport EN CN}', IFNULL(CONCAT(h.SportNameEN, ' / ', h.SportNameCS), ''))
-									, '{Kick Off Label}', CASE h.SportNameEN WHEN 'Soccer' THEN 'Kick Off' WHEN 'Basketball' THEN 'Tip Off' ELSE 'Event Start Time' END)
-								, '{KO Time}', IFNULL(h.KickOffTime, ''))
-							, '{League Name EN CN}', IFNULL(CONCAT(h.LeagueNameEN, ' [', h.LeagueNameCS, ']'), ''))
-						, '{Team Name EN CN}', IFNULL(CONCAT('***', h.HomeNameEN, ' - vs - ' , h.AwayNameEN, ' [',h.HomeNameCS, ' - vs - ' , h.AwayNameCS, ']', '***'), ''))
-					, '@@', '')
-				, CASE WHEN ccIsRemoveSABA = 1 THEN 'saba ' ELSE REPEAT('z', 1000) END, CASE WHEN ccIsRemoveSABA = 1 THEN '' ELSE REPEAT('z', 1000) END, 1, 0, 'i')
-			, CASE WHEN ccIsRemoveSABA = 1 THEN 'saba' ELSE REPEAT('z', 1000) END, CASE WHEN ccIsRemoveSABA = 1 THEN '' ELSE REPEAT('z', 1000) END, 1, 0, 'i')
-		,CASE WHEN ccIsRemoveSABA = 1 THEN '沙巴' ELSE REPEAT('z', 1000) END, CASE WHEN ccIsRemoveSABA = 1 THEN '' ELSE REPEAT('z', 1000) END, 1, 0, 'i') Content
+									REPLACE(ct.TemplateContent
+									,'{EN Announcement}', CASE WHEN ccIsRemoveSABA = 1 AND h.LeagueNameEN <> '' THEN REPLACE(h.Content_en, h.OrigLeagueNameEN, h.LeagueNameENRemovedSABA) ELSE h.Content_en END)
+								, '{CN Announcement}', CASE WHEN ccIsRemoveSABA = 1 AND h.LeagueNameCS <> '' THEN REPLACE(h.Content_cs, h.OrigLeagueNameCS, h.LeagueNameCSRemovedSABA) ELSE h.Content_cs END)
+							, '{Sport EN CN}', IFNULL(CONCAT(h.SportNameEN, ' / ', h.SportNameCS), ''))
+						, '{Kick Off Label}', CASE h.SportNameEN WHEN 'Soccer' THEN 'Kick Off' WHEN 'Basketball' THEN 'Tip Off' ELSE 'Event Start Time' END)
+					, '{KO Time}', IFNULL(h.KickOffTime, ''))
+				, '{League Name EN CN}', IFNULL(CONCAT(CASE WHEN ccIsRemoveSABA = 1 THEN h.LeagueNameENRemovedSABA ELSE h.LeagueNameEN END, ' [', CASE WHEN ccIsRemoveSABA = 1 THEN h.LeagueNameCSRemovedSABA ELSE h.LeagueNameCS END, ']'), ''))
+			, '{Team Name EN CN}', IFNULL(CONCAT('***', h.HomeNameEN, ' - vs - ' , h.AwayNameEN, ' [',h.HomeNameCS, ' - vs - ' , h.AwayNameCS, ']', '***'), ''))
+		, '@@', '') Content
 	    ,startTime, 0 SendImmediately, STARIXIT_CUSTID, CreatedDate, CREATING_NOTIFICATION_STATUS, CREATING_NOTIFICATION_STATUSID, ccChannelId
 	  FROM tmp_MsgHeader h
 		INNER JOIN tmp_MsgContentTypeTemplate ct ON ct.MsgContentsType = h.MsgContentsType

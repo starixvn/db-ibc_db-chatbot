@@ -45,6 +45,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_SpecialDeleteMsg_AbnormalBets
 	  - 20230117@Malcolm: Scale out for ChatBot [RedmineID: #181907]
 	  - 20230731@Malcolm: Incorporate voiding duplicated bet tickets with TVS [RedmineId : #191355]
 	  - 20230921@Malcolm: Change Content for duplicated ticket content [RedmineId : #191355]
+	  - 20230925@Malcolm: Change fortmat date [RedmineId : #193252]
 	  
 	Param's Explanation:
 		- IssueTypeId = 15 : AB real member, 13 : Abnormal Account, 11: Abnormal Bet, 20: Duplicated Tickets
@@ -106,7 +107,7 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 	WITH CTE_DuplicatedInfo AS
 	(
 		SELECT VoidingHistoryCollectionId, CustId, Username, IFNULL(OrgTransId, 0) AS OrgTransId, VoidedTransId, Status, CurrencyName, Stake, TransInfo, SiteName, IsTest, IsDeposit, MessageId
-			,LEFT(Transdate, IF(LOCATE('.', Transdate) = 0, 100, LOCATE('.', Transdate) - 1)) AS Transdate
+			,DATE_FORMAT(Transdate, '%Y-%m-%d %H:%i:%s') AS Transdate
 			,ROW_NUMBER() OVER(ORDER BY VoidingHistoryCollectionId, OrgTransId, CustId, VoidedTransId) AS Id
 		FROM 
 			JSON_TABLE
@@ -128,7 +129,7 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 					,IsDeposit					TINYINT     	PATH "$.IsDeposit"
 					,IsTest						TINYINT     	PATH "$.IsTest"
 					,MessageId				    INT     		PATH "$.MessageId"
-					,Transdate					VARCHAR(100)    PATH "$.Transdate"
+					,Transdate					DATETIME(3)     PATH "$.Transdate"
 				)
 			) AS t
 	)

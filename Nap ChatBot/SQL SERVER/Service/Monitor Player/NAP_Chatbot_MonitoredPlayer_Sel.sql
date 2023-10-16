@@ -14,6 +14,7 @@ AS
 
 	Revisions:
 		- 20220821@Malcolm: Initialize SP [RedmineId: #174402]
+		- 20230925@Malcolm: Hardcode to display Currency for Jollysports market [RedmineId: #193252]
 */
 
 BEGIN
@@ -67,16 +68,18 @@ BEGIN
 	INSERT INTO @Result (LogId, CustId, username2, username, SiteName, AccumWL, WinningThreshold, IsTest, CurrencyName)
 	SELECT TOP(@BatchSize) h.LogId, h.CustID, ISNULL(SUBSTRING(c.username2, CHARINDEX('$', c.username2) + 1, 50), '')  AS username2, c.username, c.site 
 		,AccumWL, WinningThreshold, CASE WHEN c.currency = 20 THEN 1 ELSE 0 END AS IsTest
-		,CASE e.ExchangeId 
-			WHEN 20  THEN 'UUS'
-			WHEN 51  THEN 'INH'
-			WHEN 70  THEN 'MKK'
-			WHEN 92  THEN 'HID'
-			WHEN 125 THEN 'INH'
-		 ELSE e.Code END AS CurrencyName
+		,CASE WHEN ISNULL(s.SpecialPlatfrom, 0) > 0 AND e.currency = 'PE4' THEN 'MP'
+			  WHEN ISNULL(s.SpecialPlatfrom, 0) > 0 AND e.currency = 'USDT4' THEN 'USDT'
+			  WHEN e.ExchangeId = 20  THEN 'UUS'
+			  WHEN e.ExchangeId = 51  THEN 'INH'
+			  WHEN e.ExchangeId = 70  THEN 'MKK'
+			  WHEN e.ExchangeId = 92  THEN 'HID'
+			  WHEN e.ExchangeId = 125 THEN 'INH'
+		ELSE e.Code END AS CurrencyName
 	FROM dbo.Dep_WLMonitored_Player_History h WITH(NOLOCK)
 		INNER JOIN dbo.Customer c WITH(NOLOCK) ON c.custid = h.CustID
 		INNER JOIN dbo.Exchange e WITH(NOLOCK) ON e.ExchangeId = c.currency
+		LEFT JOIN dbo.Site s WITH(NOLOCK) ON s.site = c.site
 	WHERE h.LogId > @LastLogId AND h.LogId <= @MaxLogId
 	ORDER BY LogId ASC
 	

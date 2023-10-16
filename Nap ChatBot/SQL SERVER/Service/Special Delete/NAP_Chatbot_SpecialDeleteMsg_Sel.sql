@@ -22,6 +22,7 @@ AS
 		- 20220223@Malcolm: Remove SABA text out of the league name for China View platform [RedmineID: #168798]
 		- 20230515@Roy: Database - HA DB061/DB062 [RedmineID: #169643]
 		- 20230829@Malcolm: Remove SABA text out of the league name for Jollysports platform [RedmineID: #193252]
+		- 20230925@Malcolm: Get MatchId [#193252]
 	
 	@SiteAsJSON
 		[
@@ -61,54 +62,32 @@ BEGIN
 	CREATE TABLE #MsgContentsTypeLst(MsgContentsType TINYINT)
 	CREATE UNIQUE CLUSTERED INDEX PK_MsgContentsType ON #MsgContentsTypeLst(MsgContentsType)
 	
-	CREATE TABLE #tmpSite (
-		Site VARCHAR(50)
-		,IsChinaView BIT
-		,SpecialPlatform TINYINT
-	)
+	CREATE TABLE #tmpSite (Site VARCHAR(50), IsChinaView BIT, SpecialPlatform TINYINT)
 	
-	CREATE TABLE #tmpDepCustSuper (
-		CustId INT
-		,Site VARCHAR(50)
-		,Currency INT
-	)
+	CREATE TABLE #tmpDepCustSuper (CustId INT, Site VARCHAR(50), Currency INT)
 
-	DECLARE @XML XML  = NULL
-
-	SET @XML = N'<root><r>' + REPLACE(@MsgContentsTypeLst, ',', '</r><r>') + '</r></root>'
+	INSERT INTO #MsgContentsTypeLst (MsgContentsType)
+	SELECT DISTINCT value
+	FROM STRING_SPLIT(@MsgContentsTypeLst, ',')
 	
-	INSERT INTO #MsgContentsTypeLst(MsgContentsType)
-	SELECT DISTINCT r.value('.', 'NVARCHAR(15)') AS MsgContentsType
-	FROM @xml.nodes('//root/r') AS RECORDS(r)
-	WHERE LEN(ISNULL(r.value('.', 'NVARCHAR(15)'), '')) > 0
-	
-	INSERT INTO #tmpSite (
-		Site
-		,IsChinaView
-		,SpecialPlatform
-	)
-	SELECT DISTINCT Site
-		,ISNULL(IsChinaView, 0)
-		,ISNULL(SpecialPlatform, 0)
-	FROM OPENJSON(@SiteAsJSON) WITH (
-			Site VARCHAR(50) '$.Site'
-			,IsChinaView BIT '$.IsChinaView'
-			,SpecialPlatform TINYINT '$.SpecialPlatform'
-		)--OPENJSON case-sensitive
+	INSERT INTO #tmpSite (Site, IsChinaView, SpecialPlatform)
+	SELECT DISTINCT Site, ISNULL(IsChinaView, 0), ISNULL(SpecialPlatform, 0)
+	FROM OPENJSON(@SiteAsJSON) WITH 
+	(
+		Site VARCHAR(50) '$.Site'
+		,IsChinaView BIT '$.IsChinaView'
+		,SpecialPlatform TINYINT '$.SpecialPlatform'
+	)--OPENJSON case-sensitive
 		
-	INSERT INTO #tmpDepCustSuper (
-		CustId
-		,Site
-		,Currency
-	)
-	SELECT DISTINCT CustId
-		,Site
-		,Currency
-	FROM OPENJSON(@DepCustSAsJSON) WITH (
-			CustId INT '$.CustId'
-			,Site VARCHAR(50) '$.Site'
-			,Currency INT '$.Currency'
-		)--OPENJSON case-sensitive
+	INSERT INTO #tmpDepCustSuper (CustId, Site, Currency)
+	SELECT DISTINCT CustId, Site, Currency
+	FROM OPENJSON(@DepCustSAsJSON) 
+	WITH 
+	(
+		CustId INT '$.CustId'
+		,Site VARCHAR(50) '$.Site'
+		,Currency INT '$.Currency'
+	)--OPENJSON case-sensitive
 	
 	DECLARE @DepositSuper TABLE (CustId INT, site VARCHAR(50), IsChinaView BIT, SpecialPlatform TINYINT)
 	INSERT INTO @DepositSuper (CustId, site, IsChinaView, SpecialPlatform)
@@ -124,7 +103,7 @@ BEGIN
 			OR d.Currency NOT IN (20,27,28)
 	) AS t
 
-	DECLARE @Msg TABLE (MessageId INT, MsgContentsType TINYINT, Content_en NVARCHAR(4000), Content_cs NVARCHAR(4000), PostTime DATETIME, IsNew TINYINT, LeagueGroupID SMALLINT)
+	DECLARE @Msg TABLE (MessageId INT, MsgContentsType TINYINT, Content_en NVARCHAR(4000), Content_cs NVARCHAR(4000), PostTime DATETIME, IsNew TINYINT, LeagueGroupID SMALLINT, MatchId INT)
 	
 	-- New messages from @MessageID
 	INSERT INTO @Msg (MessageId, IsNew)
@@ -173,14 +152,14 @@ BEGIN
 	WHERE m.RN > 1
 
 	UPDATE m
-		SET m.MsgContentsType = k.MsgContentsType, m.PostTime = k.PostTime, m.Content_en = k.Content_en, m.Content_cs = k.Content_cs, m.LeagueGroupID = k.LeagueGroupID
+		SET m.MsgContentsType = k.MsgContentsType, m.PostTime = k.PostTime, m.Content_en = k.Content_en, m.Content_cs = k.Content_cs, m.LeagueGroupID = k.LeagueGroupID, m.MatchId = k.MatchId
 	FROM @Msg m
 	CROSS APPLY (
-		SELECT MsgContentsType, PostTime, Content_en, Content_cs, ISNULL(LeagueGroupID,0) AS LeagueGroupID FROM dbo.Msg g WITH(NOLOCK) WHERE g.MessageId = m.MessageId
+		SELECT MsgContentsType, PostTime, Content_en, Content_cs, ISNULL(LeagueGroupID,0) AS LeagueGroupID, ISNULL(MatchId, 0) AS MatchId FROM dbo.Msg g WITH(NOLOCK) WHERE g.MessageId = m.MessageId
 	) AS k
 	
 	--1st dataset: message header
-	SELECT MessageId, MsgContentsType, Content_en, Content_cs, PostTime, IsNew
+	SELECT MessageId, MsgContentsType, Content_en, Content_cs, PostTime, IsNew, MatchId
 	FROM @Msg
 	ORDER BY MessageId
 
