@@ -14,6 +14,7 @@ AS
 		- 20220513@Johnson: initial sp [redmine: #167819]
 		- 20230221@Johnson: get product from ProductSettingDetail with settingstatus <> 2 [redmine:#184137]
 		- 20221121@Eden: Unify RNG Lottery Customer Settings [RedmineID: #180640]
+		- 20230928@Luke: Modify SPs to adapt in-house replication setup [Redmine: #194414]
 		
 	-Parameter's Explanation:			
 */
@@ -50,8 +51,8 @@ BEGIN
 		INNER JOIN SportBettypeSettingMatrix mt WITH(NOLOCK)
 			ON d.SportType = mt.SporttypeRefWinlossLimit
 			AND d.BetType = mt.BettypeRefWinlossLimit
-			AND mt.isLicensee = 0 and mt.Site = 'ALL'
-	WHERE SettingType = 22
+			AND mt.isLicensee = 0 and mt.Site = 'ALL' AND mt.isDeleted = 0
+	WHERE SettingType = 22 
 	
 	SELECT @MaxLogID = MAX(LogID) FROM #Result
 	

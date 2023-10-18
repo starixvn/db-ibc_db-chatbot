@@ -16,6 +16,7 @@ AS
 		- 20221121@Eden: Unify RNG Lottery Customer Settings [RedmineID: #180640]
 		- 20230414@Eden: Scale out DBTRANS for Credit [Redmine: #181595]
 		- 20230728@Eden: Simplify Live Casino Customer Setting [RedmineID: #189389]
+		- 20230928@Luke: Modify SPs to adapt in-house replication setup [Redmine: #194414]
 		
 	-Parameter's Explanation:
 		@Banlance_Data = '[
@@ -84,7 +85,7 @@ BEGIN
 	FROM #tmpData t
 		LEFT JOIN SportBettypeSettingMatrix mt WITH(NOLOCK) 
 			ON t.bettype = mt.bettype
-			AND mt.isLicensee = 0 AND mt.Site = 'ALL'
+			AND mt.isLicensee = 0 AND mt.Site = 'ALL' AND mt.isDeleted = 0
 		LEFT JOIN #ProductSettingDetail d  
 			ON mt.BettypeRefWinlossLimit  = d.BetType
 	
