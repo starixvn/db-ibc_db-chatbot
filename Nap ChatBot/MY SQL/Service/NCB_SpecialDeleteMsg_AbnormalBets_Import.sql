@@ -3,11 +3,12 @@ DROP PROCEDURE IF EXISTS NCB_SpecialDeleteMsg_AbnormalBets_Import;
 DELIMITER //
 
 CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_SpecialDeleteMsg_AbnormalBets_Import(
-  IN messageHeader 	 JSON
-  ,IN messageDetail  JSON
-  ,IN duplicatedInfo JSON
-  ,OUT errCode 		INT
-  ,OUT errMsg 		VARCHAR(200)
+  IN messageHeader 	 		JSON
+  ,IN messageDetail  		JSON
+  ,IN abnormalAccountInfo 	JSON
+  ,IN duplicatedInfo 		JSON
+  ,OUT errCode 				INT
+  ,OUT errMsg 				VARCHAR(200)
 
   /*
     Creator   : 20200214@Percy
@@ -27,12 +28,20 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_SpecialDeleteMsg_AbnormalBets
 							,{ "VoidingHistoryCollectionId":885130, "MessageId": 3}
 							,{ "VoidingHistoryCollectionId":885131, "MessageId": 4}]
 							
-	- @DuplicatedInfo		[  
+	- @abnormalAccountInfo [  
+								{ "VoidingHistoryCollectionId":1643, "CustId":"12", "Username":"Supertestm1", "SiteName":"12bet", "IsDeposit":"1", "MessageId": "1", "IsTest":"0","MinWinlostDate":"2023-01-01 10:01:01","MaxWinlostDate":"2023-01-01 10:01:01"
+								}
+								,{ "VoidingHistoryCollectionId":885128, "CustId":"12", "Username":"Supertestm1", "SiteName":"12bet", "IsDeposit":"1", "MessageId": "1", "IsTest":"0","MinWinlostDate":"2023-01-01 10:01:01","MaxWinlostDate":"2023-01-01 10:01:01"
+								}
+							]
+							
+	- @duplicatedInfo		[  
 								{ "VoidingHistoryCollectionId":885128, "CustId":"12", "Username":"Supertestm1", "Stake":"100.00", "Status":"running", "CurrencyName":"USD", "OrgTransId":"1", "VoidedTransId":2, "TransInfo":"", "SiteName":"12bet", "IsDeposit":"1", "MessageId": "1", "IsTest":"0","Transdate":"2023-01-01 10:01:01"
 								}
 								,{ "VoidingHistoryCollectionId":885131, "CustId":"12", "Username":"Supertestm1", "Stake":"100.00", "Status":"running", "CurrencyName":"USD", "OrgTransId":"1", "VoidedTransId":2, "TransInfo":"", "SiteName":"12bet", "IsDeposit":"1", "MessageId": "1", "IsTest":"0","Transdate":"2023-01-01 10:01:01"
 								}
 							]
+	
 
     Revisions :
       - 20200214@Percy: Initiliaze SP [RedmineID: #127944]
@@ -46,6 +55,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_SpecialDeleteMsg_AbnormalBets
 	  - 20230731@Malcolm: Incorporate voiding duplicated bet tickets with TVS [RedmineId : #191355]
 	  - 20230921@Malcolm: Change Content for duplicated ticket content [RedmineId : #191355]
 	  - 20230925@Malcolm: Change fortmat date [RedmineId : #193252]
+	  - 20230925@Malcolm: Divide the batch by abnormal accounts [RedmineId : #195546]
 	  
 	Param's Explanation:
 		- IssueTypeId = 15 : AB real member, 13 : Abnormal Account, 11: Abnormal Bet, 20: Duplicated Tickets
@@ -71,6 +81,7 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 	DECLARE ccChannelId TINYINT UNSIGNED;
 	DECLARE ccBatchId INT;
 	DECLARE NumberRowOfBatch INT DEFAULT 10;
+	DECLARE NumberRowOfBatchForAbnormalAccount INT DEFAULT 100;
 
 	# Constants
 	DECLARE ACTION_ID INT DEFAULT 18;
@@ -108,7 +119,7 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 	(
 		SELECT VoidingHistoryCollectionId, CustId, Username, IFNULL(OrgTransId, 0) AS OrgTransId, VoidedTransId, Status, CurrencyName, Stake, TransInfo, SiteName, IsTest, IsDeposit, MessageId
 			,DATE_FORMAT(Transdate, '%Y-%m-%d %H:%i:%s') AS Transdate
-			,ROW_NUMBER() OVER(ORDER BY VoidingHistoryCollectionId, OrgTransId, CustId, VoidedTransId) AS Id
+			,ROW_NUMBER() OVER(PARTITION BY VoidingHistoryCollectionId ORDER BY OrgTransId, CustId, VoidedTransId) AS Id
 		FROM 
 			JSON_TABLE
 			(
@@ -139,6 +150,41 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 	UPDATE tmp_DuplicatedInfo
 	SET BatchId = FLOOR((Id - 1)/NumberRowOfBatch);
 	
+	DROP TEMPORARY TABLE IF EXISTS tmp_AbnormalAccountInfo;
+	CREATE TEMPORARY TABLE IF NOT EXISTS tmp_AbnormalAccountInfo (
+		Id INT NOT NULL, VoidingHistoryCollectionId INT, CustId INT, Username VARCHAR(30), MinWinlostDate DATETIME, MaxWinlostDate DATETIME, SiteName VARCHAR(50), IsDeposit TINYINT, IsTest TINYINT, MessageId INT, BatchId INT
+	);
+	
+	INSERT INTO tmp_AbnormalAccountInfo (Id, VoidingHistoryCollectionId, CustId, Username, MinWinlostDate, MaxWinlostDate, SiteName, IsDeposit, IsTest, MessageId)
+	WITH CTE_AbnormalAccountInfo AS 
+	(
+		SELECT VoidingHistoryCollectionId, CustId, Username, MinWinlostDate, MaxWinlostDate, SiteName, IsDeposit, IsTest, MessageId, DENSE_RANK() OVER(PARTITION BY VoidingHistoryCollectionId ORDER BY Username) AS Id
+		FROM 
+			JSON_TABLE 
+			(
+				AbnormalAccountInfo
+				,"$[*]"
+				COLUMNS
+				(
+					
+					VoidingHistoryCollectionId 	INT 			PATH "$.VoidingHistoryCollectionId"
+					,CustId						INT 			PATH "$.CustId"
+					,Username					VARCHAR(30) 	PATH "$.Username"
+					,MinWinlostDate				DATETIME		PATH "$.MinWinlostDate	"	 
+					,MaxWinlostDate			    DATETIME 		PATH "$.MaxWinlostDate"	 					
+					,SiteName					VARCHAR(50)     PATH "$.SiteName" 
+					,IsDeposit					TINYINT     	PATH "$.IsDeposit"
+					,IsTest						TINYINT     	PATH "$.IsTest"
+					,MessageId				    INT     		PATH "$.MessageId"
+				)
+			) AS t
+	) 
+	SELECT Id, VoidingHistoryCollectionId, CustId, Username, MinWinlostDate, MaxWinlostDate, SiteName, IsDeposit, IsTest, MessageId
+	FROM CTE_AbnormalAccountInfo;
+	
+	UPDATE tmp_AbnormalAccountInfo
+	SET BatchId = FLOOR((Id - 1)/NumberRowOfBatchForAbnormalAccount);
+	
 	/*Get All messageId and VoidingHistoryCollectionId*/
 	DROP TEMPORARY TABLE IF EXISTS tmp_MsgDetail;
 	CREATE TEMPORARY TABLE IF NOT EXISTS tmp_MsgDetail (VoidingHistoryCollectionId INT, MessageId INT, BatchId INT);
@@ -168,6 +214,23 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 		WITH CTE_Message AS
 		(
 			SELECT VoidingHistoryCollectionId, BatchId, MessageId FROM tmp_DuplicatedInfo GROUP BY VoidingHistoryCollectionId, BatchId, MessageId
+		)
+		SELECT VoidingHistoryCollectionId, MessageId, BatchId
+		FROM CTE_Message;
+	
+	END IF;
+	
+	/*If BatchId > 0 --> get messageid for Abnormal Accounts*/
+	IF EXISTS (SELECT 1 FROM tmp_AbnormalAccountInfo WHERE BatchId > 0) THEN
+	
+		DELETE d 
+		FROM tmp_MsgDetail d
+			INNER JOIN tmp_AbnormalAccountInfo tmp ON tmp.VoidingHistoryCollectionId = d.VoidingHistoryCollectionId;
+
+		INSERT INTO tmp_MsgDetail (VoidingHistoryCollectionId, MessageId, BatchId)
+		WITH CTE_Message AS
+		(
+			SELECT VoidingHistoryCollectionId, BatchId, MessageId FROM tmp_AbnormalAccountInfo GROUP BY VoidingHistoryCollectionId, BatchId, MessageId
 		)
 		SELECT VoidingHistoryCollectionId, MessageId, BatchId
 		FROM CTE_Message;
@@ -232,14 +295,14 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 		,TypeNameLst 
 		,Content_en 
 		,Content_cs
-		,MinWinlostDate 
-		,MaxWinlostDate 
-		,UsernameLst
 		,IssueTypeId
 		,IsParlay	
 		,MatchId
 		,CheckMsg
 		,BatchId
+		,MinWinlostDate 
+		,MaxWinlostDate 
+		,UsernameLst
 		,IsTest
 		,TotalTickets 
 		,CreditSiteLst 
@@ -252,9 +315,19 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 			,BatchId
 			,COUNT(1) AS TotalTickets
 			,MIN(IsTest) AS IsTest
+			,MIN(MinWinlostDate) AS MinWinlostDate
+			,MAX(MaxWinlostDate) AS MaxWinlostDate
 			,GROUP_CONCAT(DISTINCT CASE WHEN IsDeposit = 0 THEN SiteName ELSE NULL END ORDER BY SiteName SEPARATOR ', ') AS CreditSiteLst
 			,GROUP_CONCAT(DISTINCT CASE WHEN IsDeposit = 1 THEN SiteName ELSE NULL END ORDER BY SiteName SEPARATOR ', ') AS DepositSiteLst
-		FROM tmp_DuplicatedInfo 
+			,GROUP_CONCAT(DISTINCT Username ORDER BY Username SEPARATOR ', ') AS UsernameLst
+		FROM 
+		(
+			SELECT VoidingHistoryCollectionId, BatchId, 1 AS TotalTickets, IsTest, NULL AS MinWinlostDate, NULL AS MaxWinlostDate, '' AS Username, SiteName, IsDeposit
+			FROM tmp_DuplicatedInfo
+			UNION All
+			SELECT VoidingHistoryCollectionId, BatchId, NULL AS TotalTickets, IsTest, MinWinlostDate, MaxWinlostDate, Username, SiteName, IsDeposit
+			FROM tmp_AbnormalAccountInfo
+		) AS t
 		GROUP BY VoidingHistoryCollectionId, BatchId
 	)
 	SELECT 
@@ -275,18 +348,18 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 		,t.TypeNameLst 
 		,t.Content_en 
 		,t.Content_cs
-		,t.MinWinlostDate 
-		,t.MaxWinlostDate 
-		,t.UsernameLst
 		,t.IssueTypeId
 		,t.IsParlay	
 		,t.MatchId
 		,'' AS CheckMsg
 		,IFNULL(b.BatchId, 0) AS BatchId
-		,IF(b.VoidingHistoryCollectionId IS NULL, t.IsTest, b.IsTest) AS IsTest
-		,IF(b.VoidingHistoryCollectionId IS NULL, t.TotalTickets, b.TotalTickets) AS TotalTickets
-		,IF(b.VoidingHistoryCollectionId IS NULL, t.CreditSiteLst, b.CreditSiteLst) AS CreditSiteLst   
-		,IF(b.VoidingHistoryCollectionId IS NULL, t.DepositSiteLst, b.DepositSiteLst) AS DepositSiteLst 
+		,b.MinWinlostDate 
+		,b.MaxWinlostDate
+		,b.UsernameLst
+		,IF(b.VoidingHistoryCollectionId IS NULL, t.IsTest, 		b.IsTest) 			AS IsTest
+		,IF(b.VoidingHistoryCollectionId IS NULL, t.TotalTickets, 	b.TotalTickets) 	AS TotalTickets
+		,IF(b.VoidingHistoryCollectionId IS NULL, t.CreditSiteLst, 	b.CreditSiteLst) 	AS CreditSiteLst   
+		,IF(b.VoidingHistoryCollectionId IS NULL, t.DepositSiteLst, b.DepositSiteLst) 	AS DepositSiteLst 
 	FROM 
 		JSON_TABLE
 		(
@@ -315,9 +388,6 @@ NCB_SpecialDeleteMsg_AbnormalBets_Import:BEGIN
 				,DepositSiteLst 			TEXT            PATH "$.DepositSiteLst"
 				,Content_en 				TEXT            PATH "$.Content_en"
 				,Content_cs 				TEXT            PATH "$.Content_cs"
-				,MinWinlostDate 			DATETIME(3)     PATH "$.MinWinlostDate"
-				,MaxWinlostDate 			DATETIME(3)     PATH "$.MaxWinlostDate"
-				,UsernameLst 				TEXT            PATH "$.UsernameLst"
 				,IssueTypeId 				INT     		PATH "$.IssueTypeId"
 				,IsParlay 					TINYINT     	PATH "$.IsParlay"
 				,MatchId 					INT     		PATH "$.MatchId"

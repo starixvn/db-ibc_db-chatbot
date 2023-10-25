@@ -14,6 +14,7 @@ AS
 		- 20220728@Malcolm: Initialize SPs [RedmineId: #175878]
 		- 20220116@Malcolm: Scale out for ChatBot [RedmineId: #181907]
 		- 20230731@Malcolm: Incorporate voiding duplicated bet tickets with TVS [RedmineId : #191355]
+		- 20231017@Malcolm: Get Winlostdate for Abnormal Account [RedmineId : #195546]
 		
 	Param's Explanation:
 		+ @AbnormalBetsInfo:
@@ -37,7 +38,7 @@ BEGIN
 
 	/*Get Data*/
 	BEGIN
-		CREATE TABLE #AbnormalAccountsInfoTmp (VoidingHistoryCollectionId INT, VoidingHistoryId INT, Username VARCHAR(30), CustId INT, IsValid BIT DEFAULT(0), SiteName NVARCHAR(50))
+		CREATE TABLE #AbnormalAccountsInfoTmp (VoidingHistoryCollectionId INT, VoidingHistoryId INT, Username VARCHAR(30), CustId INT, MinWinlostDate DATETIME, MaxWinlostDate DATETIME, IsValid BIT DEFAULT(0), SiteName NVARCHAR(50))
 
 		--Abnormal Accounts
 		INSERT INTO #AbnormalAccountsInfoTmp (VoidingHistoryCollectionId, VoidingHistoryId, Username)
@@ -118,23 +119,41 @@ BEGIN
 			WHERE s.site = m.SiteName AND s.SiteDBGroupID <> @SiteDBGroupID
 		)
 
-		CREATE TABLE #VoidedMember (VoidingHistoryId INT,CustId INT)
+		CREATE TABLE #VoidedMember (VoidingHistoryId INT,CustId INT, MinWinlostDate DATETIME, MaxWinlostDate DATETIME)
 		CREATE CLUSTERED INDEX Ix_Result ON #VoidedMember (VoidingHistoryId)
 
-		INSERT INTO #VoidedMember (VoidingHistoryId, CustId)
-		SELECT DISTINCT VoidingHistoryId, CustId
+		INSERT INTO #VoidedMember (VoidingHistoryId, CustId, MinWinlostDate, MaxWinlostDate)
+		SELECT DISTINCT VoidingHistoryId, CustId, MIN(winlostdate) AS MinWinlostDate, MAX(winlostdate) AS MaxWinlostDate
 		FROM dbo.zzzbettrans b WITH(NOLOCK)
 		WHERE EXISTS(SELECT 1 FROM #AbnormalAccountsInfoTmp m WHERE b.VoidingHistoryId = m.VoidingHistoryId AND b.SiteDBGroupID = @SiteDBGroupID)
+		GROUP BY VoidingHistoryId, CustId
 
-		UPDATE m
-			SET m.IsValid = 1
-		FROM #AbnormalAccountsInfoTmp m
-		WHERE EXISTS (
-			SELECT 1 FROM #VoidedMember r 
-				INNER JOIN CustDB.dbo.Customer c WITH(ROWLOCK) ON c.custid = r.CustId
-			WHERE m.VoidingHistoryId = r.VoidingHistoryId	
-				AND m.CustId IN (c.custid, c.recommend, c.mrecommend, c.srecommend)
+		;WITH CTE_Upper AS
+		(
+			SELECT r.VoidingHistoryId, l.CustId, r.MinWinlostDate, r.MaxWinlostDate
+			FROM #VoidedMember r
+				INNER JOIN CustDB.dbo.Customer c WITH(NOLOCK) ON c.custid = r.CustId
+				CROSS APPLY 
+				(
+					SELECT c.custid
+					UNION ALL
+					SELECT c.recommend
+					UNION ALL
+					SELECT c.mrecommend
+					UNION ALL
+					SELECT c.srecommend
+				) AS l (CustId)
+		),CTE_Info AS
+		(
+			SELECT m.VoidingHistoryCollectionId, m.VoidingHistoryId, m.CustId, MIN(u.MinWinlostDate) AS MinWinlostDate, MAX(u.MaxWinlostDate) AS MaxWinlostDate
+			FROM CTE_Upper u	
+				INNER JOIN #AbnormalAccountsInfoTmp m ON m.VoidingHistoryId = u.VoidingHistoryId AND m.CustId = u.custid 
+			GROUP BY m.VoidingHistoryCollectionId, m.VoidingHistoryId, m.CustId
 		)
+		UPDATE m
+			SET m.IsValid = 1, m.MinWinlostDate = i.MinWinlostDate, m.MaxWinlostDate = i.MaxWinlostDate
+		FROM #AbnormalAccountsInfoTmp m
+			INNER JOIN CTE_Info i On i.VoidingHistoryCollectionId = m.VoidingHistoryCollectionId AND i.VoidingHistoryId = m.VoidingHistoryId AND i.CustId = m.CustId
 
 		DELETE #AbnormalAccountsInfoTmp WHERE IsValid = 0
 	END
@@ -186,15 +205,10 @@ BEGIN
 		FROM @tblRecommendBettype
 		ORDER BY VoidingHistoryCollectionId ASC
 
-		;WITH CTE_Message AS
-		(
-			SELECT DISTINCT m.VoidingHistoryCollectionId, m.VoidingHistoryId, m.Username
-			FROM #AbnormalAccountsInfoTmp m
-		)
-		SELECT VoidingHistoryCollectionId, VoidingHistoryId, STRING_AGG(Username, ',') WITHIN GROUP (ORDER BY Username ASC) AS Usernames
-		FROM CTE_Message m
-		GROUP BY VoidingHistoryCollectionId, VoidingHistoryId
-		ORDER BY VoidingHistoryCollectionId ASC, VoidingHistoryId ASC
+		SELECT m.VoidingHistoryCollectionId, m.VoidingHistoryId, m.Username, m.CustId, MIN(m.MinWinlostDate) AS MinWinlostDate, MAX(m.MaxWinlostDate) AS MaxWinlostDate
+		FROM #AbnormalAccountsInfoTmp m
+		GROUP BY m.VoidingHistoryCollectionId, m.VoidingHistoryId, m.Username, m.CustId
+		ORDER BY m.VoidingHistoryCollectionId ASC, m.VoidingHistoryId ASC, m.Username ASC, m.CustId ASC 
 
 		SELECT VoidingHistoryCollectionId, VoidingHistoryId, CustId, OrgTransId, VoidedTransId, Status, Stake, Transdate, ISNULL(FilterBy, 0) AS IsParlay
 		FROM #DuplicatedTickets 
