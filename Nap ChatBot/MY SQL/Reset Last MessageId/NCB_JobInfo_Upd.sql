@@ -13,6 +13,7 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_JobInfo_Upd`(
 			- 20211010@Malcolm: Get information of Job [RedmineID: #162825]
 			- 20220414@Malcolm: Add Job [RedmineID: #170182]
 			- 20220414@Malcolm: Add Job Monitered Player [RedmineID: #174402]
+			- 20220414@Malcolm: Add Job Settledment - Internal CSD, Settledment - Licensee [RedmineID: #195404]
 		Param:
 				- @JobInfo
 							[  
@@ -48,7 +49,7 @@ BEGIN
     UPDATE SystemSetting AS s
 	INNER JOIN tmp_JobInfo AS j ON j.JobIdentify = s.JobIdentify
 		SET s.Value = j.ReferenceId
-    WHERE s.ID IN (3, 8, 13, 20, 25);
+    WHERE s.ID IN (3, 8, 13, 20, 25, 33, 38);
 
     UPDATE SystemSetting AS s
 	INNER JOIN tmp_JobInfo AS j ON j.JobIdentify = s.JobIdentify
