@@ -1,6 +1,7 @@
 /*<info serverAlias="DBBOT-bodb_ChatBot" executers="bodbDownlineNet" viewers="" selecters=""></info>*/
 ALTER PROCEDURE [dbo].[Age_Chatbot_GetLinkedAccounts] 	
-	@CustIdList	VARCHAR(MAX)
+	@CustIdList	VARCHAR(MAX)=''
+	,@SiteList VARCHAR(MAX)=''
 	,@FunctionKey	VARCHAR(100) = ''
 	,@Environment   VARCHAR(20) = 'LIVE'
 AS
@@ -11,6 +12,8 @@ AS
 	
 	Revisions:
 		- 20220428@Malcolm: Initial SP [redmine: #167819]
+		- 20231025@Tacy: NAP CM - Manage Domain [RedmineID: #194024]
+
 */
 BEGIN
 	SET NOCOUNT ON;
@@ -23,17 +26,26 @@ BEGIN
 	FROM dbo.BotSystemSetting WITH(NOLOCK) 
 	WHERE ServiceName = @FunctionKey AND SettingName = 'IncludeRealCurrencyUAT'
 	
-	CREATE TABLE #CustId (CustId INT, IsRealUser BIT)
+	CREATE TABLE #CustId (CustId INT, IsRealUser BIT, Site VARCHAR(50))
 
 	INSERT INTO #CustId (CustId)
 	SELECT f.value AS CustId
 	FROM STRING_SPLIT(@CustIdList, ',') AS f
+	WHERE TRIM(value)<>''
+
+	CREATE TABLE #Site (SiteName VARCHAR(50))
+
+	INSERT INTO #Site (SiteName)
+	SELECT TRIM(s.value) AS SiteName
+	FROM STRING_SPLIT(@SiteList, ',') AS s
+	WHERE TRIM(value)<>''
 
 	UPDATE t
 		SET t.IsRealUser = n.IsRealUser
+			,t.Site=n.site
 	FROM #CustId t
 	CROSS APPLY (
-		SELECT CASE WHEN c.currency = 20 THEN 0 ELSE 1 END AS IsRealUser
+		SELECT CASE WHEN c.currency = 20 THEN 0 ELSE 1 END AS IsRealUser, c.site
 		FROM bodb02.dbo.Customer c WITH(NOLOCK) 
 		WHERE c.custid = t.CustId
 	) n
@@ -42,7 +54,7 @@ BEGIN
 	FROM #CustId t
 	WHERE (@Environment = 'UAT' AND @IncludeRealCurrencyUAT = 0 AND t.IsRealUser = 1)
 
-	SELECT ca.CustID, ca.SubAccID, ca.Language, ca.CustomerLevel, ca.UserId, c.IsRealUser, cm.BotId
+	SELECT ca.CustID, ca.SubAccID, ca.Language, ca.CustomerLevel, ca.UserId, c.IsRealUser, cm.BotId, c.Site
 	FROM dbo.CustBotAccount ca WITH(NOLOCK)
 		INNER JOIN dbo.CustBotMessenger cm WITH(NOLOCK) ON ca.UserID = cm.UserID 
 		INNER JOIN dbo.CustBotFunction cf WITH(NOLOCK) ON ca.UserID = cf.UserID
@@ -54,6 +66,21 @@ BEGIN
 		AND cf.Status = 1 --enabled
 		AND cm.IsVerifyOTP = 1 
 		AND cm.Status = 1
+	UNION
+	SELECT ca.CustID, ca.SubAccID, ca.Language, ca.CustomerLevel, ca.UserId
+		, CASE WHEN c.currency = 20 THEN 0 ELSE 1 END AS IsRealUser, cm.BotId, c.site
+	FROM dbo.CustBotAccount ca WITH(NOLOCK)
+		INNER JOIN dbo.CustBotMessenger cm WITH(NOLOCK) ON ca.UserID = cm.UserID 
+		INNER JOIN dbo.CustBotFunction cf WITH(NOLOCK) ON ca.UserID = cf.UserID
+		INNER JOIN bodb02.dbo.customer c WITH(NOLOCK) ON c.CustId = ca.CustId
+		INNER JOIN dbo.Bot b WITH(NOLOCK) ON b.BotId = cm.BotId 
+		INNER JOIN #Site s WITH(NOLOCK) ON s.SiteName=c.site
+	WHERE b.IsTest = CASE WHEN @Environment = 'UAT' THEN 1 ELSE 0 END
+		AND b.Status = 1
+		AND cf.FunctionID = @FunctionID
+		AND cf.Status = 1 --enabled
+		AND cm.IsVerifyOTP = 1 
+		AND cm.Status = 1
 
-	DROP TABLE #CustId
+	DROP TABLE #CustId, #Site
 END	

@@ -13,7 +13,8 @@ AS
 	Revisions:
 		- 20220420@Johnson: initial sp [redmine: #167819]
 		- 20230220@Johnson: get FunctionKey for clone account [redmine:#183697]
-		
+		- 20231025@Tacy: NAP/Alpha - Manage Domain [Redmine: #194024]
+
 	Parameter's Explanation:
 		- @IsTest: 0: BOT in PRO/ 1 Bot in UAT	
 */
@@ -34,7 +35,7 @@ BEGIN
 		AND Status = 1
 		AND IsVerifyOTP = 1
 	
-	SELECT rs.*, b.System, c.username, @ChatID  as ChatID
+	SELECT rs.*, b.System, c.username, @ChatID  as ChatID, c.site
 	FROM #Result rs
 		INNER JOIN Bot b WITH(NOLOCK) ON rs.BotID = b.BotID
 		INNER JOIN bodb02.dbo.customer c WITH(NOLOCK) ON rs.custid = c.custid
