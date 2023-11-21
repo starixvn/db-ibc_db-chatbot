@@ -12,7 +12,8 @@ AS
 	
 	Revisions:
 		- 20220510@Malcolm: Initial SP [redmine: #167819]
-	
+		- 20231025@Tacy: NAP CM - Manage Domain [RedmineID: #194024]
+
 	Parameter's Explanation:
 	
 */
@@ -35,13 +36,18 @@ BEGIN
 		,Content_cs 	NVARCHAR(4000)
 		,Content_vn 	NVARCHAR(4000)
 		,TargetId 		INT
-		,BetTransId 	VARCHAR(MAX))
+		,BetTransId 	VARCHAR(MAX)
+		,Remark 		VARCHAR(300)
+		,MsgContentsType TINYINT
+		)
 
-	INSERT INTO #Result (MsgTargetId, MessageID, content_en, Content_ch, Content_cs, Content_th, Content_vn, TargetId, BetTransId)
-	SELECT TOP(@BatchSize)	mt.MsgTargetId, m.MessageId, m.content_en, m.Content_ch, Content_cs, m.Content_th, Content_vn, mt.TargetId, mt.BetTransId
+	INSERT INTO #Result (MsgTargetId, MessageID, content_en, Content_ch, Content_cs, Content_th, Content_vn, TargetId, BetTransId, Remark, MsgContentsType)
+	SELECT TOP(@BatchSize)	mt.MsgTargetId, m.MessageId, m.content_en, m.Content_ch, Content_cs, m.Content_th, Content_vn, mt.TargetId, mt.BetTransId, m.Remark, m.MsgContentsType
 	FROM dbo.MsgTarget mt WITH(NOLOCK)
 		INNER JOIN dbo.Msg m WITH(NOLOCK) ON m.MessageId = mt.MessageId
-	WHERE m.MsgType = 1 AND m.isDeleted = 0 AND m.IsTest = @IsTest AND mt.isDeleted = 0 AND mt.MsgTargetId > @MsgTargetId AND mt.MsgTargetId <= @__MsgTargetId
+	WHERE (m.MsgType = 1 OR (m.MsgType=3 AND m.MsgContentsType=110)) 
+		AND m.isDeleted = 0 AND m.IsTest = @IsTest AND mt.isDeleted = 0 
+		AND mt.MsgTargetId > @MsgTargetId AND mt.MsgTargetId <= @__MsgTargetId
 	ORDER BY mt.MsgTargetId ASC
 
 	IF @@ROWCOUNT < @BatchSize
@@ -49,7 +55,7 @@ BEGIN
 	ELSE
 		SELECT @MaxMsgTargetId = MAX(MsgTargetId) FROM #Result	
 	
-	SELECT MsgTargetId, MessageID, content_en, Content_ch, Content_cs, Content_th, Content_vn, TargetId, BetTransId
+	SELECT MsgTargetId, MessageID, content_en, Content_ch, Content_cs, Content_th, Content_vn, TargetId, BetTransId, MsgContentsType, Remark
 	FROM #Result
 	ORDER BY MsgTargetId ASC
 
