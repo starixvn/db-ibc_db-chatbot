@@ -23,6 +23,7 @@ AS
 		- 20230515@Roy: Database - HA DB061/DB062 [RedmineID: #169643]
 		- 20230829@Malcolm: Remove SABA text out of the league name for Jollysports platform [RedmineID: #193252]
 		- 20230925@Malcolm: Get MatchId [#193252]
+		- 20231101@Malcolm: Exclude Refund running tickets (MsgContenttype = 105 AND IsBatch = 1 AND MatchId > 0) [#193252]
 	
 	@SiteAsJSON
 		[
@@ -110,10 +111,11 @@ BEGIN
 	SELECT TOP (@BatchSize) m.MessageId, 1
 	FROM dbo.Msg m WITH (NOLOCK)
 		INNER JOIN dbo.MsgTarget mt WITH (NOLOCK) ON m.MessageId = mt.MessageId
+		INNER JOIN #MsgContentsTypeLst ms ON ms.MsgContentsType = m.MsgContentsType
 		INNER JOIN @DepositSuper ds ON mt.TargetId = ds.CustId
 	WHERE m.MessageId > @MessageID
 		AND m.msgtype = 1	
-		AND EXISTS (SELECT 1 FROM #MsgContentsTypeLst mct WHERE m.MsgContentsType = mct.MsgContentsType)
+		AND (ms.MsgContentsType  <> 105 OR (ms.MsgContentsType = 105 AND (m.IsBatch <> 1 OR m.MatchId <= 0)))
 		AND m.isbatch = 1	
 		AND mt.isDeleted = 0
 		AND m.Content_en LIKE '%@@%'

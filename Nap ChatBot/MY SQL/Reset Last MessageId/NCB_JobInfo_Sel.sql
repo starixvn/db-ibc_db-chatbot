@@ -11,58 +11,37 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_JobInfo_Sel`(
 			- 20220414@Malcolm: Add Job [RedmineID: #170182]
 			- 20220414@Malcolm: Add Job Monitered Player [RedmineID: #174402]
 			- 20230128@Malcolm: Scale for ChatBot [RedmineId : #181907] 
+			- 20231027@Malcolm: Get Setting [RedmineId : #195404]
+			- 20231101@Malcolm: Add Settledment - Internal CSD, Settledment - Licensee [RedmineID: #195404]			
     */
 )
 SQL SECURITY DEFINER
 BEGIN
-	DECLARE ListMsgContentsType JSON;
-    DECLARE MsgContentsTypeList JSON;
-    DECLARE pId INT DEFAULT 0;
-	DECLARE Job_Id INT;
-	DECLARE Finished INT DEFAULT 0;
-    DECLARE CurId CURSOR FOR 
-    SELECT ID FROM SystemSetting
-	WHERE DESCRIPTION LIKE '%Notification Template ID / MsgContentsType / NotificationType%';
-    DECLARE CONTINUE HANDLER FOR NOT FOUND SET Finished = 1;
-    
-    DROP TEMPORARY TABLE IF EXISTS tmp_MsgContentsType;
-    CREATE TEMPORARY TABLE IF NOT EXISTS tmp_MsgContentsType
-    (
-		JobIdentify		 INT
-		,MsgContentsType INT
-    );
-    
-    OPEN CurId;
-    GetId : LOOP
-		FETCH curId INTO pId;
-        IF Finished = 1 THEN
-			LEAVE getId;
-		END IF;
-        
-		SELECT Value, JobIdentify INTO MsgContentsTypeList, Job_Id FROM SystemSetting WHERE Id = pId;
-	    INSERT INTO tmp_MsgContentsType (JobIdentify, MsgContentsType)
-	    SELECT DISTINCT Job_Id, t.MsgContentsType
-	    FROM 
-			JSON_TABLE
-			(
-				MsgContentsTypeList,
-				"$[*]"
-				COLUMNS
-				(
-					MsgContentsType INT PATH "$.MsgContentsType"
-				)
-			) t
-            ORDER BY t.MsgContentsType;
-	END LOOP GetId;
-    CLOSE CurId;
-	
+
     SELECT JobIdentify, Value AS ReferenceId 
     FROM SystemSetting 
     WHERE Description LIKE '%- ReferenceId -%'
     ORDER BY JobIdentify;
     
-	SELECT JobIdentify, MsgContentsType 
-    FROM tmp_MsgContentsType;
+	SELECT s.JobIdentify, t.MsgContentsType
+    FROM SystemSetting s,
+	LATERAL 
+    (
+		SELECT DISTINCT t.MsgContentsType
+        FROM 
+			JSON_TABLE
+            (
+				s.Value,
+                "$[*]"
+                COLUMNS
+                (
+					MsgContentsType INT PATH "$.MsgContentsType"
+                )
+            ) AS t
+    ) AS t 
+    WHERE s.SettingName = 'NotificationTemplate'
+    ORDER BY s.JobIdentify ASC, t.MsgContentsType ASC;
+
 END;
 //
 DELIMITER ;
