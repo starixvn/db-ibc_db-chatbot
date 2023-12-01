@@ -12,7 +12,7 @@ AS
 	Revisions:
 		- 20220510@Malcolm: Initial SP [redmine: #167819]
 		- 20221020@Malcolm: Hide problem accounts (group betting) [redmine: #178796]
-
+		- 20231201@Johnson: Hide robot accounts [redmine:#196735]
 	Parameter's Explanation:
 		- HiddenSite=0 [default]
 		- HiddenSite=1 [credit]
@@ -40,7 +40,7 @@ BEGIN
 	SELECT TOP(@BatchSize) LogID, custid, d.CreatedDate
 	FROM dbo.CustCategoryHistory d WITH(NOLOCK)
 	WHERE EXISTS (SELECT 1 FROM #CategoryConfig c WHERE c.CustomerClass = d.CustomerClass AND HiddenSite IN (0, 2))
-		AND NOT EXISTS (SELECT 1 FROM #CategoryConfig c WHERE c.CustomerClass = d.OldCustomerClass)
+		AND NOT EXISTS (SELECT 1 FROM #CategoryConfig c WHERE c.CustomerClass = d.OldCustomerClass AND HiddenSite IN (0, 2))
 		AND d.LogID > @LastLogId 
 		AND d.LogID <= @MaxLogId
 	ORDER BY d.LogID ASC
