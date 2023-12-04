@@ -3,6 +3,8 @@ ALTER PROCEDURE [dbo].[NAP_Chatbot_SpecialDelete_AbnormalBets_Sel]
 	@TicketInfo    		XML
 	,@UsernameLst  		XML
 	,@DuplicatedInfo 	XML
+	,@MessageInfo		XML
+	,@MessageDetail 	XML
 AS
 
 /*
@@ -24,6 +26,7 @@ AS
 		- 20230207@Malcolm: Split 789y site [RedmineId: #182692]
 		- 20230731@Malcolm: Incorporate voiding duplicated bet tickets with TVS [RedmineId : #191355]
 		- 20231017@Malcolm: Get Winlostdate for Abnormal Account [RedmineId : #195546]
+		- 20231117@Malcolm: Get data for voiding Abnormal Bets by Void By BetID [RedmineId : #196660]	
 
 	Param's Explanation:
 		+ @TicketInfo:
@@ -37,6 +40,14 @@ AS
 		+ @DuplicatedInfo 
 			<root>
 				<r VoidingHistoryCollectionId="1" VoidingHistoryId="1" CustId="1232" OrgTransId="1" VoidedTransId="1" Status="Running" Stake="200" IsParlay="1" Transdate="2023-01-01"/>
+			</root>
+		+ @MessageInfo
+			<root>
+				<r VoidingHistoryCollectionId="1" MessageId="1" Content_en="Content_en" Content_cs="Content_cs" CreatorName="starix"/>
+			</root>
+		+ @MessageDetail
+			<root>
+				<r MessageId="1" MsgTargetId="1" BetTransId="189009480506146855" TargetId="1411915"/>
 			</root>
 */
 
@@ -90,8 +101,53 @@ BEGIN
 		,t.c.value('@IsParlay', 'BIT') AS IsParlay
 		,t.c.value('@Transdate', 'DATETIME') AS Transdate
 	FROM @DuplicatedInfo.nodes('root/r') AS t(c)
-	OPTION (OPTIMIZE FOR ( @DuplicatedInfo = NULL))
+	OPTION (OPTIMIZE FOR (@DuplicatedInfo = NULL))
 
+	CREATE TABLE #MessageDetail (MessageId INT, MsgTargetId INT, TargetId INT, TransId BIGINT, MatchId INT, Bettype INT, liveindicator BIT, CustId INT, Recommend INT, IsTest BIT, SubIssueTypeID TINYINT)
+	
+	INSERT INTO #MessageDetail (MessageId, MsgTargetId, TargetId, TransId)
+	SELECT
+		t.c.value('@MessageId', 'INT') AS MessageId
+		,t.c.value('@MsgTargetId', 'INT') AS MsgTargetId
+		,t.c.value('@TargetId', 'INT') AS TargetId
+		,n.TransId
+	FROM @MessageDetail.nodes('root/r') AS t(c)
+		CROSS APPLY (
+			SELECT CONVERT(BIGINT, value) AS TransId FROM STRING_SPLIT(t.c.value('@BetTransId', 'VARCHAR(MAX)'), ',') AS d
+		) n
+	WHERE n.TransId <> 0
+	OPTION (OPTIMIZE FOR (@MessageDetail = NULL))
+
+	CREATE TABLE #MessageInfo (VoidingHistoryCollectionId INT, MessageId INT, CreatorName NVARCHAR(50), Content_en NVARCHAR(4000), Content_cs NVARCHAR(4000))
+	
+	INSERT INTO #MessageInfo (VoidingHistoryCollectionId, MessageId, CreatorName, Content_en, Content_cs)
+	SELECT
+		t.c.value('@VoidingHistoryCollectionId ', 'INT') AS VoidingHistoryCollectionId 
+		,t.c.value('@MessageId ', 'INT') AS MessageId 
+		,t.c.value('@CreatorName ', 'NVARCHAR(50)') AS CreatorName 
+		,t.c.value('@Content_en ', 'NVARCHAR(4000)') AS Content_en 
+		,t.c.value('@Content_cs ', 'NVARCHAR(4000)') AS Content_cs 
+	FROM @MessageInfo.nodes('root/r') AS t(c)
+	OPTION (OPTIMIZE FOR (@MessageInfo = NULL))
+
+	CREATE CLUSTERED INDEX CIX_MessageInfo ON #MessageInfo (VoidingHistoryCollectionId, MessageId)
+
+	CREATE CLUSTERED INDEX CIX_MessageDetail ON #MessageDetail (MessageId)
+
+	DELETE m
+	FROM #MessageInfo m
+	WHERE EXISTS (SELECT 1 FROM bodb02.dbo.TicketVoiding_VoidingHistory vh WITH(NOLOCK) WHERE vh.MessageId = m.MessageId)
+		AND m.VoidingHistoryCollectionId = 0
+
+	DELETE md
+	FROM #MessageDetail	md
+	WHERE NOT EXISTS (SELECT 1 FROM #MessageInfo m WHERE m.MessageId = md.MessageId AND m.VoidingHistoryCollectionId = 0)
+
+	DELETE md
+	FROM #MessageDetail md
+		INNER JOIN bodb02.dbo.Customer c WITH(NOLOCK) ON c.custid = md.TargetId
+	WHERE c.roleid <> 1
+		
 	UPDATE d
 		SET d.MessageId = vh.MessageId
 	FROM #DuplicatedInfo d
@@ -227,6 +283,173 @@ BEGIN
 		WHERE vh.IssueTypeId IN (11, 15) -- Abnormal Bets, AB (real member)
 	END
 
+
+	DECLARE @Result TABLE (VoidingHistoryCollectionId INT, MessageId INT, IsTest BIT, TotalTickets INT, RequestIdLst NVARCHAR(MAX), DecIdedByLst NVARCHAR(MAX), RequestByLst NVARCHAR(MAX), VoIdByLst NVARCHAR(MAX), 
+		ReasonLst NVARCHAR(MAX), KickOffTime NVARCHAR(MAX), LeagueName NVARCHAR(MAX), HomeName NVARCHAR(MAX), AwayName NVARCHAR(MAX), HalfTimeHomeScore INT, HalfTimeAwayScore INT,FullTimeHomeScore INT,  FullTimeAwayScore INT
+		, TypeNameLst NVARCHAR(MAX), CreditSiteLst NVARCHAR(MAX), DepositSiteLst NVARCHAR(MAX), Matchid INT, IssueTypeId TINYINT, IsParlay BIT)
+
+	-- Process for void by betID
+	BEGIN	
+
+		UPDATE m
+			SET m.Bettype = b.bettype, m.liveindicator = b.liveindicator, m.CustId = b.custid, m.Recommend = b.recommend, m.MatchId = b.matchid, m.IsTest = CASE WHEN b.currency = 20 THEN 1 ELSE 0 END
+		FROM #MessageDetail m
+			INNER JOIN bettrans b WITH(NOLOCK) ON b.TransId = m.TransId
+
+		UPDATE m
+			SET m.Bettype = b.bettype, m.liveindicator = b.liveindicator, m.CustId = b.custid, m.Recommend = b.recommend, M.MatchId = b.matchid, m.IsTest = CASE WHEN b.currency = 20 THEN 1 ELSE 0 END
+		FROM #MessageDetail m
+			INNER JOIN bettrans14 b WITH(NOLOCK) ON b.TransId = m.TransId
+
+		UPDATE m
+			SET m.SubIssueTypeID = v.SubIssueTypeID
+		FROM #MessageDetail m
+			INNER JOIN dbo.TicketVoiding_VoidedTransaction v WITH(NOLOCK) ON v.TransId = m.TransId
+
+		;WITH CTE_Match AS (
+			SELECT MessageId, MAX(MatchId) AS MatchId, COUNT(DISTINCT MatchId) AS NoMatch FROM #MessageDetail GROUP BY MessageId
+		)
+		UPDATE m	
+			SET m.MatchId = CASE WHEN ma.NoMatch > 1 THEN 0 ELSE m.MatchId END
+		FROM #MessageDetail m
+			INNER JOIN CTE_Match ma ON ma.MessageId = m.MessageId
+
+		;WITH CTE_Match AS (
+			SELECT MessageId, MatchId, COUNT(DISTINCT TransId) AS TotalTickets, MIN(CONVERT(TINYINT, IsTest)) AS IsTest, MAX(SubIssueTypeID) AS SubIssueTypeID 
+			FROM #MessageDetail 
+			GROUP BY MessageId, MatchId
+		),CTE_EventInfo AS (
+			SELECT 
+				e.MessageId
+				,FORMAT(DATEADD(HOUR, 12, m.kickofftime), N'h:mm tt') AS KickOffTime 
+				,h.TeamName + (CASE WHEN m.IsNeutral = 1 THEN ' (N)' ELSE '' END) AS HomeTeam
+				,aw.teamname AS AwayTeam
+				,l.leaguename
+				,m.HalfTimeHomeScore
+				,m.HalfTimeAwayScore
+				,m.FullTimeHomeScore
+				,m.FullTimeAwayScore
+			FROM CTE_Match e 
+				CROSS APPLY (
+					SELECT 
+						m.matchid
+						,m.homeid
+						,m.awayid
+						,m.kickofftime
+						,m.leagueid
+						,m.hthomescore AS HalfTimeHomeScore
+						,m.htawayscore AS HalfTimeAwayScore
+						,m.finalhomescore AS FullTimeHomeScore
+						,m.finalawayscore AS FullTimeAwayScore
+						,m.IsNeutral
+					FROM dbo.match m WITH(NOLOCK) 
+					WHERE m.matchid = e.MatchId
+					UNION ALL
+					SELECT 
+						m.matchid
+						,m.homeid
+						,m.awayid
+						,m.kickofftime
+						,m.leagueid
+						,m.hthomescore AS HalfTimeHomeScore
+						,m.htawayscore AS HalfTimeAwayScore
+						,m.finalhomescore AS FullTimeHomeScore
+						,m.finalawayscore AS FullTimeAwayScore
+						,m.IsNeutral
+					FROM dbo.match14 m WITH(NOLOCK) 
+					WHERE m.matchid = e.MatchId
+				) AS m
+				INNER JOIN dbo.Team h WITH(NOLOCK) ON h.teamid = m.homeid
+				INNER JOIN dbo.Team aw WITH(NOLOCK) ON aw.teamid = m.awayid
+				INNER JOIN dbo.league l WITH(NOLOCK) ON l.leagueid = m.leagueid
+		), CTE_Bettype AS (
+			SELECT
+				m.MessageId
+				,CASE WHEN m.liveindicator = 0 THEN 'Non-Live ' + ISNULL(d.typenamee, b.typenamee)
+				ELSE 'Live ' + ISNULL(d.typenamee, b.typenamee) END  AS TypeName
+			FROM #MessageDetail m	
+				INNER JOIN dbo.bettype b WITH (NOLOCK) ON m.bettype = b.typeId
+				LEFT JOIN dbo.bettype d WITH (NOLOCK) ON b.DisplayedTypeId = d.typeId
+			GROUP BY 
+				m.MessageId
+				,CASE WHEN m.liveindicator = 0 THEN 'Non-Live ' + ISNULL(d.typenamee, b.typenamee)
+				ELSE 'Live ' + ISNULL(d.typenamee, b.typenamee) END 
+		), CTE_Site AS (
+			SELECT DISTINCT
+				t.MessageId
+				,CASE WHEN ISNULL(st.SiteLabel, '') = '789y' THEN  '789y'
+					  WHEN s.custId IS NULL AND c.site <> 'CN88' THEN 'NV88'   
+				 ELSE c.site END AS site
+				,CASE WHEN s.custId IS NULL THEN 0 ELSE 1 END AS isDeposit
+			FROM #MessageDetail t
+				INNER JOIN dbo.Customer c WITH(NOLOCK) ON t.recommend = c.custId
+				INNER JOIN dbo.Site st WITH(NOLOCK) ON st.site = c.site
+				LEFT JOIN dbo.Dep_CustSuper s WITH (NOLOCK) ON c.srecommend = s.custId
+		), CTE_SiteMsg AS
+		(
+			SELECT
+				MessageId
+				,STUFF((SELECT DISTINCT N', ' + CONVERT(NVARCHAR(2000), r2.site) FROM CTE_Site r2 WHERE r2.MessageId = b.MessageId AND isDeposit = 0 FOR XML PATH ('')), 1, 1, '') AS CreditSiteLst
+				,STUFF((SELECT DISTINCT N', ' + CONVERT(NVARCHAR(2000), r2.site) FROM CTE_Site r2 WHERE r2.MessageId = b.MessageId AND isDeposit = 1 FOR XML PATH ('')), 1, 1, '') AS DepositSiteLst
+				,STUFF((SELECT DISTINCT N', ' + CONVERT(NVARCHAR(2000), r2.TypeName) FROM CTE_Bettype r2 WHERE r2.MessageId = b.MessageId  FOR XML PATH ('')), 1, 1, '') AS TypeName
+			FROM CTE_Match b
+		)
+		INSERT INTO @Result 
+		(
+			VoidingHistoryCollectionId
+			,MessageId
+			,IsTest 
+			,TotalTickets 
+			,RequestIdLst 
+			,DecIdedByLst 
+			,RequestByLst 
+			,VoIdByLst
+			,ReasonLst 
+			,KickOffTime 
+			,LeagueName 
+			,HomeName 
+			,AwayName 
+			,HalfTimeHomeScore 
+			,HalfTimeAwayScore 
+			,FullTimeHomeScore 
+			,FullTimeAwayScore 
+			,TypeNameLst 
+			,CreditSiteLst
+			,DepositSiteLst 
+			,Matchid 
+			,IssueTypeId 
+			,IsParlay
+		)
+		SELECT 
+			0 AS VoidingHistoryCollectionId
+			,m.MessageId
+			,ISNULL(m.IsTest, 0) AS IsTest
+			,ISNULL(m.TotalTickets, 0) AS TotalTickets
+			,'N/A' AS RequestIdLst
+			,'N/A' AS DecIdedByLst
+			,'N/A' AS RequestByLst
+			,mi.CreatorName AS VoIdByLst
+			,ISNULL(t.SubIssueTypeName, 'N/A') AS ReasonLst
+			,ISNULL(e.kickofftime, 'N/A')
+			,ISNULL(e.leaguename, 'N/A')
+			,ISNULL(e.HomeTeam, 'N/A')
+			,ISNULL(e.AwayTeam, 'N/A')
+			,e.HalfTimeHomeScore
+			,e.HalfTimeAwayScore
+			,e.FullTimeHomeScore
+			,e.FullTimeAwayScore
+			,ISNULL(s.TypeName, '')
+			,ISNULL(s.CreditSiteLst, '')
+			,ISNULL(s.DepositSiteLst, '')
+			,m.MatchId
+			,0 AS IssueTypeId
+			,0 AS IsParlay
+		FROM CTE_Match m
+			LEFT JOIN dbo.TicketVoiding_SubIssueType  t WITH(NOLOCK) ON t.SubIssueTypeId = m.SubIssueTypeID
+			LEFT JOIN CTE_EventInfo e ON e.MessageId = m.MessageId 
+			LEFT JOIN CTE_SiteMsg s ON s.MessageId = m.MessageId 
+			LEFT JOIN #MessageInfo mi ON mi.MessageId = m.MessageId
+	END
 	-- Return Data
 	BEGIN
 		-- Request Info
@@ -298,8 +521,35 @@ BEGIN
 			FROM CTE_site s1
 			GROUP BY s1.VoidingHistoryCollectionId
 		)
+		INSERT INTO @Result 
+		(
+			VoidingHistoryCollectionId
+			,MessageId 
+			,IsTest 
+			,TotalTickets 
+			,RequestIdLst 
+			,DecIdedByLst 
+			,RequestByLst 
+			,VoIdByLst 
+			,ReasonLst 
+			,KickOffTime
+			,LeagueName
+			,HomeName 
+			,AwayName 
+			,HalfTimeHomeScore 
+			,HalfTimeAwayScore 
+			,FullTimeHomeScore 
+			,FullTimeAwayScore 
+			,TypeNameLst 
+			,CreditSiteLst 
+			,DepositSiteLst 
+			,Matchid 
+			,IssueTypeId 
+			,IsParlay 
+		)
 		SELECT
 			r.VoidingHistoryCollectionId
+			, 0 AS MessageId
 			,ISNULL(CONVERT(BIT, s.IsTest), 0)	AS IsTest
 			,ISNULL(t.TotalTickets, 0)			AS TotalTickets
 			,ISNULL(r.RequestIdLst, '')			AS RequestIdLst
@@ -327,11 +577,46 @@ BEGIN
 			LEFT JOIN CTE_MsgBettype b ON r.VoidingHistoryCollectionId = b.VoidingHistoryCollectionId
 			LEFT JOIN CTE_MsgSite s ON r.VoidingHistoryCollectionId = s.VoidingHistoryCollectionId		
 
+		SELECT 
+			r.VoidingHistoryCollectionId
+			,r.MessageId 
+			,r.IsTest 
+			,r.TotalTickets 
+			,r.RequestIdLst 
+			,r.DecIdedByLst 
+			,r.RequestByLst 
+			,r.VoIdByLst 
+			,r.ReasonLst 
+			,r.KickOffTime
+			,r.LeagueName
+			,r.HomeName 
+			,r.AwayName 
+			,r.HalfTimeHomeScore 
+			,r.HalfTimeAwayScore 
+			,r.FullTimeHomeScore 
+			,r.FullTimeAwayScore 
+			,r.TypeNameLst 
+			,r.CreditSiteLst 
+			,r.DepositSiteLst 
+			,r.Matchid 
+			,r.IssueTypeId 
+			,r.IsParlay 
+			,m.Content_en
+			,m.Content_cs
+		FROM @Result r
+			LEFT JOIN #MessageInfo m ON m.VoidingHistoryCollectionId = r.VoidingHistoryCollectionId AND m.MessageId = r.MessageId
+
+		;WITH CTE_Message AS (
+			SELECT DISTINCT MessageId FROM #MessageDetail
+		)
 		SELECT c.VoidingHistoryCollectionId, vh.MessageId
 		FROM dbo.VoidingHistoryCollection c WITH(NOLOCK)
 			INNER JOIN dbo.VoidingHistoryCollectionDetail vcd WITH(NOLOCK) ON vcd.VoidingHistoryCollectionId = c.VoidingHistoryCollectionId
 			INNER JOIN dbo.TicketVoiding_VoidingHistory vh WITH(NOLOCK) ON vh.VoidingHistoryId = vcd.VoidingHistoryId
 		WHERE EXISTS (SELECT 1 FROM #VoidingHistoryCollection hc WHERE hc.VoidingHistoryCollectionId = c.VoidingHistoryCollectionId) 
+		UNION ALL
+		SELECT 0 AS VoidingHistoryCollection, m.MessageId
+		FROM CTE_Message m
 
 		SELECT 
 			a.VoidingHistoryCollectionId
@@ -380,5 +665,7 @@ BEGIN
 	DROP TABLE #tblEventInfo
 	DROP TABLE #tblRequestInfo
 	DROP TABLE #DuplicatedInfo
+	DROP TABLE #MessageDetail
+	DROP TABLE #MessageInfo
 END
 GO

@@ -16,6 +16,7 @@ AS
 		- 20210405@Malcolm: Add RequestId for Ticket Voiding Abnormal Accounts [RedmineID: #152175]
 		- 20220112@Malcolm: Scale Out for ChatBot [RedmineId : #181907]
 		- 20230731@Malcolm: Incorporate voiding duplicated bet tickets with TVS [RedmineId : #191355]
+		- 20231117@Malcolm: Get data for voiding Abnormal Bets by Void By BetID [RedmineId : #196660]	
 */
 
 BEGIN
@@ -82,6 +83,10 @@ BEGIN
 	SELECT VoidingHistoryCollectionId, VoidingHistoryId, DuplicatedTickets, FilterBy, IssueTypeId
 	FROM #Result
 	WHERE IssueTypeId = 20 -- Duplicated tickets
+
+	SELECT DISTINCT r.VoidingHistoryCollectionId, vh.MessageId
+	FROM #Result r
+		INNER JOIN bodb02.dbo.TicketVoiding_VoidingHistory vh WITH(NOLOCK) ON vh.VoidingHistoryId = r.VoidingHistoryId
 
 	DROP TABLE #Result
 END
