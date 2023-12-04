@@ -4,7 +4,7 @@ DROP PROCEDURE IF EXISTS NCB_SettingConfiguration_JobInfo_Sel;
 DELIMITER //
 
 CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_SettingConfiguration_JobInfo_Sel`(
-    IN      jobId       INT
+    IN jobId INT
     /*
 		Creator: 20200417@Merlin
 		Task:
@@ -14,41 +14,29 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_SettingConfiguration_JobInfo_S
 			- 20210513@Malcolm: Integrate Telegram [RedmineID: #151807]
 			- 20220412@Malcolm: Get LogId [RedmineID: #170182]
 			- 20230128@Malcolm: Scale for ChatBot [RedmineId : #181907] 
+			- 20231123@Malcolm: Get setting by jobID [RedmineId : #196660]
     */
 )
 SQL SECURITY DEFINER
 BEGIN
-    DECLARE jobStatus       VARCHAR (10);
-    DECLARE jobBatchSize    INT;
-    DECLARE maxMessageId    INT;
-    DECLARE testingGroup    TEXT;
-
-    SELECT ss.Value INTO jobStatus
-    FROM SystemSetting ss
-    WHERE ss.JobIdentify = jobId
-        AND ss.Description LIKE '%Job Sync Status%';
-
-    SELECT ss.Value INTO jobBatchSize
-    FROM SystemSetting ss
-    WHERE ss.JobIdentify = jobId
-        AND ss.Description LIKE '%Batch Size%';
-
-    SELECT ss.Value INTO maxMessageId
-    FROM SystemSetting ss
-    WHERE ss.JobIdentify = jobId
-        AND ss.Description LIKE '%- ReferenceId -%';
-
-    SELECT ss.Value INTO testingGroup
-    FROM SystemSetting ss
-    WHERE ss.JobIdentify = jobId
-        AND ss.Description LIKE '%Chat group ID%';
-		
-    SELECT
-        jobId           AS  Id
-        ,jobStatus      AS  Status
-        ,jobBatchSize   AS  BatchSize
-        ,maxMessageId   AS  PreviousMaxMessageId
-        ,testingGroup   AS  TestingGroup;
+    DROP TEMPORARY TABLE IF EXISTS tmp_SettingName;
+	CREATE TEMPORARY TABLE tmp_SettingName
+	(
+		SettingName VARCHAR(200)
+	);
+   
+	INSERT INTO tmp_SettingName (SettingName)
+	SELECT SettingName
+	FROM SystemSetting
+	WHERE JobIdentify = jobId AND IFNULL(SettingName, '') <>  '';
+    
+    SELECT CONCAT('SELECT ', jobId, ' AS Id, ', GROUP_CONCAT(CONCAT('MAX(IF(SettingName = ''', SettingName, ''', Value, NULL)) AS ', SettingName)), ' FROM SystemSetting WHERE JobIdentify = ''', jobId, ''';')
+    INTO @QuerySql
+    FROM tmp_SettingName;
+    
+	PREPARE stmt FROM @QuerySql;
+	EXECUTE stmt;
+	DEALLOCATE PREPARE stmt;
 END;
 
 //

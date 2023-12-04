@@ -14,10 +14,11 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_JobInfo_Upd`(
 			- 20220414@Malcolm: Add Job [RedmineID: #170182]
 			- 20220414@Malcolm: Add Job Monitered Player [RedmineID: #174402]
 			- 20220414@Malcolm: Add Job Settledment - Internal CSD, Settledment - Licensee [RedmineID: #195404]
+			- 20231122@Malcolm: Add Setting name [RedmineID: #196660]
 		Param:
 				- @JobInfo
 							[  
-								{ "JobIdentify":1, "ReferenceId":"12" }
+								{ "JobIdentify":2, "ReferenceId":"12", "SettingName":"LastMsgTargetId"}
 							]
     */
 )
@@ -27,13 +28,14 @@ BEGIN
     CREATE TEMPORARY TABLE IF NOT EXISTS tmp_JobInfo
     (
 		JobIdentify TINYINT, 
-        ReferenceId BIGINT UNSIGNED
+        ReferenceId BIGINT UNSIGNED,
+		SettingName VARCHAR(200)
     );
     
     SET errCode = 0, errMsg = '';
     
-    INSERT INTO tmp_JobInfo (JobIdentify, ReferenceId)
-    SELECT t.JobIdentify, t.ReferenceId
+    INSERT INTO tmp_JobInfo (JobIdentify, ReferenceId, SettingName)
+    SELECT t.JobIdentify, t.ReferenceId, t.SettingName
     FROM 
 		JSON_TABLE
         (
@@ -42,14 +44,14 @@ BEGIN
             COLUMNS
             (
 				JobIdentify TINYINT PATH "$.JobIdentify", 
-				ReferenceId BIGINT UNSIGNED PATH "$.ReferenceId"
+				ReferenceId BIGINT UNSIGNED PATH "$.ReferenceId",
+				SettingName VARCHAR(200) PATH "$.SettingName"
             )
         ) AS t;
         
     UPDATE SystemSetting AS s
-	INNER JOIN tmp_JobInfo AS j ON j.JobIdentify = s.JobIdentify
-		SET s.Value = j.ReferenceId
-    WHERE s.ID IN (3, 8, 13, 20, 25, 33, 38);
+	INNER JOIN tmp_JobInfo AS j ON j.JobIdentify = s.JobIdentify AND s.SettingName = j.SettingName
+		SET s.Value = j.ReferenceId;
 
     UPDATE SystemSetting AS s
 	INNER JOIN tmp_JobInfo AS j ON j.JobIdentify = s.JobIdentify

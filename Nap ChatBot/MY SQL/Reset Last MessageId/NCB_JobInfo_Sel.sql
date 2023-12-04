@@ -12,13 +12,14 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_JobInfo_Sel`(
 			- 20220414@Malcolm: Add Job Monitered Player [RedmineID: #174402]
 			- 20230128@Malcolm: Scale for ChatBot [RedmineId : #181907] 
 			- 20231027@Malcolm: Get Setting [RedmineId : #195404]
-			- 20231101@Malcolm: Add Settledment - Internal CSD, Settledment - Licensee [RedmineID: #195404]			
+			- 20231101@Malcolm: Add Settledment - Internal CSD, Settledment - Licensee [RedmineID: #195404]		
+            - 20231122@Malcolm: Add MsgTargetId for Job : Internal - CSD [RedmineID: #196660]	
     */
 )
 SQL SECURITY DEFINER
 BEGIN
 
-    SELECT JobIdentify, Value AS ReferenceId 
+    SELECT JobIdentify, Value AS ReferenceId, SettingName
     FROM SystemSetting 
     WHERE Description LIKE '%- ReferenceId -%'
     ORDER BY JobIdentify;

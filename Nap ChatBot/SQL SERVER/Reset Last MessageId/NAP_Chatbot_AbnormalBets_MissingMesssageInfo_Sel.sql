@@ -10,12 +10,13 @@ AS
 	Revisions:
 		- 20211007@Malcolm: Initialize SP [RedmineID: #162825]
 		- 20230118@Malcolm: Scale out for ChatBot [RedmineID: #181907]
+		- 20231122@Malcolm: Get setting for Internal - CSD [RedmineID: #196660]
 
 	Param's Explanation:
 	@MessageList: 
 			<root>
-				<r JobIdentify="1" ReferenceId="1" />
-				<r JobIdentify="3" ReferenceId="12" />
+				<r JobIdentify="1" ReferenceId="1" SettingName="LastVoidingHistoryCollectionId" />
+				<r JobIdentify="3" ReferenceId="12" SettingName="LastVoidingHistoryCollectionId"/>
 			</root>
 */
 BEGIN
@@ -27,7 +28,7 @@ BEGIN
 
 	SELECT @FromVoidingHistoryCollectionId = t.c.value ('@ReferenceId', 'INT') 
 	FROM @MessageList.nodes('root/r') t(c)
-	WHERE t.c.value ('@JobIdentify', 'TINYINT') = 2
+	WHERE t.c.value ('@JobIdentify', 'TINYINT') = 2 AND t.c.value ('@SettingName', 'VARCHAR(200)') = 'LastVoidingHistoryCollectionId'
 	OPTION (OPTIMIZE FOR (@MessageList = NULL))
 	
 	SELECT @MaxVoidingHistoryCollectionId = MAX(VoidingHistoryCollectionId) FROM dbo.VoidingHistoryCollection WITH(NOLOCK)

@@ -16,13 +16,14 @@ AS
 		- 20220116@Malcolm: Scale out for ChatBot [RedmineId: #181907]
 		- 20230515@Roy: Database - HA DB061/DB062 [RedmineID: #169643]
 		- 20231101@Malcolm: Add Settledment - Internal CSD, Settledment - Licensee [RedmineID: #195404]
+		- 20231123@Malcolm: Add void by betID [RedmineID: #196660]
 	
 	. @MessageList
 			<root>
-				<r JobIdentify="1" ReferenceId="1"/>
-				<r JobIdentify="3" ReferenceId="1"/>
-				<r JobIdentify="6" ReferenceId="1"/>
-				<r JobIdentify="7" ReferenceId="1"/>
+				<r JobIdentify="1" ReferenceId="1" SettingName=""/>
+				<r JobIdentify="3" ReferenceId="1" SettingName=""/>
+				<r JobIdentify="6" ReferenceId="1" SettingName=""/>
+				<r JobIdentify="7" ReferenceId="1" SettingName=""/>
 			</root>
 
 	. @MsgContentsTypeList
@@ -74,7 +75,7 @@ BEGIN
 
 	SELECT @MaxMsgTargetId = MAX(MsgTargetId) FROM dbo.MsgTarget WITH(NOLOCK)
 
-	DECLARE @Msg TABLE (VoidingHistoryCollectionId INT, MsgTargetId INT, MessageId INT, MessageIds VARCHAR(MAX), Content_en NVARCHAR(4000), Posttime DATETIME, JobIdentify TINYINT)
+	DECLARE @Msg TABLE (VoidingHistoryCollectionId INT, MsgTargetId INT, MessageId INT, MessageIds VARCHAR(MAX), Content_en NVARCHAR(4000), Posttime DATETIME, JobIdentify TINYINT, TargetId INT)
 
 	DECLARE @MsgContentType TABLE (JobIdentify INT, MsgContentType TINYINT)
 	INSERT INTO @MsgContentType (JobIdentify, MsgContentType)
@@ -85,11 +86,12 @@ BEGIN
 	WHERE t.c.value ('@JobIdentify', 'TINYINT') <> 0
 	OPTION (OPTIMIZE FOR (@MsgContentsTypeList = NULL))
 
-	DECLARE @Message TABLE (JobIdentify TINYINT, FromReferenceId INT)
-	INSERT INTO @Message (JobIdentify, FromReferenceId)
+	DECLARE @Message TABLE (JobIdentify TINYINT, FromReferenceId INT, SettingName VARCHAR(200))
+	INSERT INTO @Message (JobIdentify, FromReferenceId, SettingName)
 	SELECT 
 		t.c.value ('@JobIdentify', 'TINYINT') AS JobIdentify
 		,t.c.value ('@ReferenceId', 'INT') AS FromReferenceId
+		,t.c.value ('@SettingName', 'VARCHAR(200)') AS SettingName
 	FROM @MessageList.nodes('root/r') t(c)
 	WHERE t.c.value ('@JobIdentify', 'TINYINT') <> 0
 	OPTION (OPTIMIZE FOR (@MessageList = NULL))
@@ -158,6 +160,18 @@ BEGIN
 		SELECT c.VoidingHistoryCollectionId, c.MessageIds, m.Content_en, 2 AS JobIdentify, m.PostTime
 		FROM CTE_Session c
 			INNER JOIN dbo.Msg m WITH(NOLOCK) ON m.MessageId = c.MessageId
+	END
+	
+	IF EXISTS (SELECT 1 FROM @Message WHERE JobIdentify = 2)
+	BEGIN
+		SELECT @FromReferenceId = NULL, @ToReferenceId = @MaxMsgTargetId
+		SELECT TOP(1) @FromReferenceId = FromReferenceId FROM @Message WHERE JobIdentify = 2 AND SettingName = 'LastMsgTargetId'
+		
+		INSERT INTO @Msg (VoidingHistoryCollectionId, MessageId, MsgTargetId, Content_en, JobIdentify, Posttime, TargetId)
+		SELECT 0 AS VoidingHistoryCollectionId, m.MessageId, mt.MsgTargetId, m.Content_en, 2 AS JobIdentify, m.PostTime, mt.TargetId
+		FROM dbo.Msg m WITH(NOLOCK)
+			INNER JOIN dbo.MsgTarget mt WITH(NOLOCK) ON mt.MessageId = m.MessageId
+		WHERE m.MsgContentsType = 103 AND mt.MsgTargetId > @FromReferenceId AND mt.MsgTargetId <= @MaxMsgTargetId
 	END
 
 	IF EXISTS (SELECT 1 FROM @Message WHERE JobIdentify = 3)
@@ -228,6 +242,7 @@ BEGIN
 		,MessageIds
 		,Content_en
 		,DATEADD(HOUR, 12, Posttime) AS Posttime
+		,TargetId
 		,JobIdentify 
 	FROM @Msg
 	ORDER BY JobIdentify ASC, VoidingHistoryCollectionId DESC, ISNULL(MsgTargetId, 0) DESC, MessageId DESC
