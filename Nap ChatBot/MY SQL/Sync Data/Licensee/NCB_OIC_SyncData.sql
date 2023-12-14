@@ -9,6 +9,8 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_OIC_SyncData(
 	IN LicenseeTypes JSON, 
 	IN Products JSON, 
 	IN Platforms JSON,
+	IN IntegrationMethod JSON,
+	IN LicenseeIntegrationMethod JSON,
     OUT errCode INT,
     OUT errMsg VARCHAR(200)
 
@@ -27,6 +29,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_OIC_SyncData(
                 - 20211021@Malcolm: add Product Status - Redmine: #161727
 				- 20211021@Malcolm: Integrate the change of Licensee type from OIC - Redmine: #163779
                 - 20220705@Malcolm: Get those integrating/Upcomming licensees [RedmineId: 174425]
+				- 20230908@Malcolm: Get Integration Method [RedmineId: 191062]
     */
 )
 SQL SECURITY DEFINER
@@ -42,7 +45,7 @@ BEGIN
 	DECLARE INTEGRATING_LICENSEE_SOURCE_DESCRIPTION VARCHAR(50) DEFAULT 'DBCust.CustDB.dbo.Site (SiteId + 100000)';
     DECLARE PRODUCT_SOURCE_DESCRIPTION VARCHAR(50) DEFAULT 'bodb_OIC.dbo.Product';
 
-############################ Licensee ###########################################
+	############################ Licensee ###########################################
 
     DROP TEMPORARY TABLE IF EXISTS tmp_Licensee;
     CREATE TEMPORARY TABLE IF NOT EXISTS tmp_Licensee
@@ -149,7 +152,7 @@ BEGIN
 		WHERE td.IsDeleted = -1;
     END IF;
 
-############################ Licensee Product ###########################################
+	############################ Licensee Product ###########################################
 
     DROP TEMPORARY TABLE IF EXISTS tmp_LicenseeProduct;
     CREATE TEMPORARY TABLE IF NOT EXISTS tmp_LicenseeProduct
@@ -223,7 +226,7 @@ BEGIN
         WHERE td.IsDeleted = 1;
     END IF;
 
-############################ Licensee Status ###########################################
+	############################ Licensee Status ###########################################
 
     DROP TEMPORARY TABLE IF EXISTS tmp_LicenseeStatus;
     CREATE TEMPORARY TABLE IF NOT EXISTS tmp_LicenseeStatus(LicenseeStatusId TINYINT UNSIGNED PRIMARY KEY, LicenseeStatusName VARCHAR(30) CHARACTER SET 'utf8mb4'  COLLATE 'utf8mb4_unicode_ci');
@@ -281,7 +284,7 @@ BEGIN
         WHERE td.IsDeleted = 1;
     END IF;
 
-############################ Licensee Types ###########################################
+	############################ Licensee Types ###########################################
 
     DROP TEMPORARY TABLE IF EXISTS tmp_LicenseeType;
     CREATE TEMPORARY TABLE IF NOT EXISTS tmp_LicenseeType(LicenseeTypeId TINYINT UNSIGNED PRIMARY KEY, LicenseeTypeName VARCHAR(50) CHARACTER SET 'utf8mb4'  COLLATE 'utf8mb4_unicode_ci');
@@ -339,7 +342,7 @@ BEGIN
         WHERE td.IsDeleted = 1;
     END IF;
 
-############################ Products ###########################################
+	############################ Products ###########################################
 
     DROP TEMPORARY TABLE IF EXISTS tmp_Product;
     CREATE TEMPORARY TABLE IF NOT EXISTS tmp_Product(ProductId TINYINT UNSIGNED PRIMARY KEY, ProductName VARCHAR(50) CHARACTER SET 'utf8mb4'  COLLATE 'utf8mb4_unicode_ci', IsDisabled BIT);
@@ -400,7 +403,7 @@ BEGIN
         WHERE td.IsDeleted = 1;
     END IF;
 	
-############################ Platform ###########################################
+	############################ Platform ###########################################
 
 	DROP TEMPORARY TABLE IF EXISTS tmp_Platform;
     CREATE TEMPORARY TABLE IF NOT EXISTS tmp_Platform (PlatformId TINYINT UNSIGNED PRIMARY KEY, PlatformName VARCHAR(50) CHARACTER SET 'utf8mb4'  COLLATE 'utf8mb4_unicode_ci');
@@ -457,8 +460,115 @@ BEGIN
         FROM tmp_Data td
         WHERE td.IsDeleted = 1;
     END IF;
+	
+	############################ IntegrationMethod ###########################################
 
-########################################### UPDATE TABLE RECIPIENT ######################################################
+	DROP TEMPORARY TABLE IF EXISTS tmp_IntegrationMethod;
+    CREATE TEMPORARY TABLE IF NOT EXISTS tmp_IntegrationMethod (IntegrationMethodId TINYINT UNSIGNED PRIMARY KEY, IntegrationMethodName VARCHAR(50) CHARACTER SET 'utf8mb4'  COLLATE 'utf8mb4_unicode_ci');
+    
+    INSERT INTO tmp_IntegrationMethod (IntegrationMethodId, IntegrationMethodName)
+    SELECT t.IntegrationMethodId, t.IntegrationMethodName
+    FROM 
+		JSON_TABLE
+        (
+			IntegrationMethod,
+            "$[*]"
+            COLUMNS
+            (
+				IntegrationMethodId TINYINT UNSIGNED PATH "$.IntegrationMethodId", 
+                IntegrationMethodName VARCHAR(50) CHARACTER SET 'utf8mb4'  COLLATE 'utf8mb4_unicode_ci' PATH "$.IntegrationMethodName"
+            )
+        ) AS t;
+    
+	DROP TEMPORARY TABLE IF EXISTS tmp_Data;
+    CREATE TEMPORARY TABLE IF NOT EXISTS tmp_Data(IntegrationMethodId TINYINT UNSIGNED PRIMARY KEY, IntegrationMethodName VARCHAR(50) CHARACTER SET 'utf8mb4'  COLLATE 'utf8mb4_unicode_ci', IsDeleted INT);
+    
+    INSERT INTO tmp_Data (IntegrationMethodId, IntegrationMethodName, IsDeleted)
+    SELECT i.IntegrationMethodId, i.IntegrationMethodName, -1
+    FROM IntegrationMethod i
+    WHERE NOT EXISTS (SELECT 1 FROM tmp_IntegrationMethod ti WHERE ti.IntegrationMethodId = i.IntegrationMethodId);
+    
+	INSERT INTO tmp_Data (IntegrationMethodId, IntegrationMethodName, IsDeleted)
+    SELECT ti.IntegrationMethodId, ti.IntegrationMethodName, CASE WHEN i.IntegrationMethodId IS NULL THEN 1 ELSE 0 END
+    FROM tmp_IntegrationMethod ti
+		LEFT JOIN IntegrationMethod i ON i.IntegrationMethodId = ti.IntegrationMethodId 
+	WHERE i.IntegrationMethodId IS NULL 
+		OR IFNULL(i.IntegrationMethodName, '') <> IFNULL(ti.IntegrationMethodName, '');
+        
+	IF EXISTS (SELECT 1 FROM tmp_Data WHERE IsDeleted = -1) 
+	THEN	
+		DELETE i
+        FROM IntegrationMethod i
+			INNER JOIN tmp_Data td ON i.IntegrationMethodId = td.IntegrationMethodId
+		WHERE td.IsDeleted = -1;
+    END IF;
+    
+    IF EXISTS (SELECT 1 FROM tmp_Data WHERE IsDeleted = 0) 
+	THEN	
+		UPDATE IntegrationMethod i
+		INNER JOIN tmp_Data td ON i.IntegrationMethodId = td.IntegrationMethodId 
+			SET i.IntegrationMethodName = td.IntegrationMethodName
+		WHERE td.IsDeleted = 0;
+    END IF;
+    
+    IF EXISTS (SELECT 1 FROM tmp_Data WHERE IsDeleted = 1) 
+	THEN	
+		INSERT INTO IntegrationMethod (IntegrationMethodId, IntegrationMethodName)
+        SELECT td.IntegrationMethodId, td.IntegrationMethodName
+        FROM tmp_Data td
+        WHERE td.IsDeleted = 1;
+    END IF;
+	
+	############################ LicenseeIntegrationMethod ###########################################
+
+	DROP TEMPORARY TABLE IF EXISTS tmp_LicenseeIntegrationMethod;
+    CREATE TEMPORARY TABLE IF NOT EXISTS tmp_LicenseeIntegrationMethod (LicenseeId INT, IntegrationMethodId TINYINT UNSIGNED, PRIMARY KEY (LicenseeId, IntegrationMethodId));
+    
+    INSERT INTO tmp_LicenseeIntegrationMethod (LicenseeId, IntegrationMethodId)
+    SELECT t.LicenseeId, t.IntegrationMethodId
+    FROM 
+		JSON_TABLE
+        (
+			LicenseeIntegrationMethod,
+            "$[*]"
+            COLUMNS
+            (
+				LicenseeId INT PATH "$.LicenseeId", 
+                IntegrationMethodId TINYINT UNSIGNED PATH "$.IntegrationMethodId"
+            )
+        ) AS t;
+    
+	DROP TEMPORARY TABLE IF EXISTS tmp_Data;
+    CREATE TEMPORARY TABLE IF NOT EXISTS tmp_Data(LicenseeId INT, IntegrationMethodId TINYINT UNSIGNED, IsDeleted INT, PRIMARY KEY (LicenseeId, IntegrationMethodId));
+    
+    INSERT INTO tmp_Data (LicenseeId, IntegrationMethodId, IsDeleted)
+    SELECT lm.LicenseeId, lm.IntegrationMethodId, -1
+    FROM LicenseeIntegrationMethod lm
+    WHERE NOT EXISTS (SELECT 1 FROM tmp_LicenseeIntegrationMethod tl WHERE tl.LicenseeId = lm.LicenseeId AND tl.IntegrationMethodId = lm.IntegrationMethodId);
+    
+	INSERT INTO tmp_Data (LicenseeId, IntegrationMethodId, IsDeleted)
+    SELECT tl.LicenseeId, tl.IntegrationMethodId, 1
+    FROM tmp_LicenseeIntegrationMethod tl
+		LEFT JOIN LicenseeIntegrationMethod lm ON lm.LicenseeId = tl.LicenseeId AND lm.IntegrationMethodId = tl.IntegrationMethodId
+	WHERE lm.LicenseeId IS NULL;
+        
+	IF EXISTS (SELECT 1 FROM tmp_Data WHERE IsDeleted = -1) 
+	THEN	
+		DELETE lm
+        FROM LicenseeIntegrationMethod lm
+			INNER JOIN tmp_Data td ON lm.LicenseeId = td.LicenseeId AND lm.IntegrationMethodId = td.IntegrationMethodId
+		WHERE td.IsDeleted = -1;
+    END IF;
+    
+    IF EXISTS (SELECT 1 FROM tmp_Data WHERE IsDeleted = 1) 
+	THEN	
+		INSERT INTO LicenseeIntegrationMethod (LicenseeId, IntegrationMethodId)
+        SELECT td.LicenseeId, td.IntegrationMethodId
+        FROM tmp_Data td
+        WHERE td.IsDeleted = 1;
+    END IF;
+
+	########################################### UPDATE TABLE RECIPIENT ######################################################
 
     DROP TEMPORARY TABLE IF EXISTS tmp_Recipient;
     CREATE TEMPORARY TABLE IF NOT EXISTS tmp_Recipient(RecipientName VARCHAR(500), RecipientTypeID INT, SourceID INT, SourceDescription VARCHAR(50));

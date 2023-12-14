@@ -4,19 +4,20 @@ DROP PROCEDURE IF EXISTS NCB_NotificationList_Sel;
 DELIMITER //
 
 CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_NotificationList_Sel`(
-     IN notificationTypeIDLst VARCHAR(1000)
-    , IN recipientIDLst TEXT
-    , IN messageId INT UNSIGNED
-	, IN creatorID	INT
-    , IN notificationStatusIDLst VARCHAR(1000)
-    , IN ChannelIDLst VARCHAR(100)
-	, IN configSendTimeFrom DATETIME #UTC
-    , IN configSendTimeTo DATETIME #UTC
-	, IN pageIndex INT
-    , IN pageSize INT
+     IN InNotificationTypeIds 	VARCHAR(1000)
+     ,IN InRecipientIds 		TEXT
+     ,IN InMessageId 			INT UNSIGNED
+	 ,IN InCreatorId			INT
+     ,IN InNotificationStatusId VARCHAR(1000)
+     ,IN InChannelIds 			VARCHAR(100)
+	 ,IN InProductIds 			VARCHAR(4000)
+	 ,IN InConfigSendTimeFrom 	DATETIME #UTC
+     ,IN InConfigSendTimeTo 	DATETIME #UTC
+	 ,IN pageIndex 				INT
+     ,IN pageSize 				INT
     /*
 		Creator: Dominic@20190408
-        Task: Chatbot For Licensee - Phase 1: Sending UM notification using Skype bot
+        Task: ChatBot -> Notification List-> Submit
 		DB: DBCB-ChatBot
         Redmine: https://nexdev.net/issues/110890
         Param:
@@ -37,6 +38,7 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_NotificationList_Sel`(
                 - 20210513@Malcolm: Integrate Telegram [RedmineID: #151807]
 				- 20220118@Malcolm: Scale out for ChatBot [RedmineID: #181907]
 				- 20230523@Roy: Notification Bell Issue [RedmineID: #188599]
+                - 20230913@Malcolm: Add Integration Method for licensee [RedmineID: #191062]s
     */
 )
 BEGIN
@@ -45,83 +47,69 @@ BEGIN
     
 	DECLARE rowStart INT;
     SET rowStart =	pageSize * (pageIndex - 1);   
-    
-    #SET configSendTimeTo = DATE_ADD(configSendTimeTo, INTERVAL 1 DAY);
+	
+	SET InNotificationTypeIds = IFNULL(InNotificationTypeIds, ''), InRecipientIds = IFNULL(InRecipientIds, ''), InNotificationStatusId = IFNULL(InNotificationStatusId, ''), InChannelIds = IFNULL(InChannelIds, ''), InProductIds = IFNULL(InProductIds, '');
     
 	#Insert comma seperated list notificationTypeIDLst to temporary tables
     DROP TEMPORARY TABLE IF EXISTS tmp_notificationTypeIDLst;
-	CREATE TEMPORARY TABLE tmp_notificationTypeIDLst(NotificationTypeID SMALLINT);
+	CREATE TEMPORARY TABLE tmp_notificationTypeIDLst (NotificationTypeID SMALLINT);
     
-	IF IFNULL(notificationTypeIDLst,'') <> ''THEN
-		SET @sqlCommand = REPLACE(notificationTypeIDLst, ',', '),(');
-		SET @sqlCommand = CONCAT('(', @sqlCommand, ')');
-		SET @sqlCommand = CONCAT('INSERT INTO tmp_notificationTypeIDLst VALUES'
-															, @sqlCommand); 
-                                                            
-		PREPARE stmt FROM  @sqlCommand;
-		EXECUTE stmt;
-		DEALLOCATE PREPARE stmt;
-	END IF;
+    INSERT INTO tmp_notificationTypeIDLst (NotificationTypeID)
+    SELECT t.value
+	FROM JSON_TABLE 
+	(
+		CONCAT('[{"value":"', REPLACE(InNotificationTypeIds, ',', '"},{"value":"'), '"}]')
+		,'$[*]' COLUMNS (value SMALLINT PATH '$.value')
+	) AS t; 
     
 	#Insert comma seperated list recipientIDLst to temporary tables
     DROP TEMPORARY TABLE IF EXISTS tmp_recipientIDLst;
 	CREATE TEMPORARY TABLE tmp_recipientIDLst(RecipientID INT, UNIQUE INDEX Index_RecipientID(RecipientID));
     
-	IF IFNULL(recipientIDLst,'') <> ''THEN
-		SET @sqlCommand = REPLACE(recipientIDLst, ',', '),(');
-		SET @sqlCommand = CONCAT('(', @sqlCommand, ')');
-		SET @sqlCommand = CONCAT('INSERT INTO tmp_recipientIDLst VALUES'
-															, @sqlCommand); 
-                                                            
-		PREPARE stmt FROM  @sqlCommand;
-		EXECUTE stmt;
-		DEALLOCATE PREPARE stmt;
-	END IF;
+    INSERT INTO tmp_recipientIDLst (RecipientID)
+	SELECT t.value
+	FROM JSON_TABLE 
+	(
+		CONCAT('[{"value":"', REPLACE(InRecipientIds, ',', '"},{"value":"'), '"}]')
+		,'$[*]' COLUMNS (value INT PATH '$.value')
+	) AS t; 
     
 	#Insert comma seperated list notificationStatusIDLst to temporary tables
     DROP TEMPORARY TABLE IF EXISTS tmp_notificationStatusIDLst;
 	CREATE TEMPORARY TABLE tmp_notificationStatusIDLst(StatusID TINYINT UNSIGNED);
     
-    IF IFNULL(notificationStatusIDLst,'') <> ''THEN
-		SET @sqlCommand = REPLACE(notificationStatusIDLst, ',', '),(');
-		SET @sqlCommand = CONCAT('(', @sqlCommand, ')');
-		SET @sqlCommand = CONCAT('INSERT INTO tmp_notificationStatusIDLst VALUES'
-															, @sqlCommand); 
-                                                            
-		PREPARE stmt FROM  @sqlCommand;
-		EXECUTE stmt;
-		DEALLOCATE PREPARE stmt;
-	END IF;
+	INSERT INTO tmp_notificationStatusIDLst (StatusID)
+	SELECT t.value
+	FROM JSON_TABLE 
+	(
+		CONCAT('[{"value":"', REPLACE(InNotificationStatusId, ',', '"},{"value":"'), '"}]')
+		,'$[*]' COLUMNS (value TINYINT UNSIGNED PATH '$.value')
+	) AS t;
     
     DROP TEMPORARY TABLE IF EXISTS tmp_ChannelIDLst;
     CREATE TEMPORARY TABLE tmp_ChannelIDLst (ChannelID TINYINT UNSIGNED);
     
-    IF IFNULL(ChannelIDLst, '') <> '' THEN
-		SET @sqlCommand = REPLACE(ChannelIDLst, ',', '),(');
-        SET @sqlCommand = CONCAT('(', @sqlcommand, ')');
-        SET @sqlCommand = CONCAT('INSERT INTO tmp_ChannelIDLst VALUES', @sqlcommand);
-        
-        PREPARE stmt FROM @sqlcommand;
-        EXECUTE stmt;
-        DEALLOCATE PREPARE stmt;
-	END IF;
-    
-    #1st dataset: Return Total_Row for paging
-    SELECT COUNT(1) Total_Row
-    FROM Notification n
-    WHERE n.NotificationTypeID IN (SELECT	tmp_nt.NotificationTypeID FROM tmp_notificationTypeIDLst tmp_nt)
-	AND n.ConfigSendTime >= configSendTimeFrom
-    AND n.ConfigSendTime < configSendTimeTo
-	AND (creatorID IS NULL OR n.CreatorID = creatorID)
-    AND n.StatusID IN (SELECT	tmp_stt.StatusID FROM tmp_notificationStatusIDLst tmp_stt)
-	AND n.ChannelID IN (SELECT tmp_c.ChannelID FROM tmp_ChannelIDLst tmp_c)
-    AND EXISTS (
-			SELECT 1
-            FROM NotificationRecipientList nrl
-            WHERE nrl.NotificationID = n.NotificationID
-			AND nrl.RecipientID IN (SELECT tmp_rid.RecipientID FROM tmp_recipientIDLst tmp_rid)
-    ) AND (EXISTS (SELECT 1 FROM NotificationSystemMsg m WHERE m.NotificationID = n.NotificationID AND m.MessageID = messageId) OR IFNULL(messageId, 0) = 0);
-    
+    INSERT INTO tmp_ChannelIDLst (ChannelID)
+	SELECT t.value
+	FROM JSON_TABLE 
+	(
+		CONCAT('[{"value":"', REPLACE(InChannelIds, ',', '"},{"value":"'), '"}]')
+		,'$[*]' COLUMNS (value TINYINT UNSIGNED PATH '$.value')
+	) AS t;
+	
+	DROP TEMPORARY TABLE IF EXISTS tmp_ProductIDLst;
+    CREATE TEMPORARY TABLE tmp_ProductIDLst (ProductId TINYINT UNSIGNED);
+	
+	IF InProductIds <> 'ALL' THEN 
+		INSERT INTO tmp_ProductIDLst (ProductId)
+		SELECT t.value
+		FROM JSON_TABLE 
+		(
+			CONCAT('[{"value":"', REPLACE(InProductIds, ',', '"},{"value":"'), '"}]')
+			,'$[*]' COLUMNS (value TINYINT UNSIGNED PATH '$.value')
+		) AS t;
+    END IF;
+	
 	#Get data based on Page Index and Page Size
     DROP TEMPORARY TABLE IF EXISTS tmp_Notification;
 	CREATE TEMPORARY TABLE tmp_Notification
@@ -139,6 +127,8 @@ BEGIN
 		,StatusID 					TINYINT UNSIGNED
 		,RecipientSentStatusJSON 	TEXT
 		,ChannelID 					TINYINT UNSIGNED
+		,ProductID					TINYINT UNSIGNED
+        ,TotalRows                  INT
 	);
     #Get data based on Page Index and Page Size
     INSERT INTO tmp_Notification 
@@ -154,6 +144,8 @@ BEGIN
 		,Status
 		,StatusID
 		,ChannelID
+		,ProductID
+        ,TotalRows
 	)
     SELECT 
 		n.NotificationID
@@ -167,24 +159,29 @@ BEGIN
 		,n.Status
 		,n.StatusID
 		,n.ChannelID
+		,n.ProductID
+        ,COUNT(1) OVER() AS TotalRows
     FROM Notification n
 		INNER JOIN NotificationType nt ON n.NotificationTypeID = nt.NotificationTypeID
         INNER JOIN Customer c ON n.CreatorID = c.custid
     WHERE n.NotificationTypeID IN (SELECT tmp_nt.NotificationTypeID FROM tmp_notificationTypeIDLst tmp_nt)
-		AND n.ConfigSendTime >= configSendTimeFrom
-		AND n.ConfigSendTime < configSendTimeTo
-		AND (creatorID IS NULL OR n.CreatorID = creatorID)
+		AND n.ConfigSendTime >= InConfigSendTimeFrom
+		AND n.ConfigSendTime < InConfigSendTimeTo
+		AND (InCreatorID IS NULL OR n.CreatorID = InCreatorID)
 		AND n.StatusID IN (SELECT tmp_stt.StatusID FROM tmp_notificationStatusIDLst tmp_stt)
 		AND n.ChannelID IN (SELECT tmp_c.ChannelID FROM tmp_ChannelIDLst tmp_c)
+        AND (InProductIds = 'ALL' OR n.ProductID IN (SELECT p.ProductID FROM tmp_ProductIDLst p))
 		AND EXISTS (
 			SELECT 1
             FROM NotificationRecipientList nrl
             WHERE nrl.NotificationID = n.NotificationID
 			AND nrl.RecipientID IN (SELECT tmp_rid.RecipientID FROM tmp_recipientIDLst tmp_rid)
 		)
-		AND (EXISTS (SELECT 1 FROM NotificationSystemMsg m WHERE m.NotificationID = n.NotificationID AND m.MessageID = messageId) OR IFNULL(messageId, 0) = 0)
+		AND (EXISTS (SELECT 1 FROM NotificationSystemMsg m WHERE m.NotificationID = n.NotificationID AND m.MessageID = InMessageId) OR IFNULL(InMessageId, 0) = 0)
     ORDER BY n.ConfigSendTime DESC, n.NotificationID DESC
     LIMIT rowStart, pageSize; 
+    
+    SELECT IFNULL(MAX(TotalRows), 0) AS Total_Row FROM tmp_Notification;
 	
 	DROP TEMPORARY TABLE IF EXISTS tmp_NotificationMsg;
 	CREATE TEMPORARY TABLE tmp_NotificationMsg(NotificationID INT, MessageIdList MEDIUMTEXT);
@@ -201,34 +198,22 @@ BEGIN
 	FROM CTE;
 	
 	UPDATE tmp_Notification n 
-		INNER JOIN tmp_NotificationMsg m ON m.NotificationID = n.NotificationID
-		SET n.MessageIdList = m.MessageIdList;
-    
+	INNER JOIN tmp_NotificationMsg m ON m.NotificationID = n.NotificationID
+	SET n.MessageIdList = m.MessageIdList;
+
     #Update RecipientSentStatus
-   #Update RecipientSentStatus
-    UPDATE tmp_Notification n
+	UPDATE tmp_Notification n
     SET n.RecipientSentStatusJSON = (
-				SELECT CONCAT('[' , GROUP_CONCAT(
-										json_object('recipientName', r.RecipientName
-										, 'isError', CASE 
-														WHEN EXISTS (SELECT 1 
-																	FROM NotificationRecipientList nrl
-																	WHERE nrl.StatusID IN (SENT_STATUSID_ERROR, SENT_STATUSID_RESOLVED)
-																		AND r.RecipientID = nrl.RecipientID AND nrl.NotificationID = n.NotificationID
-																	)
-															THEN 1 #error
-														ELSE 0
-													END
-                                        )
-							SEPARATOR ', ') ,']') 
-				FROM Recipient r 
-                WHERE EXISTS(
-					SELECT 1
-					FROM NotificationRecipientList nrl
-                    WHERE r.RecipientID = nrl.RecipientID AND nrl.NotificationID = n.NotificationID
-                )
-                ORDER BY r.RecipientName
-		);
+		SELECT JSON_ARRAYAGG(JSON_OBJECT('recipientName', RecipientName, 'isError', IsError))
+		FROM (
+			SELECT r.RecipientName, MAX(IF(nrl.StatusID IN (SENT_STATUSID_ERROR, SENT_STATUSID_RESOLVED) > 0, 1, 0)) AS IsError
+			FROM Recipient r 
+				INNER JOIN NotificationRecipientList nrl ON r.RecipientID = nrl.RecipientID 
+			WHERE nrl.NotificationID = n.NotificationID
+			GROUP BY r.RecipientName
+			ORDER BY r.RecipientName ASC
+		) AS n
+	);
     
     #2nd dataset: Get data based on Page Index and Page Size
     SELECT 
@@ -246,8 +231,11 @@ BEGIN
 		,n.ChannelID
 		,n.RecipientSentStatusJSON
         ,c.ChannelName
+        ,p.ProductID
+        ,p.ProductName
     FROM tmp_Notification n
 		INNER JOIN ConversationChannel c ON c.ChannelId = n.ChannelId
+        LEFT JOIN Product p ON p.ProductID = n.ProductID
 	ORDER BY n.ConfigSendTime DESC ,n.NotificationID DESC;
 END;
 
