@@ -30,6 +30,8 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_OIC_SyncData(
 				- 20211021@Malcolm: Integrate the change of Licensee type from OIC - Redmine: #163779
                 - 20220705@Malcolm: Get those integrating/Upcomming licensees [RedmineId: 174425]
 				- 20230908@Malcolm: Get Integration Method [RedmineId: 191062]
+				- 20220705@Malcolm: Remove recipient type : 3rd Party Product [RedmineId: 198113]
+
     */
 )
 SQL SECURITY DEFINER
@@ -580,13 +582,6 @@ BEGIN
           , CASE WHEN l.LicenseeId > 100000 THEN INTEGRATING_LICENSEE_SOURCE_DESCRIPTION ELSE LICENSEE_SOURCE_DESCRIPTION END
     FROM Licensee l;
 
-    INSERT INTO tmp_Recipient(RecipientName, RecipientTypeID, SourceID, SourceDescription)
-    SELECT p.ProductName
-          , RECIPIENT_TYPE_PRODUCT
-          , p.ProductID
-          , PRODUCT_SOURCE_DESCRIPTION
-    FROM Product p;
-
     # Need delete Ricipient
     DROP TEMPORARY TABLE IF EXISTS tmp_Recipient_Remove;
     CREATE TEMPORARY TABLE IF NOT EXISTS tmp_Recipient_Remove(RecipientID INT);
@@ -596,7 +591,7 @@ BEGIN
     FROM Recipient r
     LEFT JOIN tmp_Recipient tmp ON r.RecipientTypeID = tmp.RecipientTypeID 
                         AND r.SourceID = tmp.SourceID
-    WHERE tmp.RecipientTypeID IS NULL AND r.RecipientTypeID IN (1, 2);
+    WHERE tmp.RecipientTypeID IS NULL AND r.RecipientTypeID = 1;
 
     IF EXISTS (SELECT 1 FROM tmp_Recipient_Remove) THEN
 
