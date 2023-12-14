@@ -14,6 +14,8 @@ AS
 		- 20220217@Malcolm: Add Platform [RedmineId: 167946]
 		- 20220705@Malcolm: Get those integrating/Upcomming licensees [RedmineId: 174425]
 		- 20231207@Malcolm: Exclude upcoming Licensee - Joker [RedmineId: 198113]
+		- 20230908@Malcolm: Get Integration Method [RedmineId: 191062]
+
 	Param's Explanation:
 
 */
@@ -26,7 +28,7 @@ BEGIN
 	INSERT INTO #IntergatingLicensees (LicenseeId, LicenseeName, IsActive)
 	SELECT 100000 + s.siteid, s.site, ISNULL(l.IsActive, 1)
 	FROM bodb02.dbo.Site s WITH(NOLOCK)
-		LEFT JOIN bodb_licensee.dbo.Licensees l WITH(NOLOCK) ON s.site = l.LicenseeName
+		INNER JOIN bodb_licensee.dbo.Licensees l WITH(NOLOCK) ON s.site = l.LicenseeName
 		LEFT JOIN dbo.Licensee li WITH(NOLOCK) ON li.RegisteredLicenseeName = s.site
 	WHERE s.isLicensee = 1 AND s.isActive = 1 AND li.LicenseeId IS NULL AND l.LicenseeName <> 'Joker'
 		
@@ -91,7 +93,17 @@ BEGIN
 	SELECT 
 		PlatformId
 		,PlatformName
-	FROM Platform WITH(NOLOCK)
+	FROM dbo.[Platform] WITH(NOLOCK)
+
+	SELECT 
+		IntegrationMethodId
+		,IntegrationMethodName
+	FROM dbo.IntegrationMethod WITH(NOLOCK)
+
+	SELECT 
+		LicenseeId
+		,IntegrationMethodId
+	FROM dbo.LicenseeIntegrationMethod WITH(NOLOCK)
 
 	DROP TABLE #IntergatingLicensees
 END

@@ -5,6 +5,7 @@ DELIMITER //
 CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_Settlement_InternalCSD_Import(
   IN messageHeader 			JSON
   ,IN messageDetail  		JSON
+  ,IN InMaxMsgTargetId		INT
   ,OUT errCode 				INT
   ,OUT errMsg 				VARCHAR(200)
 
@@ -23,6 +24,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_Settlement_InternalCSD_Import
 
     Revisions :
       - 20231031@Malcolm: Initiliaze SP [RedmineID: #127944]
+	  - 20231204@Malcolm: Only get member level data [RedmineId: #191062]
 	  
 	Param's Explanation:
     
@@ -159,8 +161,6 @@ NCB_Settlement_InternalCSD_Import:BEGIN
 				,MsgTargetId	INT	PATH "$.MsgTargetId"
 			)
 		) AS t;
-        
-	SELECT MAX(MsgTargetId) INTO pMaxMsgTargetId FROM tmp_MsgDetail;
 	
 	/*Refund ticket*/
 	UPDATE tmp_MsgHeader
@@ -371,8 +371,8 @@ NCB_Settlement_InternalCSD_Import:BEGIN
 	/*Step 9: Update Setting*/
 	#Update Max MsgTargetId
 	UPDATE SystemSetting
-		SET Value = pMaxMsgTargetId
-	WHERE ID = 33 AND IFNULL(pMaxMsgTargetId, 0) > 0;
+		SET Value = InMaxMsgTargetId
+	WHERE ID = 33 AND IFNULL(InMaxMsgTargetId, 0) > 0;
 			
 	#Update flag to 'Done'
 	UPDATE SystemSetting
@@ -418,7 +418,7 @@ NCB_Settlement_InternalCSD_Import:BEGIN
 	SET duration = TIMESTAMPDIFF(MICROSECOND, startTime, finishTime) / 1000; 	#miliseconds
 			
 	#Get Log Content JSON format
-	SET logContent = JSON_OBJECT('MessageHeader', messageHeader, 'messageDetail', messageDetail);
+	SET logContent = JSON_OBJECT('MessageHeader', messageHeader, 'messageDetail', messageDetail, 'InMaxMsgTargetId', InMaxMsgTargetId);
 						
 	#Write User Log
 	IF EXISTS (SELECT 1 FROM tmp_MsgHeader) THEN

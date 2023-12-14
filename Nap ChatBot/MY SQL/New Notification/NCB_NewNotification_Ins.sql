@@ -3,21 +3,22 @@ DROP PROCEDURE IF EXISTS NCB_NewNotification_Ins;
 DELIMITER //
 
 CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_NewNotification_Ins`(
-	IN notificationTypeID SMALLINT
-	, IN productID SMALLINT
-	, IN Platforms TEXT
-	, IN recipientIDLst TEXT
-	, IN title VARCHAR(300) CHARACTER SET utf8mb4
-	, IN ContentLst JSON
-	, IN configSendTime DATETIME
-    , IN sendImmediately BIT
-	, IN creatorID INT
-    , OUT notificationIDLst JSON
-	, OUT errCode SMALLINT
-	, OUT errMsg TEXT
+	IN InNotificationTypeId 	SMALLINT
+	,IN InProductId 			SMALLINT
+	,IN InPlatformIds 			TEXT
+	,IN InIntegrationMethodIds 	TEXT
+	,IN InRecipientIds 			TEXT
+	,IN InTitle 				VARCHAR(300) CHARACTER SET utf8mb4
+	,IN InContentLst 			JSON
+	,IN InConfigSendTime 		DATETIME
+    ,IN InSendImmediately 		BIT
+	,IN InCreatorID 			INT
+    ,OUT notificationIDLst 		JSON
+	,OUT errCode 				SMALLINT
+	,OUT errMsg 				TEXT
     /*
 		Creator: Dominic@20190401
-		Task:
+		Task: ChatBot -> New Notification -> Submit
 		DB: DBCB-ChatBot
         Param:
 				- ProductID: Applied to filter licensees who are offered a specific product, NULL if not specified
@@ -31,9 +32,12 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_NewNotification_Ins`(
                 - 20211201@Malcolm: Change Logs - RedmineID: #163777
 				- 20220218@Malcolm: Add Platform for licensee [RedmineID: #167946]
                 - 20220705@Malcolm: Get those integrating/Upcomming licensees [RedmineId: 174425]	
-                - 20220907@Malcolm: Update content [RedmineId: 174402]	
+                - 20220907@Malcolm: Update content [RedmineId: 174402]
+				- 20220705@Malcolm: Get those integrating/Upcomming licensees [RedmineId: 174425]		
+                - 20230913@Malcolm: Add Integration Method for licensee [RedmineID: #191062]
+				
 		Param's Explanation:
-		- ContentLst:
+		- InContentLst:
 				[
 					{"ChannelId" : "1", "Content" : "Content_skype"}
                     ,{"ChannelId" : "2", "Content" : "Content_telegram"}
@@ -44,27 +48,27 @@ SQL SECURITY DEFINER
 NCB_NewNotification_Ins:BEGIN
 
 	#Variables used to write User Logs
-	DECLARE startTime 		DATETIME(3);
-    DECLARE finishTime 		DATETIME(3); 
-    DECLARE duration 		INT;							
-    DECLARE logContent 		TEXT CHARACTER SET utf8mb4;
-    DECLARE ACTION_ID 		INT DEFAULT 1;
-	DECLARE iLoop           INT;
-	DECLARE _Content 		MEDIUMTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-	DECLARE _ChannelId 		TINYINT UNSIGNED;
-	DECLARE _recipientIDLst	TEXT;
-	DECLARE _NotificationID INT UNSIGNED;
-	DECLARE _notificationIDLst VARCHAR(2000) DEFAULT '';
-	DECLARE pNotificationTypeId SMALLINT;
+	DECLARE startTime 							DATETIME(3);
+    DECLARE finishTime 							DATETIME(3); 
+    DECLARE duration 							INT;							
+    DECLARE logContent 							TEXT CHARACTER SET utf8mb4;
+    DECLARE ACTION_ID 							INT DEFAULT 1;
+	DECLARE zContent 							MEDIUMTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+	DECLARE zChannelId 							TINYINT UNSIGNED;
+	DECLARE zrecipientIDLst						TEXT;
+	DECLARE zNotificationId 					INT UNSIGNED;
+	DECLARE znotificationIDLst 					TEXT DEFAULT '';
+	DECLARE LICENSEE_TYPE_UNIDENTIFIED 			TINYINT UNSIGNED DEFAULT 100;
+	DECLARE LicenseeTechnicalNotificationTypeId SMALLINT;
     
     #constants
-    DECLARE RECIPIENT_TYPE_LICENSEES 	SMALLINT DEFAULT 1;
-    DECLARE LICENSEE_STATUS_ACTIVE 		TINYINT UNSIGNED DEFAULT 3;
-    DECLARE NEW_NOTIFICATION_STATUSID	TINYINT UNSIGNED DEFAULT 0;
-    DECLARE NEW_NOTIFICATION_STATUS	VARCHAR(10) DEFAULT 'Planned';
+    DECLARE RECIPIENT_TYPE_LICENSEES 		SMALLINT DEFAULT 1;
+    DECLARE LICENSEE_STATUS_ACTIVE 			TINYINT UNSIGNED DEFAULT 3;
+    DECLARE NEW_NOTIFICATION_STATUSID		TINYINT UNSIGNED DEFAULT 0;
+    DECLARE NEW_NOTIFICATION_STATUS			VARCHAR(10) DEFAULT 'Planned';
     DECLARE CREATING_NOTIFICATION_STATUSID	TINYINT UNSIGNED DEFAULT 7;
     DECLARE CREATING_NOTIFICATION_STATUS	VARCHAR(10) DEFAULT 'Creating';
-	DECLARE LICENSEE_STATUS_UPCOMMING	TINYINT UNSIGNED DEFAULT 1;
+	DECLARE LICENSEE_STATUS_UPCOMMING		TINYINT UNSIGNED DEFAULT 1;
     
      #Local variables
     DECLARE configSendTimeGMTPlus4 DATETIME;
@@ -74,272 +78,172 @@ NCB_NewNotification_Ins:BEGIN
     SET errCode=0, errMsg='';
     
 	#Check param
-	IF  NOT EXISTS(SELECT 1 
-									FROM NotificationType  nt
-                                    WHERE nt.NotificationTypeID = notificationTypeID ) THEN
+	IF  NOT EXISTS(SELECT 1 FROM NotificationType  nt WHERE nt.NotificationTypeID = notificationTypeID) THEN
 		SET errCode=101, errMsg='Invalid NotificationTypeID';
         LEAVE NCB_NewNotification_Ins;
-    ELSEIF IFNULL(title,'') = '' THEN
-		SET errCode=102, errMsg='Title must not be empty';
-        LEAVE NCB_NewNotification_Ins;
-	ELSEIF IFNULL(recipientIDLst,'') = '' THEN
-		SET errCode=103, errMsg='Recipient list must not be empty';
-        LEAVE NCB_NewNotification_Ins;
-	ELSEIF creatorID IS NULL THEN
-		SET errCode=104, errMsg='CreatorID can not be null';
-        LEAVE NCB_NewNotification_Ins;
-	ELSEIF configSendTime IS NULL THEN
-		SET errCode=105, errMsg='ConfigSendTime can not be null';
-        LEAVE NCB_NewNotification_Ins;
-	END IF;
+    END IF;
 	
 	#Insert Content 
-	DROP TEMPORARY TABLE IF EXISTS tmpContent;
-    CREATE TEMPORARY TABLE tmpContent (ChannelId TINYINT UNSIGNED NOT NULL, Content MEDIUMTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci);
+	DROP TEMPORARY TABLE IF EXISTS tmp_Content;
+    CREATE TEMPORARY TABLE tmp_Content (ChannelId TINYINT UNSIGNED NOT NULL, Content MEDIUMTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci);
     
-    SET iLoop = 0;
-    WHILE (JSON_EXTRACT(ContentLst, CONCAT('$[', iLoop, '].ChannelId')) IS NOT NULL) DO
-		INSERT INTO tmpContent (ChannelId, Content)
-        VALUES 
+    INSERT INTO tmp_Content (ChannelId, Content)
+    SELECT ChannelId, Content
+    FROM JSON_TABLE 
+	(
+		InContentLst, 
+		'$[*]' COLUMNS 
         (
-			JSON_UNQUOTE(JSON_EXTRACT(ContentLst, CONCAT('$[', iLoop, '].ChannelId'))),
-            JSON_UNQUOTE(JSON_EXTRACT(ContentLst, CONCAT('$[', iLoop, '].Content')))
-        );
-        SET iLoop := iLoop + 1;
-    END WHILE;
+			ChannelId TINYINT UNSIGNED PATH '$.ChannelId'
+			,Content MEDIUMTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci PATH '$.Content'
+        )
+	) AS t; 
 	
-	#Check content
-	
-	IF EXISTS (
-		SELECT 1 FROM tmpContent tc 
-		WHERE IFNULL(tc.Content, '') = ''
-	) THEN
-		SET errCode=111, errMsg = 'Content must not be empty';
-		LEAVE NCB_NewNotification_Ins;
-	END IF;
-	
-	IF EXISTS (
-		SELECT 1 FROM tmpContent tc 
-		WHERE NOT EXISTS (SELECT 1 FROM ConversationChannel c WHERE c.ChannelId = tc.ChannelId)
-	) THEN
-		SET errCode=111, errMsg = 'Invalid ChannelId';
-		LEAVE NCB_NewNotification_Ins;
-	END IF;
-	
-    /*Update content*/
-    UPDATE tmpContent
-		SET Content = CASE WHEN ChannelId = 1 THEN REPLACE(Content, '\n ', CONCAT('\n', 0x7F))
+    /*Update content tab key : Skype (\n 0x7F), telegram (\n 0x7F )*/
+    UPDATE tmp_Content
+		SET Content = CASE WHEN ChannelId = 1 THEN REPLACE(Content, '\n ', CONCAT('\n', 0x7F)) 
 					  ELSE REPLACE(Content, '\n ', CONCAT('\n', 0x7F, ' ')) END;
+					  
+	SET InRecipientIds = IFNULL(InRecipientIds, ''), InPlatformIds = IFNULL(InPlatformIds, ''), InIntegrationMethodIds = IFNULL(InIntegrationMethodIds, '');
 
-    #Insert comma seperated list RecipientIDLst to temporary tables
-    DROP TEMPORARY TABLE IF EXISTS tmp_recipientIDLst;
-	CREATE TEMPORARY TABLE tmp_recipientIDLst(RecipientID INT);
-    
-	SET @sqlCommand = REPLACE(recipientIDLst, ',', '),(');
-	SET @sqlCommand = CONCAT('(', @sqlCommand, ')');
-	SET @sqlCommand= CONCAT('INSERT INTO tmp_recipientIDLst VALUES'
-														, @sqlCommand); 
+    #Insert comma seperated list RecipientIds to temporary tables
+    DROP TEMPORARY TABLE IF EXISTS tmp_Recipient;
+	CREATE TEMPORARY TABLE tmp_Recipient (RecipientID INT);
 	
-    PREPARE stmt FROM  @sqlCommand;
-	EXECUTE stmt;
-	DEALLOCATE PREPARE stmt;
+	INSERT INTO tmp_Recipient (RecipientID)
+	SELECT t.value
+	FROM JSON_TABLE 
+	(
+		CONCAT('[{"value":"', REPLACE(InRecipientIds, ',', '"},{"value":"'), '"}]')
+		,'$[*]' COLUMNS (value INT PATH '$.value')
+	) AS t;
 	
-	#Insert comma seperated list Platforms to temporary tables
+	#Insert comma seperated list PlatformIds to temporary tables
     DROP TEMPORARY TABLE IF EXISTS tmp_Platform;
-	CREATE TEMPORARY TABLE tmp_Platform(PlatformId TINYINT UNSIGNED);
+	CREATE TEMPORARY TABLE tmp_Platform (PlatformId TINYINT UNSIGNED);
     
-	SET @sqlCommand = REPLACE(Platforms, ',', '),(');
-	SET @sqlCommand = CONCAT('(', @sqlCommand, ')');
-	SET @sqlCommand= CONCAT('INSERT INTO tmp_Platform VALUES'
-														, @sqlCommand); 
+	INSERT INTO tmp_Platform (PlatformId)
+	SELECT t.value
+	FROM JSON_TABLE 
+	(
+		CONCAT('[{"value":"', REPLACE(InPlatformIds, ',', '"},{"value":"'), '"}]')
+		,'$[*]' COLUMNS (value TINYINT UNSIGNED PATH '$.value')
+	) AS t; 
+    
+	#Insert comma seperated list tmp_IntegrationMethod to temporary tables
+    DROP TEMPORARY TABLE IF EXISTS tmp_IntegrationMethod;
+	CREATE TEMPORARY TABLE tmp_IntegrationMethod (IntegrationMethodId TINYINT UNSIGNED);
+	INSERT INTO tmp_IntegrationMethod (IntegrationMethodId)
+	SELECT t.value
+	FROM JSON_TABLE 
+	(
+		CONCAT('[{"value":"', REPLACE(InIntegrationMethodIds, ',', '"},{"value":"'), '"}]')
+		,'$[*]' COLUMNS (value TINYINT UNSIGNED PATH '$.value')
+	) AS t;
 	
-    PREPARE stmt FROM  @sqlCommand;
-	EXECUTE stmt;
-	DEALLOCATE PREPARE stmt;
-    
     DROP TEMPORARY TABLE IF EXISTS tmp_mappedRecipientIDLst;
-	CREATE TEMPORARY TABLE tmp_mappedRecipientIDLst(RecipientID INT, ChannelId TINYINT UNSIGNED);
+	CREATE TEMPORARY TABLE tmp_mappedRecipientIDLst(RecipientID INT UNSIGNED, ChannelId TINYINT UNSIGNED);
 	
 	INSERT INTO tmp_mappedRecipientIDLst(RecipientID, ChannelId)
-	SELECT main.RecipientID, con.ChannelId
-	FROM tmp_recipientIDLst main
-	INNER JOIN ConversationGroupRecipient bcr
-			ON bcr.RecipientID = main.RecipientID
-	INNER JOIN ConversationGroupExtraInfo bcri
-			ON bcri.ConversationGroupID = bcr.ConversationGroupID
-	INNER JOIN ConversationGroup con
-			ON con.ConversationGroupID = bcr.ConversationGroupID AND con.IsActive = 1
-	INNER JOIN ConversationGroupBot cgb
-			ON cgb.ConversationGroupID = bcr.ConversationGroupID
-	WHERE bcri.ChatGroupTypeID IN (SELECT cgt.ChatGroupTypeID FROM NotificationChatGroupType  cgt WHERE cgt.NotificationTypeID = notificationTypeID) 
-		AND con.ChannelId IN (SELECT tcl.ChannelId FROM tmpContent tcl);
+	SELECT DISTINCT t.RecipientID, con.ChannelId
+	FROM tmp_Recipient t
+		INNER JOIN ConversationGroupRecipient bcr ON bcr.RecipientID = t.RecipientID
+		INNER JOIN ConversationGroupExtraInfo bcri ON bcri.ConversationGroupID = bcr.ConversationGroupID
+		INNER JOIN ConversationGroup con ON con.ConversationGroupID = bcr.ConversationGroupID 
+		INNER JOIN ConversationGroupBot cgb ON cgb.ConversationGroupID = bcr.ConversationGroupID
+		INNER JOIN NotificationChatGroupType cgt ON cgt.ChatGroupTypeID = bcri.ChatGroupTypeID
+        INNER JOIN tmp_Content tcl ON tcl.ChannelId = con.ChannelId
+		WHERE cgt.NotificationTypeID = InNotificationTypeId AND con.IsActive = 1;
 	
-	DELETE FROM tmpContent tc WHERE NOT EXISTS (SELECT 1 FROM tmp_mappedRecipientIDLst r WHERE r.ChannelId = tc.ChannelId);
-                
-    #Check Not-Mapping/Removed-Bot Recipients
-    IF EXISTS(
-						SELECT 1 
-						FROM tmp_recipientIDLst main
-						WHERE main.RecipientID NOT IN (SELECT t1.RecipientID FROM tmp_mappedRecipientIDLst t1)
-	) THEN
-		SET errCode=106;
-    
-		SELECT GROUP_CONCAT( DISTINCT re.RecipientName  ORDER BY re.RecipientName SEPARATOR ', ') 
-        INTO errMsg
-        FROM Recipient re
-        WHERE re.RecipientID IN (
-						SELECT main. RecipientID
-						FROM tmp_recipientIDLst main
-						WHERE main.RecipientID NOT IN (SELECT t1.RecipientID FROM tmp_mappedRecipientIDLst t1)
-			);
-		SET errMsg = CONCAT('Recipient is not mapped or removed: ' , errMsg);
-        LEAVE NCB_NewNotification_Ins;
-    END IF;
+	DELETE FROM tmp_Content tc WHERE NOT EXISTS (SELECT 1 FROM tmp_mappedRecipientIDLst r WHERE r.ChannelId = tc.ChannelId);
 
-	SELECT nt.NotificationTypeID INTO pNotificationTypeId FROM NotificationType nt WHERE nt.NotificationTypeName = 'Licensee Technical Group';
+	DROP TEMPORARY TABLE IF EXISTS tmp_ErrorMsg;
+	CREATE TEMPORARY TABLE tmp_ErrorMsg (ErrorCode INT, ErrorMsg VARCHAR(200));
 
-    #Check InActive Licensees
-     IF EXISTS(
-		SELECT 1 
-		FROM tmp_recipientIDLst main
-			INNER JOIN Recipient re ON re.RecipientID = main.RecipientID AND re.RecipientTypeID = RECIPIENT_TYPE_LICENSEES
-               INNER JOIN Licensee l ON l.LicenseeId = re.SourceID
-		WHERE  
-		(
-			l.LicenseeStatusId NOT IN (LICENSEE_STATUS_ACTIVE, LICENSEE_STATUS_UPCOMMING) 
-			OR (l.LicenseeStatusId = LICENSEE_STATUS_UPCOMMING AND pNotificationTypeId <> notificationTypeID)
-		)
-	) THEN
-		SET errCode=107;
-        
-        SELECT GROUP_CONCAT(re.RecipientName ORDER BY re.RecipientName  SEPARATOR ', ')  
-        INTO errMsg
-        FROM Recipient re
-        WHERE re.RecipientID IN 
-		(
-			SELECT main. RecipientID
-			FROM tmp_recipientIDLst main
-				INNER JOIN Recipient re ON re.RecipientID = main.RecipientID AND re.RecipientTypeID = RECIPIENT_TYPE_LICENSEES
-                INNER JOIN Licensee l ON l.LicenseeId = re.SourceID
-			WHERE  
-			(
-				l.LicenseeStatusId NOT IN (LICENSEE_STATUS_ACTIVE, LICENSEE_STATUS_UPCOMMING) 
-				OR (l.LicenseeStatusId = LICENSEE_STATUS_UPCOMMING AND pNotificationTypeId <> notificationTypeID)
-			)
-		);
-            
-		SET errMsg = CONCAT('Licensee is Inactive: ' , errMsg);
-        LEAVE NCB_NewNotification_Ins;
-    END IF;
+	INSERT INTO tmp_ErrorMsg (ErrorCode, ErrorMsg)
+	VALUES 
+		(1, 'Recipient is not mapped or removed')
+		,(2, 'There are recipients in the exception list')
+		,(3, 'Licensee is Inactive')
+		,(4, 'Licensee does not belong to selected Platform')
+		,(5, 'Licensee does not belong to selected Integration Method')
+		,(6, 'Licensee is not offered');
+
+	SELECT nt.NotificationTypeID INTO LicenseeTechnicalNotificationTypeId FROM NotificationType nt WHERE nt.NotificationTypeName = 'Licensee Technical Group';
 	
-	#Check Platform
-     IF EXISTS(
-		SELECT 1 
-		FROM tmp_recipientIDLst main
-			INNER JOIN Recipient re ON re.RecipientID = main.RecipientID AND re.RecipientTypeID = RECIPIENT_TYPE_LICENSEES
-			INNER JOIN Licensee l ON l.LicenseeId = re.SourceID
-		WHERE NOT EXISTS (SELECT 1 FROM tmp_Platform p WHERE p.PlatformId = l.PlatformId) AND l.PlatformId IS NOT NULL
-	) THEN
-		SET errCode=111;
-        
-        SELECT GROUP_CONCAT(re.RecipientName ORDER BY re.RecipientName  SEPARATOR ', ')  
-        INTO errMsg
-        FROM Recipient re
-        WHERE re.RecipientID IN 
-		(
-			SELECT main. RecipientID
-			FROM tmp_recipientIDLst main
-				INNER JOIN Recipient re ON re.RecipientID = main.RecipientID AND re.RecipientTypeID = RECIPIENT_TYPE_LICENSEES
-                INNER JOIN Licensee l ON l.LicenseeId = re.SourceID
-			WHERE NOT EXISTS (SELECT 1 FROM tmp_Platform p WHERE p.PlatformId = l.PlatformId) AND l.PlatformId IS NOT NULL
-		);
-            
-		SET errMsg = CONCAT('Licensee does not belong to selected Platform: ' , errMsg);
-        LEAVE NCB_NewNotification_Ins;
-    END IF;
+	SET configSendTimeGMTPlus4 = CONVERT_TZ(InConfigSendTime,'+00:00','-04:00');
 	
-    DROP TEMPORARY TABLE IF EXISTS tmp_recipientIDLst_Error;
-	
-	CREATE TEMPORARY TABLE tmp_recipientIDLst_Error 
+	DROP TEMPORARY TABLE IF EXISTS tmp_RecipientError;
+	CREATE TEMPORARY TABLE tmp_RecipientError (RecipientID INT UNSIGNED, ErrorCode INT);
+
+	INSERT INTO tmp_RecipientError (RecipientID, ErrorCode)
+	WITH CTE_MappedRecipient AS
 	(
-		RecipientID INT
-	);
-	
-	INSERT INTO tmp_recipientIDLst_Error
+		SELECT DISTINCT RecipientID FROM tmp_mappedRecipientIDLst 
+	),CTE_LicenseeProduct AS
 	(
-		RecipientID
+	    SELECT DISTINCT LicenseeId FROM LicenseeProduct
+	),CTE_IntegrationMethod AS
+	(
+		SELECT l.LicenseeId, COUNT(1) AS IsHaveIntegrationMethod, COUNT(im.IntegrationMethodId) AS IsValid
+		FROM LicenseeIntegrationMethod l  
+			LEFT JOIN tmp_IntegrationMethod im ON l.IntegrationMethodId = im.IntegrationMethodId
+		GROUP BY l.LicenseeId
 	)
-	SELECT main.RecipientID
-	FROM tmp_recipientIDLst main
-		INNER JOIN Recipient re ON re.RecipientID = main.RecipientID AND re.RecipientTypeID = RECIPIENT_TYPE_LICENSEES
-        INNER JOIN LicenseeProduct lp ON lp.LicenseeID = re.SourceID AND lp.ProductID = productID
-	WHERE lp.LaunchDate IS NULL
-		OR (lp.LaunchDate IS NOT NULL AND configSendTimeGMTPlus4 <  lp.LaunchDate)
-		OR (lp.TerminationDate IS NOT NULL AND configSendTimeGMTPlus4 > lp.TerminationDate);
-									
-	INSERT INTO tmp_recipientIDLst_Error
-	(
-		RecipientId
-	)
-	SELECT main.RecipientId
-	FROM tmp_recipientIDLst main
-		INNER JOIN Recipient re ON re.RecipientID = main.RecipientID AND re.RecipientTypeID = RECIPIENT_TYPE_LICENSEES
-	WHERE NOT EXISTS (
-		SELECT 1 FROM LicenseeProduct lp 
-		WHERE lp.LicenseeID = re.SourceID AND lp.ProductId = productID
-	) AND EXISTS (
-		SELECT 1 FROM LicenseeProduct lp 
-		WHERE lp.LicenseeID = re.SourceID
-	);
+	SELECT 
+		r.RecipientID
+        ,CASE WHEN IFNULL(cr.RecipientID, 0) = 0 THEN 1 -- Recipient is not mapped or removed
+			  WHEN IFNULL(ex.NotificationTypeID, 0) > 0 THEN 2 -- There are recipients in the exception list
+			  WHEN l.LicenseeId IS NULL THEN 0 -- isn't licensee --> not check
+			  /*
+				With groups belonging to chat type group = 'Licensee Technical Group' --> support creating notifications for licensees with statuses LICENSEE_STATUS_ACTIVE and LICENSEE_STATUS_UPCOMMING
+				For groups that are not part of the chat type group = 'Licensee Technical Group' --> create notification for licensee with status LICENSEE_STATUS_ACTIVE
+			  */
+			  WHEN 
+			  (
+			     l.LicenseeStatusId NOT IN (LICENSEE_STATUS_ACTIVE, LICENSEE_STATUS_UPCOMMING) 
+				 OR (l.LicenseeStatusId = LICENSEE_STATUS_UPCOMMING AND InNotificationTypeId <> LicenseeTechnicalNotificationTypeId)
+			  )  THEN 3 -- Licensee is Inactive
+			  WHEN l.PlatformId IS NOT NULL AND p.PlatformId IS NULL THEN 4 -- Licensee does not belong to selected Platform
+			  WHEN IFNULL(im.IsHaveIntegrationMethod, 0) > 0 AND IFNULL(im.IsValid, 0) = 0 THEN 5 -- Licensee does not belong to selected Integration Method
+			  WHEN IFNULL(InProductId, 0) <> 0 AND l.LicenseeTypeId <>  LICENSEE_TYPE_UNIDENTIFIED
+					AND
+					(
+						lp.LaunchDate IS NULL
+						OR (lp.LaunchDate IS NOT NULL AND configSendTimeGMTPlus4 <  lp.LaunchDate) -- The product's launch date has not yet arrived
+						OR (lp.TerminationDate IS NOT NULL AND configSendTimeGMTPlus4 > lp.TerminationDate) -- product is no longer offered
+					) THEN 6  -- Licensee is not offered
+		ELSE 0 END ErrorCode
+	FROM tmp_Recipient r
+		INNER JOIN Recipient re ON re.RecipientID = r.RecipientID AND re.RecipientTypeID = RECIPIENT_TYPE_LICENSEES 
+		LEFT JOIN Licensee l ON l.LicenseeId = re.SourceID
+        LEFT JOIN tmp_Platform p ON p.PlatformId = l.PlatformId
+		LEFT JOIN LicenseeProduct lp ON lp.LicenseeID = re.SourceID AND lp.ProductID = InProductId
+        LEFT JOIN NotificationTypeRecipientException ex ON ex.NotificationTypeID = InNotificationTypeId AND ex.RecipientId = r.RecipientId
+		LEFT JOIN CTE_MappedRecipient cr ON cr.RecipientID = r.RecipientID
+		LEFT JOIN CTE_LicenseeProduct lip ON lip.LicenseeId = re.SourceID
+		LEFT JOIN CTE_IntegrationMethod im ON im.LicenseeId = re.SourceID;
+		
+	IF EXISTS (SELECT 1 FROM tmp_RecipientError WHERE IFNULL(ErrorCode, 0) <> 0) THEN
+		SELECT CONCAT(MAX(ro.ErrorMsg), ': ', GROUP_CONCAT(DISTINCT ro.RecipientName ORDER BY ro.RecipientName ASC SEPARATOR ', ')), MIN(MinErrCode)
+		INTO errMsg, errCode
+        FROM (
+			SELECT re.RecipientId, re.ErrorCode, e.ErrorMsg, r.RecipientName, MIN(e.ErrorCode) OVER() AS MinErrCode
+			FROM tmp_RecipientError re 
+				INNER JOIN Recipient r ON r.RecipientId = re.RecipientID
+				INNER JOIN tmp_ErrorMsg e ON e.ErrorCode = re.ErrorCode
+		) AS ro
+		WHERE ro.ErrorCode = ro.MinErrCode;
+        
+        LEAVE NCB_NewNotification_Ins;
+	END IF;
 		
     #Check Licensees do not offered a product
-    SET configSendTimeGMTPlus4 = CONVERT_TZ(configSendTime,'+00:00','-04:00');
-    IF productID IS NOT NULL AND EXISTS(SELECT 1 FROM tmp_recipientIDLst_Error tm)
-	THEN
-		SET errCode=108;
-        
-		SELECT GROUP_CONCAT(re.RecipientName ORDER BY re.RecipientName SEPARATOR ', ') 
-        INTO errMsg
-        FROM Recipient re
-        WHERE EXISTS (SELECT 1 FROM tmp_recipientIDLst_Error tr WHERE tr.RecipientId = re.RecipientId);
-            
-		SET errMsg = CONCAT('Licensee is not offered: ' , errMsg);
-        LEAVE NCB_NewNotification_Ins;
-    END IF;
     
-    #Check exeption recipient
-    IF EXISTS(
-			SELECT 1
-			FROM tmp_recipientIDLst main
-			WHERE main.RecipientID IN (
-							SELECT ex.RecipientID 
-							FROM NotificationTypeRecipientException ex
-							WHERE ex.NotificationTypeID = notificationTypeID
-						)
-	)
+    IF InSendImmediately = 0 AND InConfigSendTime < UTC_TIMESTAMP(3)
     THEN
-		SET errCode=109;
-        
-        SELECT GROUP_CONCAT(re.RecipientName ORDER BY re.RecipientName SEPARATOR ', ') 
-        INTO errMsg
-        FROM tmp_recipientIDLst main
-        INNER JOIN Recipient re 
-							ON re.RecipientID = main.RecipientID 
-		WHERE main.RecipientID IN (
-						SELECT ex.RecipientID 
-						FROM NotificationTypeRecipientException ex
-						WHERE ex.NotificationTypeID = notificationTypeID
-                        );
-               
-		SET errMsg = CONCAT('There are recipients in the exception list: ' , errMsg);
+		SELECT 110, 'The schedule is expired, Please check again!' INTO errCode, errMsg;
 		LEAVE NCB_NewNotification_Ins;
-    END IF;
-	
-    IF sendImmediately = 0 AND configSendTime < UTC_TIMESTAMP(3)
-    THEN
-			SET errCode=110;
-            SET errMsg = 'The schedule is expired, Please check again!';
-			LEAVE NCB_NewNotification_Ins;
     END IF;
     
 	-- Get Log 
@@ -347,16 +251,12 @@ NCB_NewNotification_Ins:BEGIN
 	CREATE TEMPORARY TABLE tmpNotificationRecipient (notificationID INT, RecipientID INT);
 	
 	DROP TEMPORARY TABLE IF EXISTS tmpNotificationContent;
-	CREATE TEMPORARY TABLE tmpNotificationContent (notificationID INT, ChannelId TINYINT UNSIGNED,Content mediumtext CHARACTER SET 'utf8mb4' COLLATE 'utf8mb4_unicode_ci');
+	CREATE TEMPORARY TABLE tmpNotificationContent (notificationID INT, ChannelId TINYINT UNSIGNED, Content mediumtext CHARACTER SET 'utf8mb4' COLLATE 'utf8mb4_unicode_ci');
 	
     #Insert a new Notification
-	
-	WHILE (EXISTS(SELECT 1 FROM tmpContent)) DO
+	WHILE (EXISTS(SELECT 1 FROM tmp_Content)) DO
 		
-		SELECT tc.ChannelId, tc.Content INTO _ChannelId, _Content
-		FROM tmpContent tc 
-		ORDER BY tc.ChannelId ASC
-		LIMIT 1;
+		SELECT tc.ChannelId, tc.Content INTO zChannelId, zContent FROM tmp_Content tc ORDER BY tc.ChannelId ASC LIMIT 1;
 		
 		INSERT INTO Notification
 		(
@@ -373,55 +273,48 @@ NCB_NewNotification_Ins:BEGIN
 			,StatusID
 		)
 		SELECT 
-			notificationTypeID
-			,_ChannelId
-			,productID
-			,title
-			,_Content
-			,configSendTime
-			,sendImmediately
-			,creatorID
+			InNotificationTypeId
+			,zChannelId
+			,InProductId
+			,InTitle
+			,zContent
+			,InConfigSendTime
+			,InSendImmediately
+			,InCreatorID
 			,UTC_TIMESTAMP()
 			,CREATING_NOTIFICATION_STATUS
 			,CREATING_NOTIFICATION_STATUSID;
 		
-		SET _notificationID = LAST_INSERT_ID();
+		SET znotificationId = LAST_INSERT_ID();
 		
-		SET _notificationIDLst = CONCAT('{"NotificationId" : ', _notificationID, "},", _notificationIDLst);
+		SET znotificationIDLst = CONCAT('{"NotificationId" : ', znotificationId, "},", znotificationIDLst);
 		
 		#Insert recipient list
 		INSERT INTO NotificationRecipientList(NotificationID, ConversationGroupID, ChatGroupTypeID, RecipientID, Status, StatusID)
-		SELECT _notificationID, IFNULL(gri.ConversationGroupID, -1), IFNULL(gri.ChatGroupTypeID,-1), re.RecipientID, NEW_NOTIFICATION_STATUS, NEW_NOTIFICATION_STATUSID
-		FROM tmp_recipientIDLst re
-			INNER JOIN ConversationGroupRecipient gr 
-				ON re.RecipientID = gr.RecipientID
-			INNER JOIN ConversationGroup con
-					ON con.ConversationGroupID = gr.ConversationGroupID AND con.IsActive = 1
-			LEFT JOIN ConversationGroupExtraInfo gri 
-				ON gri.ConversationGroupID = gr.ConversationGroupID
-		WHERE gri.ChatGroupTypeID IN (
-							SELECT cgt.ChatGroupTypeID 
-							FROM NotificationChatGroupType  cgt
-							WHERE cgt.NotificationTypeID = notificationTypeID
-		) AND con.ChannelId = _ChannelId;
+		SELECT znotificationId, IFNULL(gri.ConversationGroupID, -1), IFNULL(gri.ChatGroupTypeID,-1), re.RecipientID, NEW_NOTIFICATION_STATUS, NEW_NOTIFICATION_STATUSID
+		FROM tmp_Recipient re
+			INNER JOIN ConversationGroupRecipient gr ON re.RecipientID = gr.RecipientID
+			INNER JOIN ConversationGroup con ON con.ConversationGroupID = gr.ConversationGroupID
+			LEFT JOIN ConversationGroupExtraInfo gri ON gri.ConversationGroupID = gr.ConversationGroupID
+            INNER JOIN NotificationChatGroupType cgt ON cgt.ChatGroupTypeID = gri.ChatGroupTypeID
+		WHERE cgt.NotificationTypeID = InNotificationTypeId AND con.ChannelId = zChannelId AND con.IsActive = 1;
 		
 		UPDATE Notification n
-		SET	StatusID = NEW_NOTIFICATION_STATUSID 
-			, Status = NEW_NOTIFICATION_STATUS
-		WHERE n.NotificationID = _notificationID;
+		SET	StatusID = NEW_NOTIFICATION_STATUSID, Status = NEW_NOTIFICATION_STATUS
+		WHERE n.NotificationID = zNotificationId;
 		
 		INSERT INTO tmpNotificationRecipient (NotificationID, RecipientID)
 		SELECT DISTINCT NotificationID, RecipientID
 		FROM NotificationRecipientList
-		WHERE NotificationID = _notificationID;
+		WHERE NotificationID = zNotificationId;
 		
 		INSERT INTO tmpNotificationContent(NotificationID, Content, ChannelId)
-		VALUES (_notificationID, _Content, _ChannelId);
+		VALUES (zNotificationId, zContent, zChannelId);
 		
-		DELETE FROM tmpContent WHERE ChannelId = _ChannelId;
+		DELETE FROM tmp_Content WHERE ChannelId = zChannelId;
 	END WHILE;
 	
-	SET notificationIDLst = CONCAT('[', LEFT(_notificationIDLst, LENGTH(_notificationIDLst) - 1),']');
+	SET notificationIDLst = CONCAT('[', LEFT(znotificationIDLst, LENGTH(znotificationIDLst) - 1),']');
     
      #Get Finish Time to calcualte execution duration
     SET finishTime = UTC_TIMESTAMP(3);
@@ -429,33 +322,37 @@ NCB_NewNotification_Ins:BEGIN
     
     #Get Log Content, JSON format
 	WHILE (EXISTS (SELECT 1 FROM tmpNotificationContent)) DO
-		 SELECt NotificationID, Content, ChannelId INTO _notificationID, _Content, _ChannelId FROM tmpNotificationContent LIMIT 1;
+		 SELECt NotificationID, Content, ChannelId INTO zNotificationId, zContent, zChannelId FROM tmpNotificationContent LIMIT 1;
 		 
 		 SELECT GROUP_CONCAT(DISTINCT re.RecipientID ORDER BY re.RecipientID SEPARATOR ', ')  
-         INTO _RecipientIDLst
+         INTO zRecipientIDLst
          FROM tmpNotificationRecipient re;
 		
-		 SET logContent = json_object('NotificationTypeID', notificationTypeID
-										, 'ProductID', productID
-                                        , 'RecipientIDLst', recipientIDLst
-										, 'Title', title
-										, 'ChannelId', _ChannelId
-                                        , 'content', ContentLst
-                                        , 'ConfigSendTime', configSendTime
-                                        , 'SendImmediately', sendImmediately
-                                        , 'notificationID', _notificationID
-					) ;
+		 SET logContent = JSON_OBJECT
+		 (
+				'NotificationTypeID', 	InNotificationTypeID
+				,'ProductID', 			InProductId
+				,'RecipientIDLst', 		InRecipientIds
+				,'Title', 				InTitle
+				,'ChannelId', 			zChannelId
+				,'content', 			InContentLst
+				,'ConfigSendTime', 		InConfigSendTime
+				,'SendImmediately', 	InSendImmediately
+				,'notificationID', 		zNotificationId
+		 );
                     
 		#Write User Log
-        CALL NCB_UserLog_RunSP_Ins(
-											ACTION_ID #actionID
-                                            , _notificationID #referenceID
-											, creatorID #UserID
-                                            , logContent #LogContent
-                                            , startTime #logtime
-                                            , duration	#Duration
-                                            );
-		DELETE FROM tmpNotificationContent WHERE NotificationID = _notificationID;
+        CALL NCB_UserLog_RunSP_Ins
+		(
+				ACTION_ID 			#actionID
+				,zNotificationId 	#referenceID
+				,InCreatorID 		#UserID
+				,logContent 		#LogContent
+				,startTime 			#logtime
+				,duration			#Duration
+		);
+        
+		DELETE FROM tmpNotificationContent WHERE NotificationID = zNotificationId;
 	END WHILE;
    
 END;

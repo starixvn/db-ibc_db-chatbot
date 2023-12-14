@@ -9,6 +9,7 @@ AS
 
 	Revisions:
 		- 20231122@Malcolm: Exclude abnormal bet void by request [RedmineID: #196660]
+		- 20231208@Malcolm: Only get member level data [RedmineID: #191062]
 
 	Param's Explanation:
 	
@@ -35,10 +36,14 @@ BEGIN
 	FROM @MessageList.nodes('root/r') t(c)
 	OPTION (OPTIMIZE FOR (@MessageList = NULL))
 
+	/*
+		Only get member level data for jobs sent to internal CSD (Special Delete - Internal CSD, Settlement - Internal CSD) 
+		So that the transid list is not duplicated.
+	*/
 	DELETE m 
 	FROM #Message m
 		INNER JOIN bodb02.dbo.Customer c WITH(NOLOCK) ON c.custid = m.TargetId
-	WHERE c.roleid <> 1
+	WHERE c.roleid <> 1 AND JobIdentify IN (2, 6)
 	
 	SELECT m.VoidingHistoryCollectionId, m.MsgTargetId, m.MessageId, m.MessageIds, m.Content_en, m.PostTime, m.JobIdentify
 	FROM #Message m

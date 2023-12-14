@@ -17,6 +17,7 @@ AS
 		- 20230515@Roy: Database - HA DB061/DB062 [RedmineID: #169643]
 		- 20231101@Malcolm: Add Settledment - Internal CSD, Settledment - Licensee [RedmineID: #195404]
 		- 20231123@Malcolm: Add void by betID [RedmineID: #196660]
+		- 20231204@Malcolm: Only get member level for Settlement - Internal CSD Job [RedmineID: #195404]
 	
 	. @MessageList
 			<root>
@@ -212,8 +213,8 @@ BEGIN
 
 		SELECT @FromReferenceId = FromReferenceId FROM @Message WHERE JobIdentify = 6
 
-		INSERT INTO @Msg (VoidingHistoryCollectionId, MsgTargetId, MessageId, Content_en, JobIdentify, Posttime)
-		SELECT mt.MsgTargetId, mt.MsgTargetId, m.MessageId, m.Content_en, 6, m.PostTime
+		INSERT INTO @Msg (VoidingHistoryCollectionId, MsgTargetId, MessageId, Content_en, JobIdentify, Posttime, TargetId)
+		SELECT mt.MsgTargetId, mt.MsgTargetId, m.MessageId, m.Content_en, 6, m.PostTime, mt.TargetId
 		FROM dbo.MsgTarget mt WITH(NOLOCK)
 			INNER JOIN dbo.Msg m WITH(NOLOCK) ON m.MessageId = mt.MessageId
 		WHERE m.MsgType = 1 AND (m.MsgContentsType = 110 OR m.MsgContentsType = 105 AND m.IsBatch = 1 AND m.MatchId > 0)

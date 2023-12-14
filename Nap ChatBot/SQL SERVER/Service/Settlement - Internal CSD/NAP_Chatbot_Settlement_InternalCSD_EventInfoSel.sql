@@ -11,6 +11,8 @@ AS
 
 	Revisions:
 		- 20231031@Malcolm: Initialize SP [RedmineId: #195404]
+		- 20231204@Malcolm: Only get member level data [RedmineId: #191062]
+		
 
 	Param's Explanation:
 		+ @MessageInfo
@@ -19,7 +21,7 @@ AS
 			</root>
 		+ @MessageDetail
 			<root>
-				<r MessageId="1" MsgTargetId="100001" BetTransId="11343,34334"/>
+				<r MessageId="1" MsgTargetId="100001" BetTransId="11343,34334" TargerId="1411915"/>
 			</root>
 */
 
@@ -37,11 +39,12 @@ BEGIN
 	FROM @MessageInfo.nodes('root/r') AS t(c)
 	OPTION (OPTIMIZE FOR (@MessageInfo = NULL)) 
 
-	CREATE TABLE #MessageDetail (MessageId INT, MsgTargetId INT, TransId BIGINT, CustId INT, SiteName NVARCHAR(50), IsTest BIT, IsDeposit BIT)
-	INSERT INTO #MessageDetail (MessageId, MsgTargetId, TransId)
+	CREATE TABLE #MessageDetail (MessageId INT, MsgTargetId INT, TargetId INT, TransId BIGINT, CustId INT, SiteName NVARCHAR(50), IsTest BIT, IsDeposit BIT)
+	INSERT INTO #MessageDetail (MessageId, MsgTargetId, TargetId, TransId)
 	SELECT DISTINCT 
 		t.c.value('@MessageId', 'INT') AS MessageId
 		,t.c.value('@MsgTargetId', 'INT') AS MsgTargetId
+		,t.c.value('@TargetId', 'INT') AS TargetId
 		,n.TransId
 	FROM @MessageDetail.nodes('root/r') AS t(c)
 	CROSS APPLY (
@@ -49,6 +52,15 @@ BEGIN
 		FROM STRING_SPLIT(t.c.value('@BetTransId', 'VARCHAR(MAX)'), ',') f
 	) AS n(TransId)
 	OPTION (OPTIMIZE FOR (@MessageDetail = NULL)) 
+
+	/*
+		Only get member level data for jobs sent to internal CSD (Special Delete - Internal CSD, Settlement - Internal CSD) 
+		So that the transid list is not duplicated.
+	*/
+	DELETE m
+	FROM #MessageDetail m	
+		INNER JOIN dbo.Customer c WITH(NOLOCK) ON m.TargetId = c.custid
+	WHERE c.roleid <> 1
 
 	UPDATE m
 		SET m.CustId = b.custid
@@ -61,6 +73,13 @@ BEGIN
 		INNER JOIN bodb02.dbo.bettrans14 b WITH(NOLOCK) ON b.TransId = m.TransId 
 	WHERE m.CustId IS NULL
 
+	/*
+		IF Customer Is Credit  
+			+ Site = CN88							--> Show Site = CN88
+			+ SiteLabel is 789y						--> Show Site = 789y
+			+ Site <> CN88 AND SiteLabel isn't 789y	--> show Site = NV88
+		IF Customer Is Deposit						--> Show Site = Customer.Site
+	*/
 	;WITH CTE_site AS (
 		SELECT DISTINCT
 			CASE 
