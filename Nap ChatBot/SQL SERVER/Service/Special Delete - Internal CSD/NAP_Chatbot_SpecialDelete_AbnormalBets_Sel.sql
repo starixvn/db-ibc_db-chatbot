@@ -27,6 +27,7 @@ AS
 		- 20230731@Malcolm: Incorporate voiding duplicated bet tickets with TVS [RedmineId : #191355]
 		- 20231017@Malcolm: Get Winlostdate for Abnormal Account [RedmineId : #195546]
 		- 20231117@Malcolm: Get data for voiding Abnormal Bets by Void By BetID [RedmineId : #196660]	
+		- 20240108@Malcolm: Trim data for decideby field [RedmineId : #198593]	
 
 	Param's Explanation:
 		+ @TicketInfo:
@@ -553,9 +554,9 @@ BEGIN
 			,ISNULL(CONVERT(BIT, s.IsTest), 0)	AS IsTest
 			,ISNULL(t.TotalTickets, 0)			AS TotalTickets
 			,ISNULL(r.RequestIdLst, '')			AS RequestIdLst
-			,ISNULL(r.DecIdedByLst, '')			AS DecIdedByLst
-			,ISNULL(r.RequestByLst, '')			AS RequestByLst
-			,ISNULL(r.VoIdByLst, '')			AS VoIdByLst
+			,ISNULL(TRIM(r.DecIdedByLst), '')			AS DecIdedByLst
+			,ISNULL(TRIM(r.RequestByLst), '')			AS RequestByLst
+			,ISNULL(TRIM(r.VoIdByLst), '')			AS VoIdByLst
 			,ISNULL(r.ReasonLst, '')			AS ReasonLst
 			,ISNULL(e.KickOffTime, '')          AS KickOffTime
 			,ISNULL(e.LeagueName, '')			AS LeagueName
