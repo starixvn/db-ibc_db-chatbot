@@ -110,7 +110,18 @@ BEGIN
 		) AS m
 	WHERE mt.MsgTargetId > @LastMsgTargetId AND mt.MsgTargetId <= @MaxMsgTargetId
 	GROUP BY m.MessageId, m.MatchId, m.LeagueGroupID
-
+	
+	/*
+		Determine the MaxMsgTargetId at which we scan a number of messages equal to @BatchSize
+		Ex:	BatchSize = 2, LastMsgTargetId = 1
+			MessageId | MsgTargetId
+			1         | 100
+			2		  | 101
+			1		  | 102
+			3		  | 103
+			2		  | 104 
+		--> MaxMsgTargetId = 103 - 1 = 102
+	*/
 	;WITH CTE_MsgTarget AS
 	(
 		SELECT MsgTargetId - 1 AS MaxMsgTargetId
