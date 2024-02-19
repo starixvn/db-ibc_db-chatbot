@@ -16,11 +16,13 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_ResultAmendment_InternalCSD_I
     Params    :
     - @messageHeader:
 							[  
-								{"MessageId":"1", "MatchId":"1", "EventDate": "2023-01-01", "EventTime":"02:20", "LeagueName":America", "Match":"A VS B", "CreditSite":NV88",  "DepositSite":"12bet", "TotalAffectedBetsCounts":"", "Wrongresult":"sss"
-								,"Actualresult":"Actual", "SettlementLog":"log", "Content_en":"Content_en", "Content_cs":"Content_en", "MsgContentTypes":"111","IsTest":0, "SiteNameGroup":"777"}
+								{"NotificationId":"1", "MatchId":"1", "EventDate": "2023-01-01", "EventTime":"02:20", "LeagueName":America", "MatchInfo":"A VS B", "CreditSite":NV88",  "DepositSite":"12bet"
+								, "CreditTotalBets":"", "NormalLicenseeTotalBets":"", "CVLicenseeTotalBets":"", "JSLicenseeTotalBets":"", "JollySportsCVLicenseeTotalBets":"", "NegativeBalance":""
+								, "TotalLicensee":"", "TotalCVLicensee":"", "TotalJSLicensee":"", "TotalJollySportsCVLicensee":""
+								, "Wrongresult":"sss","Actualresult":"Actual", "SettlementLog":"log", "Content_en":"Content_en", "Content_cs":"Content_en", "MsgContentTypes":"111","IsTest":0, "SiteNameGroup":"777"}
 							]
 	- @messageDetail: 		[
-								{ "MessageId":885128, "LogId": 1}
+								{ "NotificationId":885128, "MessageId": 1}
 							]
 
     Revisions :
@@ -42,10 +44,10 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 
 	DECLARE createdDate DATETIME(3);
     DECLARE pMaxMsgTargetId INT;
-	DECLARE pNotificationID INT UNSIGNED;
+	DECLARE pLastInsert INT UNSIGNED;
 	DECLARE pIsTest TINYINT;
 	DECLARE pChannelId TINYINT UNSIGNED;
-	DECLARE pMessageId INT;
+	DECLARE pNotificationId INT;
 	DECLARE pSiteNameGroup VARCHAR(50);
 
 	# Constants
@@ -78,38 +80,56 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 	CREATE TEMPORARY TABLE IF NOT EXISTS tmp_MsgHeader
 	(
 		Id							INT NOT NULL AUTO_INCREMENT
-		,MessageId 					INT
-		,MatchId					TEXT
-		,EventDate		 			TEXT
-		,EventTime 					TEXT
-		,LeagueName					TEXT
-		,Match						TEXT
-		,CreditSite 				TEXT
-		,DepositSite 	 			TEXT
-		,TotalAffectedBetsCounts	TEXT
-		,Wrongresult				TEXT
-		,Actualresult				TEXT
-		,SettlementLog				TEXT
-		,Content_en 				TEXT
-		,Content_cs 				TEXT
-        ,MsgContentsType			TINYINT UNSIGNED 
-        ,IsTest 					TINYINT
-		,SiteNameGroup				TEXT
+		,NotificationId 					INT
+		,MatchId						TEXT
+		,EventDate		 				TEXT
+		,EventTime 						TEXT
+		,LeagueName						TEXT
+		,MatchInfo						TEXT
+		,CreditSite 					TEXT
+		,DepositSite 	 				TEXT
+		,CreditTotalBets				TEXT
+		,NormalLicenseeTotalBets		TEXT
+		,CVLicenseeTotalBets			TEXT
+		,JSLicenseeTotalBets			TEXT
+		,JollySportsCVLicenseeTotalBets	TEXT
+		,NegativeBalance				TEXT
+		,TotalLicensee					TEXT
+		,TotalCVLicensee				TEXT
+		,TotalJSLicensee				TEXT
+		,TotalJollySportsCVLicensee		TEXT
+		,Wrongresult					TEXT
+		,Actualresult					TEXT
+		,SettlementLog					TEXT
+		,Content_en 					TEXT
+		,Content_cs 					TEXT
+        ,MsgContentsType				TINYINT UNSIGNED 
+        ,IsTest 						TINYINT
+		,SiteNameGroup					TEXT
 		,PRIMARY KEY (Id)
-		,UNIQUE INDEX Index_MessageId(MessageId)
+		,UNIQUE INDEX Index_NotificationId(NotificationId)
 	);
 
 	INSERT INTO tmp_MsgHeader
 	(
-		MessageId				
+		NotificationId				
 		,MatchId					
 		,EventDate		 			
 		,EventTime 					
 		,LeagueName
-		,Match
+		,MatchInfo
 		,CreditSite 			
 		,DepositSite 	 		
-		,TotalAffectedBetsCounts	
+		,CreditTotalBets				
+        ,NormalLicenseeTotalBets		
+        ,CVLicenseeTotalBets			
+        ,JSLicenseeTotalBets			
+        ,JollySportsCVLicenseeTotalBets	
+        ,NegativeBalance
+		,TotalLicensee	
+		,TotalCVLicensee	
+		,TotalJSLicensee	
+		,TotalJollySportsCVLicensee			
 		,Wrongresult				
 		,Actualresult				
 		,SettlementLog				
@@ -120,15 +140,24 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 		,SiteNameGroup
 	)
 	SELECT 
-		t.MessageId
+		t.NotificationId
 		,t.MatchId					
 		,t.EventDate		 			
 		,t.EventTime 					
 		,t.LeagueName
-		,t.Match
+		,t.MatchInfo
 		,t.CreditSite 			
 		,t.DepositSite 	 		
-		,t.TotalAffectedBetsCounts	
+		,t.CreditTotalBets				
+        ,t.t.NormalLicenseeTotalBets		
+        ,t.t.CVLicenseeTotalBets			
+        ,t.t.JSLicenseeTotalBets			
+        ,t.t.JollySportsCVLicenseeTotalBets	
+        ,t.NegativeBalance
+		,t.TotalLicensee	
+		,t.TotalCVLicensee	
+		,t.TotalJSLicensee	
+		,t.TotalJollySportsCVLicensee	
 		,t.Wrongresult				
 		,t.Actualresult				
 		,t.SettlementLog				
@@ -144,36 +173,45 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 			,"$[*]"
 			COLUMNS
 			(
-				MessageId 					INT         		PATH "$.MessageId"
-				,MatchId 					TEXT            	PATH "$.MatchId"
-				,EventDate 					TEXT            	PATH "$.EventDate"
-				,EventTime 					TEXT            	PATH "$.EventTime"
-				,LeagueName 				TEXT            	PATH "$.LeagueName"
-				,Match 						TEXT            	PATH "$.Match"
-				,CreditSite 				TEXT            	PATH "$.CreditSite"
-				,DepositSite 				TEXT            	PATH "$.DepositSite"
-				,TotalAffectedBetsCounts 	TEXT            	PATH "$.TotalAffectedBetsCounts"
-				,Wrongresult 				TEXT            	PATH "$.Wrongresult"
-				,Actualresult 				TEXT            	PATH "$.Actualresult"
-				,SettlementLog 				TEXT            	PATH "$.SettlementLog"
-				,Content_en 				TEXT            	PATH "$.Content_en"
-				,Content_cs 				TEXT            	PATH "$.Content_cs"
-				,MsgContentsType 			TINYINT UNSIGNED    PATH "$.MsgContentsType"
-				,IsTest 					TINYINT 			PATH "$.IsTest"
-				,SiteNameGroup 				TEXT            	PATH "$.SiteNameGroup"
+				NotificationId 						INT         		PATH "$.NotificationId"
+				,MatchId 							TEXT            	PATH "$.MatchId"
+				,EventDate 							TEXT            	PATH "$.EventDate"
+				,EventTime 							TEXT            	PATH "$.EventTime"
+				,LeagueName 						TEXT            	PATH "$.LeagueName"
+				,MatchInfo 							TEXT            	PATH "$.MatchInfo"
+				,CreditSite 						TEXT            	PATH "$.CreditSite"
+				,DepositSite 						TEXT            	PATH "$.DepositSite"
+				,CreditTotalBets 					TEXT            	PATH "$.CreditTotalBets"
+				,NormalLicenseeTotalBets 			TEXT            	PATH "$.NormalLicenseeTotalBets"
+				,CVLicenseeTotalBets 				TEXT            	PATH "$.CVLicenseeTotalBets"
+				,JSLicenseeTotalBets 				TEXT            	PATH "$.JSLicenseeTotalBets"
+				,JollySportsCVLicenseeTotalBets 	TEXT            	PATH "$.JollySportsCVLicenseeTotalBets"
+				,NegativeBalance 					TEXT            	PATH "$.NegativeBalance"
+				,TotalLicensee 						TEXT            	PATH "$.TotalLicensee"
+				,TotalCVLicensee 					TEXT            	PATH "$.TotalCVLicensee"
+				,TotalJSLicensee 					TEXT            	PATH "$.TotalJSLicensee"
+				,TotalJollySportsCVLicensee 		TEXT            	PATH "$.TotalJollySportsCVLicensee"
+				,Wrongresult 						TEXT            	PATH "$.Wrongresult"
+				,Actualresult 						TEXT            	PATH "$.Actualresult"
+				,SettlementLog 						TEXT            	PATH "$.SettlementLog"
+				,Content_en 						TEXT            	PATH "$.Content_en"
+				,Content_cs 						TEXT            	PATH "$.Content_cs"
+				,MsgContentsType 					TINYINT UNSIGNED    PATH "$.MsgContentsType"
+				,IsTest 							TINYINT 			PATH "$.IsTest"
+				,SiteNameGroup 						TEXT            	PATH "$.SiteNameGroup"
 			)
 		) AS t;
         
 	DROP TEMPORARY TABLE IF EXISTS tmp_MsgDetail;
 	CREATE TEMPORARY TABLE IF NOT EXISTS tmp_MsgDetail
 	(
-		MessageId	INT 
+		NotificationId	INT 
         ,LogId		INT 
-		,UNIQUE INDEX Index_MessageId(MessageId, LogId)
+		,UNIQUE INDEX Index_NotificationId(NotificationId, LogId)
 	);
     
-    INSERT INTO tmp_MsgDetail (MessageId, LogId)
-	SELECT t.MessageId, t.LogId
+    INSERT INTO tmp_MsgDetail (NotificationId, LogId)
+	SELECT t.NotificationId, t.LogId
 	FROM 
 		JSON_TABLE
 		(
@@ -181,7 +219,7 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 			,"$[*]"
 			COLUMNS
 			(
-				MessageId		INT PATH "$.MessageId"
+				NotificationId		INT PATH "$.NotificationId"
 				,LogId			INT	PATH "$.LogId"
 			)
 		) AS t;
@@ -189,7 +227,7 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 	/*Refund ticket*/
 	UPDATE tmp_MsgHeader
     SET Content_Detail = CONCAT(
-		'**Result Amendment Announcement**',
+		'**Result Amendment Announcement**'
 		,'\r\n', '\r\n'
         ,'MatchID: ', MatchID
 		,'\r\n'
@@ -199,17 +237,34 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 		,'\r\n'
 		,'League: ', LeagueName
 		,'\r\n'
-		,'Match: ', Match
+		,'Match: ', MatchInfo
         ,'\r\n', '\r\n'
         ,'**Affected Credit sites:', CASE WHEN CreditSite > '' THEN CONCAT(' ', CreditSite, '**') ELSE '**' END
         ,'\r\n'
         ,'**Affected Licensee sites:', CASE WHEN DepositSite > '' THEN CONCAT(' ', DepositSite, '**') ELSE '**' END
 		,'\r\n','\r\n'
-		,'Total Affected Bets Counts: ', TotalAffectedBetsCounts
-		,'\r\n','\r\n'
-		,'Wrong result: ', WrongResult
+		,'Total Affected Bets Counts: '
 		,'\r\n'
-		,'Actual result: ', ActualResult
+		,'- Credit Total Bets: x', CreditTotalBets
+		IF
+		(
+			SiteNameGroup = '777'
+			,''
+			,CONCAT 
+			(
+				'\r\n'
+				,'- Normal Licensee Total Bets: x', NormalLicenseeTotalBets,'; Total Licensee: x', TotalLicensee
+				,'\r\n'
+				,'CV Licensee Total Bets: x', CVLicenseeTotalBets,'; Total CV Licensee: x', TotalCVLicensee
+				,'\r\n'
+				,'JS Licensee Total Bets: x', JSLicenseeTotalBets,'; Total JS Licensee: x', TotalJSLicensee
+				,'\r\n'
+				,'- JollySportsCV Licensee Total Bets: x', JollySportsCVLicenseeTotalBets,'; Total JollySportsCV Licensee: x', TotalJollySportsCVLicensee
+				,'\r\n','\r\n'
+				,'- Negative Balance: x', NegativeBalance, '(Licensee)'
+			)
+		)
+		
 		,'\r\n','\r\n'
 		,'Settlement Log (System time): ', SettlementLog
         ,'\r\n', '\r\n'
@@ -321,7 +376,7 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 	DROP TEMPORARY TABLE IF EXISTS tmp_NotificationRecipientList;
 	CREATE TEMPORARY TABLE IF NOT EXISTS tmp_NotificationRecipientList
 	(
-		MessageId					INT
+		NotificationId					INT
 		,SiteNameGroup				VARCHAR(50)
 		,RecipientID 				INT
 		,ConversationGroupID 		INT
@@ -329,11 +384,11 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 		,StatusID 					TINYINT UNSIGNED
 		,Status 					VARCHAR(10)
 		,ChannelId 					TINYINT UNSIGNED
-		,INDEX Index_MessageId(MessageId)
+		,INDEX Index_NotificationId(NotificationId)
 	);
 
-	INSERT INTO tmp_NotificationRecipientList(MessageId, SiteNameGroup, RecipientID, ConversationGroupID, ChatGroupTypeID, StatusID, Status, ChannelId)
-    SELECT h.MessageId, h.SiteNameGroup, r.RecipientID, gr.ConversationGroupID, ngt.ChatGroupTypeID, tpl.StatusID, tpl.Status, g.ChannelId
+	INSERT INTO tmp_NotificationRecipientList(NotificationId, SiteNameGroup, RecipientID, ConversationGroupID, ChatGroupTypeID, StatusID, Status, ChannelId)
+    SELECT h.NotificationId, h.SiteNameGroup, r.RecipientID, gr.ConversationGroupID, ngt.ChatGroupTypeID, tpl.StatusID, tpl.Status, g.ChannelId
       FROM tmp_MsgHeader h
         INNER JOIN tmp_MsgContentsTypeTemplate tpl ON tpl.MsgContentsType = h.MsgContentsType AND h.SiteNameGroup = tpl.SiteNameGroup
         INNER JOIN NotificationChatGroupType ngt ON tpl.NotificationTypeID = ngt.NotificationTypeID
@@ -345,62 +400,64 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 	
 	/*Step 7: Insert Notification and NotificationSystemMsg*/
 	DROP TEMPORARY TABLE IF EXISTS tmpMessageChannel;
-	CREATE TEMPORARY TABLE tmpMessageChannel (MessageId INT, SiteNameGroup VARCHAR(50), ChannelID TINYINT, INDEX Index_PK (MessageId, ChannelID));
+	CREATE TEMPORARY TABLE tmpMessageChannel (NotificationId INT, SiteNameGroup VARCHAR(50), ChannelID TINYINT, INDEX Index_PK (NotificationId, ChannelID));
   
-	INSERT INTO tmpMessageChannel (MessageId, SiteNameGroup, ChannelId)
-	SELECT DISTINCT MessageId, SiteNameGroup, ChannelId
+	INSERT INTO tmpMessageChannel (NotificationId, SiteNameGroup, ChannelId)
+	SELECT DISTINCT NotificationId, SiteNameGroup, ChannelId
 	FROM tmp_NotificationRecipientList r;
 
 	SET iLoop = 1;
 	SET createdDate = UTC_TIMESTAMP();
 	WHILE (EXISTS (SELECT 1 FROM tmp_MsgHeader WHERE Id = iLoop)) DO
-		SELECT IsTest, MessageId, SiteNameGroup INTO pIsTest, pMessageId, pSiteNameGroup FROM tmp_MsgHeader WHERE Id = iLoop;
+		SELECT IsTest, NotificationId, SiteNameGroup INTO pIsTest, pNotificationId, pSiteNameGroup FROM tmp_MsgHeader WHERE Id = iLoop;
 
-		WHILE EXISTS(SELECT 1 FROM tmpMessageChannel m WHERE m.MessageId = pMessageId AND m.SiteNameGroup = pSiteNameGroup) DO
-			SELECT ChannelId INTO pChannelId FROM tmpMessageChannel m WHERE m.MessageId = pMessageId AND m.SiteNameGroup = pSiteNameGroup LIMIT 1; 
+		WHILE EXISTS(SELECT 1 FROM tmpMessageChannel m WHERE m.NotificationId = pNotificationId AND m.SiteNameGroup = pSiteNameGroup) DO
+			SELECT ChannelId INTO pChannelId FROM tmpMessageChannel m WHERE m.NotificationId = pNotificationId AND m.SiteNameGroup = pSiteNameGroup LIMIT 1; 
 
 			# Insert Notification
 			INSERT INTO Notification(NotificationTypeID, Title, Content, ConfigSendTime, SendImmediately, CreatorID, CreatedDate, Status, StatusID, ChannelId)
 			SELECT DISTINCT ct.NotificationTypeID, ct.TemplateTitle, REPLACE(REPLACE(ct.TemplateContent, '{General Info}', h.Content_Detail), '@@', '') AS Content, startTime, 0 AS SendImmediately, STARIXIT_CUSTID, CreatedDate, CREATING_NOTIFICATION_STATUS, CREATING_NOTIFICATION_STATUSID, pChannelId
 			FROM tmp_MsgHeader h
 				INNER JOIN tmp_MsgContentsTypeTemplate ct ON ct.MsgContentsType = h.MsgContentsType AND ct.SiteNameGroup = h.SiteNameGroup
-			WHERE h.MessageId = pMessageId AND h.SiteNameGroup = pSiteNameGroup;
+			WHERE h.NotificationId = pNotificationId AND h.SiteNameGroup = pSiteNameGroup;
 
-			SELECT LAST_INSERT_ID() INTO pNotificationID;
+			SELECT LAST_INSERT_ID() INTO pLastInsert;
 
 			INSERT INTO tmp_Notification(NotificationID)
-			VALUES (pNotificationID);
+			VALUES (pLastInsert);
       
 			# Insert NotificationSystemMsg
-			INSERT INTO NotificationSystemMsg(MessageID, NotificationID, CheckMsg, CreatedDate)
-			VALUES (pMessageId, pNotificationID, NULL, startTime);
+			INSERT INTO NotificationSystemMsg(NotificationId, NotificationID, CheckMsg, CreatedDate)
+			SELECT pLastInsert, MessageId, NULL, startTime
+			FROM tmp_MsgDetail
+			WHERE NotificationId = pNotificationID
 
 			#Insert recipient list
 			INSERT INTO NotificationRecipientList(NotificationID, ConversationGroupID, ChatGroupTypeID, RecipientID, Status, StatusID)
-			SELECT pNotificationID, d.ConversationGroupID, d.ChatGroupTypeID, d.RecipientID, d.Status, d.StatusID
+			SELECT pLastInsert, d.ConversationGroupID, d.ChatGroupTypeID, d.RecipientID, d.Status, d.StatusID
 			FROM tmp_NotificationRecipientList d
-			WHERE d.MessageId = pMessageId AND d.ChannelId = pChannelId AND d.SiteNameGroup = pSiteNameGroup;
+			WHERE d.NotificationId = pLastInsert AND d.ChannelId = pChannelId AND d.SiteNameGroup = pSiteNameGroup;
 
 			#Update Status for Notification
 			IF pIsTest = 1 THEN
 				UPDATE Notification
 				SET Status = DRAFT_NOTIFICATION_STATUS
 					,StatusID = DRAFT_NOTIFICATION_STATUSID
-				WHERE NotificationID = pNotificationID;
+				WHERE NotificationID = pLastInsert;
 	
 				UPDATE NotificationRecipientList
 				SET Status = DRAFT_NOTIFICATION_STATUS
 					,StatusID = DRAFT_NOTIFICATION_STATUSID
-				WHERE NotificationID = pNotificationID;
+				WHERE NotificationID = pLastInsert;
 			ELSE
 				UPDATE Notification n
-				INNER JOIN (SELECT DISTINCT nrl.MessageId, nrl.SiteNameGroup, nrl.ChannelId, nrl.Status, nrl.StatusID FROM tmp_NotificationRecipientList nrl) AS t 
-					ON t.MessageId = pMessageId AND t.SiteNameGroup = pSiteNameGroup AND t.ChannelId = pChannelId
+				INNER JOIN (SELECT DISTINCT nrl.NotificationId, nrl.SiteNameGroup, nrl.ChannelId, nrl.Status, nrl.StatusID FROM tmp_NotificationRecipientList nrl) AS t 
+					ON t.NotificationId = pLastInsert AND t.SiteNameGroup = pSiteNameGroup AND t.ChannelId = pChannelId
 				SET n.Status = t.Status
   				    ,n.StatusID = t.StatusID
-				WHERE n.NotificationID = pNotificationID;
+				WHERE n.NotificationID = pLastInsert;
 			END IF;
-			DELETE FROM tmpMessageChannel m WHERE m.MessageId = pMessageId AND m.ChannelId = pChannelId AND m.SiteNameGroup = pSiteNameGroup;
+			DELETE FROM tmpMessageChannel m WHERE m.NotificationId = pLastInsert AND m.ChannelId = pChannelId AND m.SiteNameGroup = pSiteNameGroup;
 		END WHILE;
 		SET iLoop := iLoop + 1;
 	END WHILE;

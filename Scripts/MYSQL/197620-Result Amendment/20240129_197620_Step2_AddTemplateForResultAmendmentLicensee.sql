@@ -99,4 +99,4 @@ FROM tmp_Template;
 
 UPDATE SystemSetting
 SET Value = @tmp_TemplateNew
-WHERE ID = 44;
+WHERE ID = 45;

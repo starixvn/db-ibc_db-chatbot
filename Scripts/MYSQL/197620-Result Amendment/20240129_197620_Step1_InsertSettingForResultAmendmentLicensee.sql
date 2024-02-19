@@ -11,7 +11,7 @@ SELECT 42 AS ID, 'Result Amendment - Licensee - Job Sync Status (Running/Done)' 
 UNION ALL 
 SELECT 43 AS ID, 'Result Amendment - Licensee - Batch Size' 															AS Description, '10'    	AS Value, 8 AS JobIdentify, 'Result Amendment - Licensee' AS JobDescription, 'BatchSize' 				AS SettingName
 UNION ALL 
-SELECT 44 AS ID, 'Result Amendment - Licensee - LastMsgTargetId' 														AS Description, '0' 		AS Value, 8 AS JobIdentify, 'Result Amendment - Licensee' AS JobDescription, 'LastMsgTargetId' 			AS SettingName
+SELECT 44 AS ID, 'Result Amendment - Licensee - ReferenceId - LastMsgTargetId' 											AS Description, '0' 		AS Value, 8 AS JobIdentify, 'Result Amendment - Licensee' AS JobDescription, 'LastMsgTargetId' 			AS SettingName
 UNION ALL 
 SELECT 45 AS ID, 'Result Amendment - Licensee - Notification Template ID / MsgContentsType / NotificationType' 			AS Description, '' 			AS Value, 8 AS JobIdentify, 'Result Amendment - Licensee' AS JobDescription, 'NotificationTemplate' 	AS SettingName
 UNION ALL 
@@ -23,7 +23,7 @@ SELECT 47 AS ID, 'Result Amendment - Internal CSD - Job Sync Status (Running/Don
 UNION ALL 
 SELECT 48 AS ID, 'Result Amendment - Internal CSD - Batch Size' 														AS Description, '10'    	AS Value, 9 AS JobIdentify, 'Result Amendment - Internal CSD' AS JobDescription, 'BatchSize' 				AS SettingName
 UNION ALL 
-SELECT 49 AS ID, 'Result Amendment - Internal CSD - LastMsgTargetId' 													AS Description, '0' 		AS Value, 9 AS JobIdentify, 'Result Amendment - Internal CSD' AS JobDescription, 'LastMsgTargetId' 			AS SettingName
+SELECT 49 AS ID, 'Result Amendment - Internal CSD - ReferenceId - NotificationId' 										AS Description, '0' 		AS Value, 9 AS JobIdentify, 'Result Amendment - Internal CSD' AS JobDescription, 'NotificationId' 			AS SettingName
 UNION ALL 
 SELECT 50 AS ID, 'Result Amendment - Internal CSD - Notification Template ID / MsgContentsType / NotificationType' 		AS Description, '' 			AS Value, 9 AS JobIdentify, 'Result Amendment - Internal CSD' AS JobDescription, 'NotificationTemplate' 	AS SettingName
 UNION ALL 
