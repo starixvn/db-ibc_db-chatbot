@@ -1,4 +1,4 @@
-/*<info serverAlias="DBBOT-bodb_ChatBot" executers="bodbDownlineNet" isFunction="0" isNested="1"></info>*/
+/*<info serverAlias="DBBOT-bodb_ChatBot" executers="wsv_alp" isFunction="0" isNested="1"></info>*/
 ALTER PROCEDURE [dbo].[Age_Chatbot_BotSystemSetting_Upd]
 	@ServiceName		 VARCHAR(100)
 	,@Setting			 XML
@@ -15,6 +15,7 @@ AS
 	Revisions:
 		- 20220509@Malcolm: Initialize SP [RedmineID: #167819]
 		- 20221011@Malcolm: Enhance Sps [RedmineID: #176397]
+		- 20240530@Luke: Telegram Chatbot - Notify Member Last bets [Redmine: #193689]
 
 	Param's Explanation:
 		. @Setting = '<root>
@@ -29,12 +30,12 @@ BEGIN
 
 	SELECT @Environment = CASE WHEN @Environment <> 'UAT' THEN '' ELSE 'UAT' END
 
-	DECLARE @TmpSetting TABLE (SettingName VARCHAR(100), Value VARCHAR(1000))
+	DECLARE @TmpSetting TABLE (SettingName VARCHAR(100), Value VARCHAR(MAX))
 
 	INSERT INTO @TmpSetting (SettingName, Value)
 	SELECT 
 		t.c.value('@SettingName', 'VARCHAR(100)') AS SettingName
-		,t.c.value('@Value', 'VARCHAR(1000)') AS Value
+		,t.c.value('@Value', 'VARCHAR(MAX)') AS Value
 	FROM @Setting.nodes('root/r') t(c)
 
 	IF @IncludeEnvironment = 1
