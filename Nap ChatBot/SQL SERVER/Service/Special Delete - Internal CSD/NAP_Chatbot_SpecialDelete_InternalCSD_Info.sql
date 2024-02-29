@@ -578,6 +578,7 @@ BEGIN
 				,IIF(t.VoidingHistoryCollectionId = 0, t.MessageId, 0) AS MessageId
 				,t.SiteNameGroup
 				,CASE WHEN ISNULL(st.SiteLabel, '') = '789y' THEN  '789y'
+					  WHEN ISNULL(st.SiteLabel, '') = '777'  THEN  '777'
 					  WHEN s.custId IS NULL AND c.site <> 'CN88' THEN 'NV88'   
 				 ELSE c.site END AS site
 				,CASE WHEN s.custId IS NULL THEN 0 ELSE 1 END AS isDeposit
@@ -734,6 +735,7 @@ BEGIN
 			,a.MinWinlostDate
 			,a.MaxWinlostDate
 			,CASE WHEN ISNULL(st.SiteLabel, '') = '789y' THEN  '789y'
+				  WHEN ISNULL(st.SiteLabel, '') = '777'  THEN  '777'
 				  WHEN s.custId IS NULL AND c.site <> 'CN88' THEN 'NV88'   
 			 ELSE c.site END AS SiteName
 			,CONVERT(BIT, CASE WHEN s.custId IS NULL THEN 0 ELSE 1 END) AS IsDeposit
@@ -756,7 +758,9 @@ BEGIN
 			,d.Status
 			,d.Stake
 			,d.Transdate
-			,CASE WHEN ISNULL(st.SiteLabel, '') = '789y' THEN  '789y'
+			,CASE 
+				  WHEN ISNULL(st.SiteLabel, '') = '789y' THEN '789y'
+				  WHEN ISNULL(st.SiteLabel, '') = '777'  THEN '777'
 				  WHEN s.custId IS NULL AND c.site <> 'CN88' THEN 'NV88'   
 			 ELSE c.site END AS SiteName
 			,CONVERT(BIT, CASE WHEN s.custId IS NULL THEN 0 ELSE 1 END) AS IsDeposit
