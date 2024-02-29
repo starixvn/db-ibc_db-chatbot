@@ -1,6 +1,7 @@
 /*<info serverAlias="DBACC-bodb02" executers="bodbAdminNet" isFunction="0" isNested="0"></info>*/
 ALTER PROCEDURE [dbo].[NAP_Chatbot_SpecialDeleteIssueType_Sel]
-	@Message XML
+	@Message		XML
+	,@MessageDetail XML
 AS
 
 /*
@@ -11,12 +12,18 @@ AS
 	Revisions:
 		- 20230817@Malcolm: Initialize SPs [RedmineId : #191355]
 		- 20230925@Malcolm: Add LeagueName [RedmineId : #193252]
+		- 20240108@Malcolm: Remove SABA text for TVS [RedmineID: #199482]
 
 	Param's Explanation:
 		+ @Message:
 			<root>
 				<r MessageId="1" MsgContentsType="1" Content_en="2" Content_cs="0" PostTime="1" IsNew="1" MatchId="1"/>
 			</root>
+		+ @MessageDetail:
+			<root>
+				<r MessageId="1" TargetId="1" Site="2" LeagueGroupId="0" IsChinaView="1" SpecialPlatform="1"/>
+			</root>
+
 		+ IssueTypeId = 20 : Void Duplicated tickets
 */
 
@@ -37,14 +44,39 @@ BEGIN
 	FROM @Message.nodes('root/r') AS t(c)
 	OPTION (OPTIMIZE FOR (@Message = NULL))
 
+	CREATE TABLE #MessageDetail (MessageId INT, TargetId INT, Site VARCHAR(50), LeagueGroupId SMALLINT, IsChinaView BIT, SpecialPlatform TINYINT)
+
+	INSERT INTO #MessageDetail (MessageId, TargetId, Site, LeagueGroupId, IsChinaView, SpecialPlatform)
+	SELECT
+		t.c.value('@MessageId', 'INT') AS MessageId
+		,t.c.value('@TargetId', 'INT') AS TargetId
+		,t.c.value('@Site', 'VARCHAR(50)') AS Site
+		,t.c.value('@LeagueGroupId', 'SMALLINT') AS LeagueGroupId
+		,t.c.value('@IsChinaView', 'BIT') AS IsChinaView
+		,t.c.value('@SpecialPlatform', 'TINYINT') AS SpecialPlatform
+	FROM @MessageDetail.nodes('root/r') AS t(c)
+	OPTION (OPTIMIZE FOR (@MessageDetail = NULL))
+
+	/*Detect duplicated tickets*/
 	UPDATE m
 		SET m.IssueType = CASE WHEN n.IssueTypeId = 20 THEN 20 ELSE 0 END
 	FROM #Message m
 	CROSS APPLY (
 		SELECT TOP(1) r.IssueTypeId
-		FROM dbo.TicketVoiding_VoidingHistory vh WITH(NOLOCK)
-			INNER JOIN dbo.TicketVoiding_Request r WITH(NOLOCK) ON r.RequestId = vh.RequestId
-		WHERE vh.MessageId = m.MessageId
+		FROM dbo.TicketVoiding_VoidingHistory v WITH(NOLOCK)
+			INNER JOIN dbo.TicketVoiding_Request r WITH(NOLOCK) ON r.RequestId = v.RequestId
+		WHERE v.MessageId = m.MessageId
+	) AS n
+	WHERE m.MsgContentsType IN (101, 102) -- Void Settled Tickets
+
+	UPDATE m
+		SET m.IssueType = CASE WHEN n.IssueTypeId = 20 OR m.IssueType = 20 THEN 20 ELSE 0 END
+	FROM #Message m
+	CROSS APPLY (
+		SELECT TOP(1) r.IssueTypeId
+		FROM dbo.TicketVoiding_VoidingHistory v WITH(NOLOCK)
+			INNER JOIN dbo.TicketVoiding_Request r WITH(NOLOCK) ON r.RequestId = v.RequestId
+		WHERE v.MessageIdSpecial = m.MessageId
 	) AS n
 	WHERE m.MsgContentsType IN (101, 102) -- Void Settled Tickets
 
@@ -63,6 +95,12 @@ BEGIN
 	FROM #Message ms
 		INNER JOIN CTE_Match m ON m.MessageId = ms.MessageId
 
+	-- Not remove SABA text for tcikets voided by TVS Function (Abnormal bet, Ab real member, Abnormal Accounts, Duplicated Tickets)
+	UPDATE m
+		SET m.LeagueGroupId = 0
+	FROM #MessageDetail m
+		INNER JOIN dbo.VoidingHistoryCollectionDetail d WITH(NOLOCK) ON d.MessageId = m.MessageId
+
 	SELECT MessageId, MsgContentsType, Content_en, Content_cs, PostTime, IsNew, IssueType, ISNULL(l.LeagueNameEN, '') AS LeagueNameEN, ISNULL(l.LeagueNameCS, '') AS LeagueNameCS
 	FROM #Message ms
 		OUTER APPLY (
@@ -72,7 +110,11 @@ BEGIN
 			WHERE m.matchid = ms.MatchId
 		) AS l
 
+	SELECT MessageId, TargetId, Site, LeagueGroupId, IsChinaView, SpecialPlatform
+	FROM #MessageDetail
+
 	DROP TABLE #Message
+	DROP TABLE #MessageDetail
 
 END
 GO

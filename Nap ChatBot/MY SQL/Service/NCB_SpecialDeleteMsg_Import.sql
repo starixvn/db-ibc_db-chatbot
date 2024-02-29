@@ -15,15 +15,15 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_SpecialDeleteMsg_Import(
         Param:
 				-  @MessageHeader:
 							[  
-								{ "MessageID":885128, "MsgContentsType":101, "Content_en":"Attn:[Soccer] Due to bets er...", "Content_cs":"請注意:[籃球] 由於中文隊名顯示..", "PostTime":"2023-08-17", "IsNew":"0", "IssueType":"20" ,"LeagueNameEN":"LeagueNameEN","LeagueNameCS":"LeagueNameCS"}
-								,{ "MessageID":885131,"MsgContentsType":101,"Content_en":"Attn:[Soccer] Due to bets er...", "Content_cs":"請注意:[籃球] 由於中文隊名顯示...", "PostTime":"2023-08-17", "IsNew":"0", "IssueType":"0","LeagueNameEN":"LeagueNameEN","LeagueNameCS":"LeagueNameCS"}
+								{ "MessageId":885128, "MsgContentsType":101, "Content_en":"Attn:[Soccer] Due to bets er...", "Content_cs":"請注意:[籃球] 由於中文隊名顯示..", "PostTime":"2023-08-17", "IsNew":"0", "IssueType":"20" ,"LeagueNameEN":"LeagueNameEN","LeagueNameCS":"LeagueNameCS"}
+								,{ "MessageId":885131,"MsgContentsType":101,"Content_en":"Attn:[Soccer] Due to bets er...", "Content_cs":"請注意:[籃球] 由於中文隊名顯示...", "PostTime":"2023-08-17", "IsNew":"0", "IssueType":"0","LeagueNameEN":"LeagueNameEN","LeagueNameCS":"LeagueNameCS"}
 							]
 				- @MessageDetail
 							[  
-								{ "MessageID":885128, "Site":"IBO" , "LeagueGroupID":"8" ,"IsChinaView":"0", "SpecialPlatform":"0"}
-								, { "MessageID":885128, "Site":"XTD3" , "LeagueGroupID":"8" ,"IsChinaView":"0", "SpecialPlatform":"0"}
-								, { "MessageID":885131,"Site":"mansion88", "LeagueGroupID":"8" ,"IsChinaView":"0", "SpecialPlatform":"0"}
-								, { "MessageID":885131, "Site":"haifa", "LeagueGroupID":"8" ,"IsChinaView":"0", "SpecialPlatform":"2"}
+								{ "MessageId":885128, "Site":"IBO" , "LeagueGroupId":"8" ,"IsChinaView":"0", "SpecialPlatform":"0"}
+								, { "MessageId":885128, "Site":"XTD3" , "LeagueGroupId":"8" ,"IsChinaView":"0", "SpecialPlatform":"0"}
+								, { "MessageId":885131,"Site":"mansion88", "LeagueGroupId":"8" ,"IsChinaView":"0", "SpecialPlatform":"0"}
+								, { "MessageId":885131, "Site":"haifa", "LeagueGroupId":"8" ,"IsChinaView":"0", "SpecialPlatform":"2"}
 							]
         Revisions:
 				- 20191211@Dominic: First Commit
@@ -35,6 +35,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_SpecialDeleteMsg_Import(
 				- 20230731@Malcolm: Incorporate voiding duplicated bet tickets with TVS [RedmineId : #191355]
 				- 20230919@Malcolm: Remove SABA text out of the league name for Jollysports platform [RedmineId : #193252]
 				- 20230925@Malcolm: Hardcode to display Currency for Jollysports market [RedmineId : #193252]
+				- 20240129@Malcolm: Change MessageID to MessageId [RedmineId : #199482]
     */
 )
 SQL SECURITY DEFINER
@@ -89,7 +90,7 @@ NCB_SpecialDeleteMsg_Import:BEGIN
     CREATE TEMPORARY TABLE IF NOT EXISTS tmp_MsgHeader
 	(
             Id 				INT NOT NULL AUTO_INCREMENT,
-            MessageID 		INT,
+            MessageId 		INT,
             MsgContentsType INT,
             Content_en 		TEXT, 
             Content_cs 		TEXT,
@@ -103,12 +104,12 @@ NCB_SpecialDeleteMsg_Import:BEGIN
 			LeagueNameENRemovedSABA TEXT,
 			LeagueNameCSRemovedSABA TEXT,
             PRIMARY KEY (Id),
-            UNIQUE INDEX Index_MessageID(MessageID)
+            UNIQUE INDEX Index_MessageID(MessageId)
     );
     
 	INSERT INTO tmp_MsgHeader 
 	(
-		MessageID
+		MessageId
 		,MsgContentsType
 		,Content_en
 		,Content_cs
@@ -122,7 +123,7 @@ NCB_SpecialDeleteMsg_Import:BEGIN
 		,LeagueNameCSRemovedSABA
 	)
 	SELECT 
-		t.MessageID
+		t.MessageId
 		,t.MsgContentsType
 		,t.Content_en
 		,t.Content_cs
@@ -141,7 +142,7 @@ NCB_SpecialDeleteMsg_Import:BEGIN
             "$[*]"
             COLUMNS
             (
-				MessageID 		INT 			 PATH "$.MessageID", 
+				MessageId 		INT 			 PATH "$.MessageId", 
 				MsgContentsType INT 			 PATH "$.MsgContentsType", 
 				Content_en 		TEXT 			 PATH "$.Content_en", 
 				Content_cs      TEXT 			 PATH "$.Content_cs", 
@@ -156,18 +157,18 @@ NCB_SpecialDeleteMsg_Import:BEGIN
 	DROP TEMPORARY TABLE IF EXISTS tmp_MsgDetail;
     CREATE TEMPORARY TABLE IF NOT EXISTS tmp_MsgDetail
 	(
-            MessageID 		 INT, 
+            MessageId 		 INT, 
             Site 			 TEXT,
             RecipientID 	 INT,
             LicenseeStatusID INT,
-			LeagueGroupID    SMALLINT UNSIGNED,
+			LeagueGroupId    SMALLINT UNSIGNED,
 			IsChinaView      TINYINT,
 			SpecialPlatform	 TINYINT UNSIGNED,
-            INDEX Index_MessageID(MessageID)
+            INDEX Index_MessageID(MessageId)
     );
     
-	INSERT INTO tmp_MsgDetail (MessageID, Site, LeagueGroupID, IsChinaView, SpecialPlatform)
-	SELECT t.MessageID, t.Site, IFNULL(t.LeagueGroupID, 0), t.IsChinaView, t.SpecialPlatform
+	INSERT INTO tmp_MsgDetail (MessageId, Site, LeagueGroupId, IsChinaView, SpecialPlatform)
+	SELECT t.MessageId, t.Site, IFNULL(t.LeagueGroupId, 0), t.IsChinaView, t.SpecialPlatform
     FROM 
 		JSON_TABLE
         (
@@ -175,9 +176,9 @@ NCB_SpecialDeleteMsg_Import:BEGIN
             "$[*]"
             COLUMNS
             (
-				MessageID 		INT 		 		PATH "$.MessageID", 
+				MessageId 		INT 		 		PATH "$.MessageId", 
 				Site 			TEXT 		 		PATH "$.Site", 
-				LeagueGroupID 	SMALLINT UNSIGNED 	PATH "$.LeagueGroupID", 
+				LeagueGroupId 	SMALLINT UNSIGNED 	PATH "$.LeagueGroupId", 
 				IsChinaView     TINYINT 		 	PATH "$.IsChinaView",
 				SpecialPlatform TINYINT UNSIGNED	PATH "$.SpecialPlatform"
             )
@@ -359,7 +360,7 @@ NCB_SpecialDeleteMsg_Import:BEGIN
         ,tpl.Status
         ,d.LicenseeStatusID
 		,g.ChannelID
-		,CASE WHEN d.LeagueGroupID IN (42, 74, 108, 113, 122, 151) AND (d.IsChinaView = 1 OR IFNULL(d.SpecialPlatform, 0) <> 0) THEN 1 ELSE 0 END AS IsRemoveSABA
+		,CASE WHEN d.LeagueGroupId IN (42, 74, 108, 113, 122, 151) AND (d.IsChinaView = 1 OR IFNULL(d.SpecialPlatform, 0) <> 0) THEN 1 ELSE 0 END AS IsRemoveSABA
     FROM tmp_MsgHeader h
         INNER JOIN tmp_MsgDetail d ON d.MessageID = h.MessageID
         INNER JOIN  tmp_MsgContentTypeTemplate tpl ON tpl.MsgContentsType = h.MsgContentsType AND tpl.IssueType = h.IssueType

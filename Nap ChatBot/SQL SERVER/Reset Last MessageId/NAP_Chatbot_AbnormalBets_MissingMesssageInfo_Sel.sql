@@ -11,6 +11,7 @@ AS
 		- 20211007@Malcolm: Initialize SP [RedmineID: #162825]
 		- 20230118@Malcolm: Scale out for ChatBot [RedmineID: #181907]
 		- 20231122@Malcolm: Get setting for Internal - CSD [RedmineID: #196660]
+		- 20240108@Malcolm: Remove SABA text for TVS [RedmineID: #199482]
 
 	Param's Explanation:
 	@MessageList: 
@@ -33,16 +34,9 @@ BEGIN
 	
 	SELECT @MaxVoidingHistoryCollectionId = MAX(VoidingHistoryCollectionId) FROM dbo.VoidingHistoryCollection WITH(NOLOCK)
 
-	INSERT INTO @RequestInfo (VoidingHistoryCollectionId, MessageId, RequestId)
-	SELECT vc.VoidingHistoryCollectionId, vh.MessageId, vh.RequestId
-	FROM dbo.VoidingHistoryCollection vc WITH(NOLOCK)
-		INNER JOIN dbo.VoidingHistoryCollectionDetail vcd WITH(NOLOCK) ON vcd.VoidingHistoryCollectionId = vc.VoidingHistoryCollectionId
-		INNER JOIN dbo.TicketVoiding_VoidingHistory vh WITH(NOLOCK) ON vh.VoidingHistoryId = vcd.VoidingHistoryId
-	WHERE vc.VoidingHistoryCollectionId > @FromVoidingHistoryCollectionId AND vc.VoidingHistoryCollectionId <= @MaxVoidingHistoryCollectionId
-
-	SELECT VoidingHistoryCollectionId, MessageId, RequestId
-	FROM @RequestInfo
+	SELECT vcd.VoidingHistoryCollectionId, vcd.MessageId, vcd.RequestId
+	FROM dbo.VoidingHistoryCollectionDetail vcd WITH(NOLOCK)
+	WHERE vcd.VoidingHistoryCollectionId > @FromVoidingHistoryCollectionId AND vcd.VoidingHistoryCollectionId <= @MaxVoidingHistoryCollectionId
 	ORDER BY VoidingHistoryCollectionId, MessageId, RequestId
-	
 END
 GO

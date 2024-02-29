@@ -10,6 +10,7 @@ AS
 	Revisions:
 		- 20231122@Malcolm: Exclude abnormal bet void by request [RedmineID: #196660]
 		- 20231208@Malcolm: Only get member level data [RedmineID: #191062]
+		- 20240108@Malcolm: Remove SABA text for TVS [RedmineID: #199482]
 
 	Param's Explanation:
 	
@@ -47,7 +48,7 @@ BEGIN
 	
 	SELECT m.VoidingHistoryCollectionId, m.MsgTargetId, m.MessageId, m.MessageIds, m.Content_en, m.PostTime, m.JobIdentify
 	FROM #Message m
-		LEFT JOIN dbo.TicketVoiding_VoidingHistory vh WITH(NOLOCK) ON m.MessageId = vh.MessageId AND m.JobIdentify = 2 AND m.VoidingHistoryCollectionId = 0
+		LEFT JOIN dbo.VoidingHistoryCollectionDetail vh WITH(NOLOCK) ON m.MessageId = vh.MessageId AND m.JobIdentify = 2 AND m.VoidingHistoryCollectionId = 0
 	WHERE vh.MessageId IS NULL
 	ORDER BY m.JobIdentify ASC, m.VoidingHistoryCollectionId DESC, ISNULL(m.MsgTargetId, 0) DESC, m.MessageId DESC
 	

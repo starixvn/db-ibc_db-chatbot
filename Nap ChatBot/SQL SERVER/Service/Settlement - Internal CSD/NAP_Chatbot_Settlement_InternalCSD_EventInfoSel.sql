@@ -12,6 +12,7 @@ AS
 	Revisions:
 		- 20231031@Malcolm: Initialize SP [RedmineId: #195404]
 		- 20231204@Malcolm: Only get member level data [RedmineId: #191062]
+		- 20240201@Malcolm: Get data of 777 Site [RedmineId: #198905]
 		
 
 	Param's Explanation:
@@ -28,18 +29,7 @@ AS
 BEGIN
 	SET NOCOUNT ON
 
-	CREATE TABLE #MessageInfo (MessageId INT, MsgContentsType TINYINT, MatchId INT, EventDate DATETIME, SportName NVARCHAR(50), TotalTickets INT, Content_en NVARCHAR(4000), Content_cs NVARCHAR(4000))
-	INSERT INTO #MessageInfo (MessageId, MsgContentsType, MatchId, Content_en, Content_cs)
-	SELECT DISTINCT 
-		t.c.value('@MessageId', 'INT') AS MessageId
-		,t.c.value('@MsgContentsType', 'TINYINT') AS MsgContentsType
-		,t.c.value('@MatchId', 'INT') AS MatchId
-		,t.c.value('@Content_en', 'NVARCHAR(4000)') AS Content_en
-		,t.c.value('@Content_cs', 'NVARCHAR(4000)') AS Content_cs
-	FROM @MessageInfo.nodes('root/r') AS t(c)
-	OPTION (OPTIMIZE FOR (@MessageInfo = NULL)) 
-
-	CREATE TABLE #MessageDetail (MessageId INT, MsgTargetId INT, TargetId INT, TransId BIGINT, CustId INT, SiteName NVARCHAR(50), IsTest BIT, IsDeposit BIT)
+	CREATE TABLE #MessageDetail (MessageId INT, SiteNameGroup NVARCHAR(50), MsgTargetId INT, TargetId INT, TransId BIGINT, CustId INT, SiteName NVARCHAR(50), IsTest BIT, IsDeposit BIT)
 	INSERT INTO #MessageDetail (MessageId, MsgTargetId, TargetId, TransId)
 	SELECT DISTINCT 
 		t.c.value('@MessageId', 'INT') AS MessageId
@@ -80,19 +70,7 @@ BEGIN
 			+ Site <> CN88 AND SiteLabel isn't 789y	--> show Site = NV88
 		IF Customer Is Deposit						--> Show Site = Customer.Site
 	*/
-	;WITH CTE_site AS (
-		SELECT DISTINCT
-			CASE 
-				WHEN ISNULL(st.SiteLabel, '') = '789y' THEN  '789y'
-				WHEN s.custId IS NULL AND c.site <> 'CN88' THEN 'NV88'   
-			ELSE c.site END AS site
-			,CASE WHEN s.custId IS NULL THEN 0 ELSE 1 END AS isDeposit
-			,CASE WHEN c.currency = 20 THEN 1 ELSE 0 END AS IsTest
-		FROM #MessageDetail t
-			INNER JOIN dbo.Customer c WITH(NOLOCK) ON t.CustId = c.custId
-			INNER JOIN dbo.Site st WITH(NOLOCK) ON st.site = c.site
-			LEFT JOIN dbo.Dep_CustSuper s WITH (NOLOCK) ON c.srecommend = s.custId
-	) 
+	
 	UPDATE t
 		SET t.SiteName = CASE 
 							WHEN ISNULL(st.SiteLabel, '') = '789y' THEN  '789y'
@@ -100,30 +78,61 @@ BEGIN
 						 ELSE c.site END 
 			,t.isDeposit = CASE WHEN s.custId IS NULL THEN 0 ELSE 1 END
 			,t.IsTest    = CASE WHEN c.currency = 20 THEN 1 ELSE 0 END
+			,t.SiteNameGroup = CASE WHEN st.SiteLabel = '777' THEN '777' ELSE 'Normal' END
 	FROM #MessageDetail t
 		INNER JOIN dbo.Customer c WITH(NOLOCK) ON t.CustId = c.custId
 		INNER JOIN dbo.Site st WITH(NOLOCK) ON st.site = c.site
 		LEFT JOIN dbo.Dep_CustSuper s WITH (NOLOCK) ON c.srecommend = s.custId
+		
+	CREATE TABLE #MessageInfo 
+	(
+		MessageId			INT
+		,SiteNameGroup		NVARCHAR(50)
+		,MsgContentsType	TINYINT
+		,MatchId			INT
+		,EventDate			DATETIME
+		,SportName			NVARCHAR(50)
+		,TotalTickets		INT
+		,Content_en			NVARCHAR(4000)
+		,Content_cs			NVARCHAR(4000)
+	)
+
+	;WITH CTE_SiteNameGroup AS (
+		SELECT DISTINCT MessageId, SiteNameGroup FROM #MessageDetail 
+	), CTE_Message AS (
+		SELECT DISTINCT 
+			t.c.value('@MessageId', 'INT') AS MessageId
+			,t.c.value('@MsgContentsType', 'TINYINT') AS MsgContentsType
+			,t.c.value('@MatchId', 'INT') AS MatchId
+			,t.c.value('@Content_en', 'NVARCHAR(4000)') AS Content_en
+			,t.c.value('@Content_cs', 'NVARCHAR(4000)') AS Content_cs
+		FROM @MessageInfo.nodes('root/r') AS t(c)
+	)
+	INSERT INTO #MessageInfo (MessageId, SiteNameGroup, MsgContentsType, MatchId, Content_en, Content_cs)
+	SELECT m.MessageId, g.SiteNameGroup, m.MsgContentsType, m.MatchId, m.Content_en, m.Content_cs
+	FROM CTE_Message m 	
+		INNER JOIN CTE_SiteNameGroup g ON g.MessageId = m.MessageId
+	OPTION (OPTIMIZE FOR (@MessageInfo = NULL)) 
 	
 	;WITH CTE_CommonInfo AS (
-		SELECT m.MessageId, m.MsgContentsType, m.MatchId, mt.kickofftime AS EventDate, m.Content_en,  m.Content_cs, ISNULL(s.SportName, '') AS SportName, t.TotalTickets, t.IsTest
+		SELECT m.MessageId, m.SiteNameGroup, m.MsgContentsType, m.MatchId, mt.kickofftime AS EventDate, m.Content_en,  m.Content_cs, ISNULL(s.SportName, '') AS SportName, t.TotalTickets, t.IsTest
 		FROM #MessageInfo m
 			LEFT JOIN bodb02.dbo.match mt WITH(NOLOCK) ON mt.matchid = m.MatchId
 			LEFT JOIN bodb02.dbo.Sports s WITH(NOLOCK) ON s.SportType = mt.sporttype
 			OUTER APPLY (
 				SELECT COUNT(DISTINCT md.TransId) AS TotalTickets, MIN(CONVERT(TINYINT, IsTest)) AS IsTest
 				FROM #MessageDetail md
-				WHERE md.MessageId = m.MessageId
+				WHERE md.MessageId = m.MessageId AND md.SiteNameGroup = m.SiteNameGroup
 			) AS t
 	),CTE_EventInfo AS (
 		SELECT 
-			c.MessageId, c.MsgContentsType, c.MatchId, c.EventDate, c.SportName, c.Content_en, c.Content_cs, c.TotalTickets, c.IsTest
+			c.MessageId, c.SiteNameGroup, c.MsgContentsType, c.MatchId, c.EventDate, c.SportName, c.Content_en, c.Content_cs, c.TotalTickets, c.IsTest
 			,STUFF
 			(
 				(
 					SELECT DISTINCT ', ' + SiteName 
 					FROM #MessageDetail md 
-					WHERE md.MessageId = c.MessageId AND md.IsDeposit = 1
+					WHERE md.MessageId = c.MessageId AND md.IsDeposit = 1 AND md.SiteNameGroup = c.SiteNameGroup
 					FOR XML PATH('')
 				), 1, 1, ''
 			) AS DepositSiteList
@@ -132,16 +141,16 @@ BEGIN
 				(
 					SELECT DISTINCT ', ' + SiteName 
 					FROM #MessageDetail md 
-					WHERE md.MessageId = c.MessageId AND md.IsDeposit = 0
+					WHERE md.MessageId = c.MessageId AND md.IsDeposit = 0 AND md.SiteNameGroup = c.SiteNameGroup
 					FOR XML PATH('')
 				), 1, 1, ''
 			) AS CreditSiteList
 		FROM CTE_CommonInfo c
 	)
-	SELECT e.MessageId, e.MsgContentsType, e.MatchId, e.EventDate, e.SportName AS SportNameEN, e.TotalTickets, ISNULL(e.CreditSiteList, '') AS CreditSiteList, ISNUll(e.DepositSiteList, '') AS DepositSiteList, e.Content_en, e.Content_cs, e.IsTest
+	SELECT e.MessageId, e.SiteNameGroup, e.MsgContentsType, e.MatchId, e.EventDate, e.SportName AS SportNameEN, e.TotalTickets, ISNULL(e.CreditSiteList, '') AS CreditSiteList, ISNUll(e.DepositSiteList, '') AS DepositSiteList, e.Content_en, e.Content_cs, e.IsTest
 	FROM CTE_EventInfo e
 
-	SELECT DISTINCT MessageId, MsgTargetId
+	SELECT DISTINCT MessageId, SiteNameGroup, MsgTargetId
 	FROM #MessageDetail
 
 	DROP TABLE #MessageInfo
