@@ -16,15 +16,16 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_Settlement_InternalCSD_Import
     Params    :
     - @messageHeader:
 							[  
-								{"MessageId":"1", "EventDate":"2020-02-12 03:00:00", "TotalTickets": 1, "CreditSiteList":"CN88NV88", "DepositSiteList":"12BETHaifa", "Content_en":"", "Content_cs":"",  "MatchId":"123", "SportNameEN":"SportNameEN", "MsgContentsType":105, "IsTest":0}
+								{"MessageId":"1", "SiteNameGroup":"777", "EventDate":"2020-02-12 03:00:00", "TotalTickets": 1, "CreditSiteList":"CN88NV88", "DepositSiteList":"12BETHaifa", "Content_en":"", "Content_cs":"",  "MatchId":"123", "SportNameEN":"SportNameEN", "MsgContentsType":105, "IsTest":0}
 							]
 	- @messageDetail: 		[
-								{ "MessageId":885128, "MsgTargetId": 1}
+								{ "MessageId":885128, "SiteNameGroup":"777", "MsgTargetId": 1}
 							]
 
     Revisions :
       - 20231031@Malcolm: Initiliaze SP [RedmineID: #127944]
 	  - 20231204@Malcolm: Only get member level data [RedmineId: #191062]
+	  - 20230201@Malcolm: Get data of 777 Site [RedmineId: #198905]
 	  
 	Param's Explanation:
     
@@ -46,6 +47,7 @@ NCB_Settlement_InternalCSD_Import:BEGIN
 	DECLARE pIsTest TINYINT;
 	DECLARE pChannelId TINYINT UNSIGNED;
 	DECLARE pMessageId INT;
+	DECLARE pSiteNameGroup VARCHAR(50);
 
 	# Constants
 	DECLARE ACTION_ID INT DEFAULT 32;
@@ -77,7 +79,8 @@ NCB_Settlement_InternalCSD_Import:BEGIN
 	CREATE TEMPORARY TABLE IF NOT EXISTS tmp_MsgHeader
 	(
 		Id							INT NOT NULL AUTO_INCREMENT
-		,MessageId 					INT 
+		,MessageId 					INT
+		,SiteNameGroup				VARCHAR(50)
 		,EventDate		 			DATETIME
 		,TotalTickets 				INT
 		,CreditSiteList 			TEXT
@@ -90,12 +93,13 @@ NCB_Settlement_InternalCSD_Import:BEGIN
         ,IsTest 					TINYINT
 		,Content_Detail				TEXT
 		,PRIMARY KEY (Id)
-		,UNIQUE INDEX Index_MessageId(MessageId)
+		,UNIQUE INDEX Index_MessageId(MessageId, SiteNameGroup)
 	);
 
 	INSERT INTO tmp_MsgHeader
 	(
 		MessageId
+		,SiteNameGroup
 		,EventDate
         ,TotalTickets
         ,CreditSiteList 
@@ -109,6 +113,7 @@ NCB_Settlement_InternalCSD_Import:BEGIN
 	)
 	SELECT 
 		t.MessageId
+		,t.SiteNameGroup
 		,t.EventDate
         ,t.TotalTickets
         ,t.CreditSiteList 
@@ -127,9 +132,10 @@ NCB_Settlement_InternalCSD_Import:BEGIN
 			COLUMNS
 			(
 				MessageId 					INT         		PATH "$.MessageId"
+				,SiteNameGroup 				VARCHAR(50)         PATH "$.SiteNameGroup"
 				,EventDate 					DATETIME            PATH "$.EventDate"
 				,TotalTickets 				INT             	PATH "$.TotalTickets"
-				,CreditSiteList 			TEXT            PATH "$.CreditSiteList"
+				,CreditSiteList 			TEXT            	PATH "$.CreditSiteList"
 				,DepositSiteList 			TEXT            	PATH "$.DepositSiteList"
 				,Content_en 				TEXT            	PATH "$.Content_en"
 				,Content_cs 				TEXT            	PATH "$.Content_cs"
@@ -143,13 +149,14 @@ NCB_Settlement_InternalCSD_Import:BEGIN
 	DROP TEMPORARY TABLE IF EXISTS tmp_MsgDetail;
 	CREATE TEMPORARY TABLE IF NOT EXISTS tmp_MsgDetail
 	(
-		MessageId		INT 
+		MessageId		INT
+		,SiteNameGroup 	VARCHAR(50)
         ,MsgTargetId	INT 
-		,UNIQUE INDEX Index_MessageId(MessageId, MsgTargetId)
+		,UNIQUE INDEX Index_MessageId(MessageId, SiteNameGroup, MsgTargetId)
 	);
     
-    INSERT INTO tmp_MsgDetail (MessageId, MsgTargetId)
-	SELECT t.MessageId, t.MsgTargetId
+    INSERT INTO tmp_MsgDetail (MessageId, SiteNameGroup, MsgTargetId)
+	SELECT t.MessageId, t.SiteNameGroup, t.MsgTargetId
 	FROM 
 		JSON_TABLE
 		(
@@ -157,8 +164,9 @@ NCB_Settlement_InternalCSD_Import:BEGIN
 			,"$[*]"
 			COLUMNS
 			(
-				MessageId		INT PATH "$.MessageId"
-				,MsgTargetId	INT	PATH "$.MsgTargetId"
+				MessageId		INT 		PATH "$.MessageId"
+				,SiteNameGroup	VARCHAR(50) PATH "$.SiteNameGroup"
+				,MsgTargetId	INT			PATH "$.MsgTargetId"
 			)
 		) AS t;
 	
@@ -195,16 +203,17 @@ NCB_Settlement_InternalCSD_Import:BEGIN
 		,TemplateContent 		MEDIUMTEXT
 		,TemplateRequiredParams TEXT
 		,MsgContentsType		TINYINT UNSIGNED
+        ,SiteNameGroup			VARCHAR(50)
 		,IsTest 				TINYINT
 		,StatusID 				TINYINT UNSIGNED
 		,Status 				VARCHAR(10)
 	);
   
-	INSERT INTO tmp_MsgContentsTypeTemplate (NotificationTypeID, NotificationTemplateID, TemplateRequiredParams, MsgContentsType, IsTest)
-	SELECT t.NotificationTypeID, t.NotificationTemplateID, t.TemplateRequiredParams, t.MsgContentsType, t.IsTest
+	INSERT INTO tmp_MsgContentsTypeTemplate (NotificationTypeID, NotificationTemplateID, TemplateRequiredParams, MsgContentsType, SiteNameGroup, IsTest)
+	SELECT t.NotificationTypeID, t.NotificationTemplateID, t.TemplateRequiredParams, t.MsgContentsType, t.SiteNameGroup, t.IsTest
 	FROM SystemSetting s,
 	LATERAL (
-		SELECT DISTINCT t.NotificationTypeID, t.NotificationTemplateID, t.TemplateRequiredParams, t.MsgContentsType, t.IsTest
+		SELECT DISTINCT t.NotificationTypeID, t.NotificationTemplateID, t.TemplateRequiredParams, t.MsgContentsType, t.SiteNameGroup, t.IsTest
 		FROM 	 
 			JSON_TABLE
 			(
@@ -212,11 +221,12 @@ NCB_Settlement_InternalCSD_Import:BEGIN
 				,"$[*]"
 				COLUMNS
 				(
-					NotificationTypeID 		INT 	 PATH "$.NotificationTypeID" 
-					,NotificationTemplateID INT      PATH "$.NotificationTemplateID" 
-					,TemplateRequiredParams	TEXT     PATH "$.TemplateRequiredParams"
-					,MsgContentsType	 	SMALLINT PATH "$.MsgContentsType"
-					,IsTest     			TINYINT  PATH "$.IsTest"
+					NotificationTypeID 		INT 	 	PATH "$.NotificationTypeID" 
+					,NotificationTemplateID INT      	PATH "$.NotificationTemplateID" 
+					,TemplateRequiredParams	TEXT     	PATH "$.TemplateRequiredParams"
+					,MsgContentsType	 	SMALLINT 	PATH "$.MsgContentsType"
+                    ,SiteNameGroup	 		VARCHAR(50) PATH "$.SiteNameGroup"
+					,IsTest     			TINYINT  	PATH "$.IsTest"
 				)
 			) AS t
 	) AS t
@@ -286,6 +296,7 @@ NCB_Settlement_InternalCSD_Import:BEGIN
 	CREATE TEMPORARY TABLE IF NOT EXISTS tmp_NotificationRecipientList
 	(
 		MessageId					INT
+		,SiteNameGroup				VARCHAR(50)
 		,RecipientID 				INT
 		,ConversationGroupID 		INT
 		,ChatGroupTypeID 			SMALLINT
@@ -295,10 +306,10 @@ NCB_Settlement_InternalCSD_Import:BEGIN
 		,INDEX Index_MessageId(MessageId)
 	);
 
-	INSERT INTO tmp_NotificationRecipientList(MessageId, RecipientID, ConversationGroupID, ChatGroupTypeID, StatusID, Status, ChannelId)
-    SELECT h.MessageId, r.RecipientID, gr.ConversationGroupID, ngt.ChatGroupTypeID, tpl.StatusID, tpl.Status, g.ChannelId
+	INSERT INTO tmp_NotificationRecipientList(MessageId, SiteNameGroup, RecipientID, ConversationGroupID, ChatGroupTypeID, StatusID, Status, ChannelId)
+    SELECT h.MessageId, h.SiteNameGroup, r.RecipientID, gr.ConversationGroupID, ngt.ChatGroupTypeID, tpl.StatusID, tpl.Status, g.ChannelId
       FROM tmp_MsgHeader h
-        INNER JOIN tmp_MsgContentsTypeTemplate tpl ON tpl.MsgContentsType = h.MsgContentsType
+        INNER JOIN tmp_MsgContentsTypeTemplate tpl ON tpl.MsgContentsType = h.MsgContentsType AND h.SiteNameGroup = tpl.SiteNameGroup
         INNER JOIN NotificationChatGroupType ngt ON tpl.NotificationTypeID = ngt.NotificationTypeID
         INNER JOIN ConversationGroupExtraInfo gri ON ngt.ChatGroupTypeID = gri.ChatGroupTypeID
         INNER JOIN ConversationGroupRecipient gr ON gri.ConversationGroupID = gr.ConversationGroupID
@@ -308,26 +319,26 @@ NCB_Settlement_InternalCSD_Import:BEGIN
 	
 	/*Step 7: Insert Notification and NotificationSystemMsg*/
 	DROP TEMPORARY TABLE IF EXISTS tmpMessageChannel;
-	CREATE TEMPORARY TABLE tmpMessageChannel (MessageId INT, ChannelID TINYINT, INDEX Index_PK (MessageId, ChannelID));
+	CREATE TEMPORARY TABLE tmpMessageChannel (MessageId INT, SiteNameGroup VARCHAR(50), ChannelID TINYINT, INDEX Index_PK (MessageId, SiteNameGroup, ChannelID));
   
-	INSERT INTO tmpMessageChannel (MessageId, ChannelId)
-	SELECT DISTINCT MessageId, ChannelId
+	INSERT INTO tmpMessageChannel (MessageId, SiteNameGroup, ChannelId)
+	SELECT DISTINCT MessageId, SiteNameGroup, ChannelId
 	FROM tmp_NotificationRecipientList r;
 
 	SET iLoop = 1;
 	SET createdDate = UTC_TIMESTAMP();
 	WHILE (EXISTS (SELECT 1 FROM tmp_MsgHeader WHERE Id = iLoop)) DO
-		SELECT IsTest, MessageId INTO pIsTest, pMessageId FROM tmp_MsgHeader WHERE Id = iLoop;
+		SELECT IsTest, MessageId, SiteNameGroup INTO pIsTest, pMessageId, pSiteNameGroup FROM tmp_MsgHeader WHERE Id = iLoop;
 
-		WHILE EXISTS(SELECT 1 FROM tmpMessageChannel m WHERE m.MessageId = pMessageId) DO
-			SELECT ChannelId INTO pChannelId FROM tmpMessageChannel m WHERE m.MessageId = pMessageId LIMIT 1; 
-
+		WHILE EXISTS(SELECT 1 FROM tmpMessageChannel m WHERE m.MessageId = pMessageId AND m.SiteNameGroup = pSiteNameGroup) DO
+			SELECT ChannelId INTO pChannelId FROM tmpMessageChannel m WHERE m.MessageId = pMessageId AND m.SiteNameGroup = pSiteNameGroup LIMIT 1; 
+ 
 			# Insert Notification
 			INSERT INTO Notification(NotificationTypeID, Title, Content, ConfigSendTime, SendImmediately, CreatorID, CreatedDate, Status, StatusID, ChannelId)
 			SELECT DISTINCT ct.NotificationTypeID, ct.TemplateTitle, REPLACE(REPLACE(ct.TemplateContent, '{General Info}', h.Content_Detail), '@@', '') AS Content, startTime, 0 AS SendImmediately, STARIXIT_CUSTID, CreatedDate, CREATING_NOTIFICATION_STATUS, CREATING_NOTIFICATION_STATUSID, pChannelId
 			FROM tmp_MsgHeader h
-				INNER JOIN tmp_MsgContentsTypeTemplate ct ON ct.MsgContentsType = h.MsgContentsType
-			WHERE h.MessageId = pMessageId;
+				INNER JOIN tmp_MsgContentsTypeTemplate ct ON ct.MsgContentsType = h.MsgContentsType AND ct.SiteNameGroup = h.SiteNameGroup
+			WHERE h.MessageId = pMessageId AND h.SiteNameGroup = pSiteNameGroup;
 
 			SELECT LAST_INSERT_ID() INTO pNotificationID;
 
@@ -342,7 +353,7 @@ NCB_Settlement_InternalCSD_Import:BEGIN
 			INSERT INTO NotificationRecipientList(NotificationID, ConversationGroupID, ChatGroupTypeID, RecipientID, Status, StatusID)
 			SELECT pNotificationID, d.ConversationGroupID, d.ChatGroupTypeID, d.RecipientID, d.Status, d.StatusID
 			FROM tmp_NotificationRecipientList d
-			WHERE d.MessageId = pMessageId AND d.ChannelId = pChannelId;
+			WHERE d.MessageId = pMessageId AND d.ChannelId = pChannelId AND d.SiteNameGroup = pSiteNameGroup;
 
 			#Update Status for Notification
 			IF pIsTest = 1 THEN
@@ -357,13 +368,13 @@ NCB_Settlement_InternalCSD_Import:BEGIN
 				WHERE NotificationID = pNotificationID;
 			ELSE
 				UPDATE Notification n
-				INNER JOIN (SELECT DISTINCT nrl.MessageId, nrl.Status, nrl.StatusID FROM tmp_NotificationRecipientList nrl) AS t 
-					ON t.MessageId = pMessageId
+				INNER JOIN (SELECT DISTINCT nrl.MessageId, nrl.SiteNameGroup, nrl.ChannelId, nrl.Status, nrl.StatusID FROM tmp_NotificationRecipientList nrl) AS t 
+					ON t.MessageId = pMessageId AND t.SiteNameGroup = pSiteNameGroup AND t.ChannelId = pChannelId
 				SET n.Status = t.Status
   				    ,n.StatusID = t.StatusID
 				WHERE n.NotificationID = pNotificationID;
 			END IF;
-			DELETE FROM tmpMessageChannel m WHERE m.MessageId = pMessageId AND m.ChannelId = pChannelId;
+			DELETE FROM tmpMessageChannel m WHERE m.MessageId = pMessageId AND m.ChannelId = pChannelId AND m.SiteNameGroup = pSiteNameGroup;
 		END WHILE;
 		SET iLoop := iLoop + 1;
 	END WHILE;
@@ -400,18 +411,77 @@ NCB_Settlement_InternalCSD_Import:BEGIN
 	WHERE ID = 35;
   
 	#Return Bot Chatgroup
-	SELECT g.ConversationID AS ChatGroupConversationID, g.ServiceUrl, g.ChannelID, cc.ChannelName, b.ConversationID AS BotConversationID, b.Name AS BotName
+    	#Return Bot Chatgroup
+	DROP TEMPORARY TABLE IF EXISTS tmp_ConversationGroupCarbon;
+    CREATE TEMPORARY TABLE tmp_ConversationGroupCarbon 
+    (
+		ConversationGroupID			INT UNSIGNED
+		,ChatGroupConversationID 	VARCHAR(200)
+        ,ServiceUrl 				VARCHAR(500)
+        ,ChannelID 					TINYINT UNSIGNED 
+        ,ChannelName 				VARCHAR(45)
+        ,BotConversationID  		VARCHAR(200)
+        ,BotName 					VARCHAR(70)
+        ,ChatGroupTypeID			SMALLINT
+        ,SiteNameGroup 				VARCHAR(50)
+    );
+	
+	INSERT INTO tmp_ConversationGroupCarbon 
+    (
+		ConversationGroupID
+        ,ChatGroupConversationID
+        ,ServiceUrl
+        ,ChannelID
+        ,ChannelName
+        ,BotConversationID
+        ,BotName
+        ,ChatGroupTypeID
+        ,SiteNameGroup
+	)
+	SELECT 
+		g.ConversationGroupID
+        ,g.ConversationID AS ChatGroupConversationID
+        ,g.ServiceUrl
+        ,g.ChannelID
+        ,p.ChannelName
+        ,b.ConversationID AS BotConversationID
+        ,b.Name AS BotName
+        ,e.ChatGroupTypeID
+        ,CASE WHEN ct.ChatGroupTypeName = 'New Credit Market Internal CSD Group' THEN '777' ELSE 'Normal' END AS SiteNameGroup
 	FROM ConversationGroup g
 		INNER JOIN ConversationGroupBot gb ON g.ConversationGroupID = gb.ConversationGroupID
 		INNER JOIN ConversationBot b ON b.ConversationBotID = gb.ConversationBotID
-		INNER JOIN ConversationChannel cc ON cc.ChannelId = g.ChannelId
+		INNER JOIN ConversationChannel p ON p.ChannelId = g.ChannelId
+        INNER JOIN ConversationGroupExtraInfo e ON e.ConversationGroupID = g.ConversationGroupID
+        INNER JOIN ChatGroupType ct ON ct.ChatGroupTypeID = e.ChatGroupTypeID
 		WHERE g.ConversationGroupID IN (SELECT ConversationGroupID FROM tmp_Carbon);
   
 	#Return all imported message content
-	SELECT n.NotificationID, n.Title, n.Content, n.ChannelID, c.ChannelName
+	DROP TEMPORARY TABLE IF EXISTS tmp_NotificationCarbon;
+    CREATE TEMPORARY TABLE tmp_NotificationCarbon
+    (
+		NotificationID 		INT UNSIGNED 
+        ,Title 				VARCHAR(300)
+        ,Content 			MEDIUMTEXT
+        ,ChannelID 			TINYINT UNSIGNED
+        ,ChannelName 		VARCHAR(45)
+        ,NotificationTypeID SMALLINT
+        ,SiteNameGroup		VARCHAR(50)
+    );
+	
+	INSERT INTO tmp_NotificationCarbon (NotificationID, Title, Content, ChannelID, ChannelName, NotificationTypeID, SiteNameGroup) 
+	SELECT DISTINCT n.NotificationID, n.Title, n.Content, n.ChannelID, c.ChannelName, n.NotificationTypeID, gc.SiteNameGroup
 	FROM Notification n
 		INNER JOIN ConversationChannel c ON c.ChannelID = n.ChannelId
+        INNER JOIN NotificationChatGroupType ng ON ng.NotificationTypeID = n.NotificationTypeID 
+        INNER JOIN tmp_ConversationGroupCarbon gc ON gc.ChatGroupTypeID = ng.ChatGroupTypeID AND gc.ChannelID = n.ChannelID
 	WHERE n.NotificationID IN (SELECT t.NotificationID FROM tmp_Notification t);
+	
+	SELECT ChatGroupConversationID, ServiceUrl, ChannelID, ChannelName, BotConversationID, BotName, SiteNameGroup
+    FROM tmp_ConversationGroupCarbon;
+    
+    SELECT NotificationID, Title, Content, ChannelID, ChannelName, SiteNameGroup
+    FROM tmp_NotificationCarbon;
 	
 	#Get Finish Time to calculate execution duration
 	SET finishTime = UTC_TIMESTAMP(3);
