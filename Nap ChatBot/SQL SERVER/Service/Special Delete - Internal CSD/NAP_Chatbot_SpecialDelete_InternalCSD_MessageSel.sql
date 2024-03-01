@@ -19,6 +19,12 @@ AS
                 <root>
 					<r VoidingHistoryCollectionId="1" MessageId="1"/>
                 </root>
+
+	Remarks:
+		The purpose of this SP is to collect new data set @VoiByBetIdMsg and "append" to @MessageIdLst
+		and return back to caller. The incoming @MessageIdLst is from NAP_Chatbot_SpecialDelete_InternalCSD_GetCollection.
+		
+		@MessageIdLst doesn't really serve any meaningful business purpose except debugging.
 */
 
 BEGIN
@@ -40,6 +46,7 @@ BEGIN
 
 	DECLARE @Msg TABLE (MessageId INT PRIMARY KEY, MsgTargetId INT)
 	
+	--@Msg: distinct by MessgeId (one MessageId -> one MatchId)
 	INSERT INTO @Msg (MessageId, MsgTargetId)
 	SELECT m.MessageId, MIN(mt.MsgTargetId) AS MsgTargetId
 	FROM dbo.MsgTarget mt WITH(NOLOCK)
@@ -50,14 +57,18 @@ BEGIN
 	/*
 		Determine the MaxMsgTargetId at which we scan a number of messages equal to @BatchSize
 		Ex:	BatchSize = 2, LastMsgTargetId = 1
-			MessageId | MsgTargetId
-			1         | 100
-			2		  | 101
-			1		  | 102
-			3		  | 103
-			2		  | 104 
-		--> MaxMsgTargetId = 103 - 1 = 102
+
+			@Msg:
+			MessageId | MIN(MsgTargetId) | COUNT
+			1         | 1000 <--         | 1
+			4		  | 1010 <--         | 2
+			3		  | 1030             | 4
+			2		  | 1040             | 5
+			5 		  | 1060             | 6
 	*/
+	-- COUNT window function produces commulative count of records, in this case it is equivalent to ROW_NUMBER().
+	-- @BatchSize is used to limit the number of rows per call (defaults to 10 rows of MessageId)
+	-- The @BatchSize + 1 here is to "overflow to the next batch", then -1 to MsgTargetId to get the upperbound of current batch
 	;WITH CTE_MsgTarget AS
 	(
 		SELECT MsgTargetId - 1 AS MaxMsgTargetId
@@ -89,6 +100,9 @@ BEGIN
 				+ Abnormal Accounts  : Issue type = 13, MsgContentsType = 103
 				+ Duplicated Tickets : Issue type = 20, MsgContentsType = 101, 102
 		*/
+		-- The reason why get MIN(MessgeId) here is to single out ONE messages, 
+		-- as messages are from `VoidingHistoryCollectionDetail` table. On it each requestId
+		-- may map to multiple SiteDBs with same VoidingHistoryCollectionId
 		SELECT VoidingHistoryCollectionId, MIN(MessageId) AS MessageId
 		FROM #Message
 		GROUP BY VoidingHistoryCollectionId
