@@ -19,12 +19,28 @@ AS
                 <root>
 					<r VoidingHistoryCollectionId="1" MessageId="1"/>
                 </root>
+			+ @BatchSize is based on Msg table
 
 	Remarks:
-		The purpose of this SP is to collect new data set @VoiByBetIdMsg and "append" to @MessageIdLst
+		The purpose of this SP is to collect new data set @MsgTarget and "append" to @MessageIdLst
 		and return back to caller. The incoming @MessageIdLst is from NAP_Chatbot_SpecialDelete_InternalCSD_GetCollection.
 		
 		@MessageIdLst doesn't really serve any meaningful business purpose except debugging.
+
+		The outputs of this SP are serialized into XML again and passed into NAP_Chatbot_SpecialDelete_InternalCSD_Info.
+
+		VoidingHistoryCollectionId <> 0 :
+		--> Message is created from TVS function:
+			+ Abnormal bets		 : Issue type = 11, MsgContentsType = 103
+			+ Abnormal Accounts  : Issue type = 13, MsgContentsType = 103
+			+ AB real member	 : Issue type = 15, MsgContentsType = 103
+			+ Duplicated Tickets : Issue type = 20, MsgContentsType = 101, 102
+
+		VoidingHistoryCollectionId = 0:
+		--> Message is Voided by betID function:
+			+ Abnormal bets		: IssueType = 11, MsgContentsType = 103
+			+ Abnormal Accounts : IssueType = 13, MsgContentsType = 103
+			+ AB real member	: IssueType = 15, MsgContentsType = 103
 */
 
 BEGIN
@@ -38,85 +54,50 @@ BEGIN
 		,t.c.value('@MessageId', 'INT') AS MessageId
 	FROM @MessageIdLst.nodes('root/r') AS t(c)
 	OPTION (OPTIMIZE FOR (@MessageIdLst = NULL))
-
-	SELECT @MaxMsgTargetId = MAX(MsgTargetId) FROM dbo.MsgTarget WITH(NOLOCK)
 	
 	/*Wait for the data to stabilize*/
 	WAITFOR DELAY '00:00:04'
 
-	DECLARE @Msg TABLE (MessageId INT PRIMARY KEY, MsgTargetId INT)
-	
-	--@Msg: distinct by MessgeId (one MessageId -> one MatchId)
-	INSERT INTO @Msg (MessageId, MsgTargetId)
-	SELECT m.MessageId, MIN(mt.MsgTargetId) AS MsgTargetId
-	FROM dbo.MsgTarget mt WITH(NOLOCK)
-		INNER JOIN dbo.Msg m WITH(NOLOCK) ON m.MessageId = mt.MessageId
-	WHERE mt.MsgTargetId > @LastMsgTargetId AND mt.MsgTargetId <= @MaxMsgTargetId AND m.MsgContentsType = 103
-	GROUP BY m.MessageId, m.MatchId, m.LeagueGroupID
+	DECLARE @FilteredMsg TABLE (MessageId INT PRIMARY KEY, MaxMsgTargetId INT)
+	INSERT INTO @FilteredMsg (MessageId, MaxMsgTargetId)
+	SELECT MessageId, MAX(MsgTargetId) AS MaxMsgTargetId
+	FROM MsgTarget WITH (NOLOCK)
+	WHERE MessageId IN (SELECT MessageId FROM dbo.Msg WITH (NOLOCK) WHERE MsgContentsType = 103 AND MsgTargetId > @LastMsgTargetId)
+		AND MsgTargetId > @LastMsgTargetId
+	GROUP BY MessageId
+	OPTION (RECOMPILE)
 
-	/*
-		Determine the MaxMsgTargetId at which we scan a number of messages equal to @BatchSize
-		Ex:	BatchSize = 2, LastMsgTargetId = 1
-
-			@Msg:
-			MessageId | MIN(MsgTargetId) | COUNT
-			1         | 1000 <--         | 1
-			4		  | 1010 <--         | 2
-			3		  | 1030             | 4
-			2		  | 1040             | 5
-			5 		  | 1060             | 6
-	*/
-	-- COUNT window function produces commulative count of records, in this case it is equivalent to ROW_NUMBER().
-	-- @BatchSize is used to limit the number of rows per call (defaults to 10 rows of MessageId)
-	-- The @BatchSize + 1 here is to "overflow to the next batch", then -1 to MsgTargetId to get the upperbound of current batch
-	;WITH CTE_MsgTarget AS
-	(
-		SELECT MsgTargetId - 1 AS MaxMsgTargetId
-		FROM (
-			SELECT MessageId, MsgTargetId, COUNT(1) OVER(ORDER BY MsgTargetId) AS NoOfMessage
-			FROM @Msg
-		) AS t
-		WHERE NoOfMessage = @BatchSize + 1
+	-- Select only a batch of message ids at a time, and get @MaxMsgtargetId of the batch for SystemSetting update later
+	;WITH Batch AS (
+		SELECT TOP (@BatchSize) MaxMsgTargetId
+		FROM @FilteredMsg
+		ORDER BY MaxMsgTargetId ASC
 	)
-	SELECT @MaxMsgTargetId = MaxMsgTargetId
-	FROM CTE_MsgTarget
+	SELECT TOP 1 @MaxMsgtargetId = MaxMsgTargetId FROM Batch
+	ORDER BY MaxMsgTargetId DESC
 
-	DECLARE @VoiByBetIdMsg TABLE (MessageId INT, MsgTargetId INT, BetTransId VARCHAR(MAX), TargetId INT)
+	DECLARE @MsgTarget TABLE (MessageId INT, MsgTargetId INT, BetTransId VARCHAR(MAX), TargetId INT)
 
-	INSERT INTO @VoiByBetIdMsg (MessageId, MsgTargetId, BetTransId, TargetId)
+	INSERT INTO @MsgTarget (MessageId, MsgTargetId, BetTransId, TargetId)
 	SELECT t.MessageId, t.MsgTargetId, t.BetTransId, t.TargetId
 	FROM dbo.MsgTarget t WITH(NOLOCK) 
-		INNER JOIN @Msg m ON m.MessageId = t.MessageId
-	WHERE t.MsgTargetId <= @MaxMsgTargetId AND t.MsgTargetId > @LastMsgTargetId
+	WHERE t.MsgTargetId <= @MaxMsgTargetId AND t.MsgTargetId > @LastMsgTargetId 
+	  AND t.MessageId IN (SELECT MessageId FROM @FilteredMsg)
 	ORDER BY t.MsgTargetId ASC
+	OPTION (RECOMPILE)
 	
+	-- Contents
 	;WITH CTE_Collecttion AS
 	(
-		/*
-			VoidingHistoryCollectionId <> 0 :
-			--> Message is created from TVS function:
-				+ Abnormal bets		 : Issue type = 11, MsgContentsType = 103
-				+ AB real member	 : Issue type = 15, MsgContentsType = 103
-				+ Abnormal Accounts  : Issue type = 13, MsgContentsType = 103
-				+ Duplicated Tickets : Issue type = 20, MsgContentsType = 101, 102
-		*/
-		-- The reason why get MIN(MessgeId) here is to single out ONE messages, 
-		-- as messages are from `VoidingHistoryCollectionDetail` table. On it each requestId
-		-- may map to multiple SiteDBs with same VoidingHistoryCollectionId
-		SELECT VoidingHistoryCollectionId, MIN(MessageId) AS MessageId
-		FROM #Message
+		-- As messages are from `VoidingHistoryCollectionDetail` table. On it each requestId
+		-- they have same contents but may map to multiple SiteDBs
+		-- (same VoidingHistoryCollectionId, requestId but different SiteGroupDB and MessageId).
+		SELECT VoidingHistoryCollectionId, MIN(MessageId) AS MessageID
+		FROM [#Message]
 		GROUP BY VoidingHistoryCollectionId
 		UNION ALL 
-		/*
-			VoidingHistoryCollectionId = 0:
-			--> Message belong to :
-				+ Void by betID		: MsgContentsType = 103
-				+ Abnormal bets		: IssueType = 11, MsgContentsType = 103
-				+ AB real member	: IssueType = 15, MsgContentsType = 103
-				+ Abnormal Accounts : IssueType = 13, MsgContentsType = 103
-		*/
 		SELECT DISTINCT 0 AS VoidingHistoryCollectionId, MessageId 
-		FROM @VoiByBetIdMsg
+		FROM @MsgTarget
 	)
 	SELECT 
 		e.VoidingHistoryCollectionId
@@ -128,14 +109,20 @@ BEGIN
 		INNER JOIN CTE_Collecttion e ON e.MessageId = m.MessageId
 	ORDER BY e.VoidingHistoryCollectionId, m.MessageId
 
+	-- Details
 	;WITH CTE_Result AS (
 		SELECT VoidingHistoryCollectionId, MessageId
 		FROM #Message
 		UNION ALL	
 		SELECT DISTINCT 0 AS VoidingHistoryCollectionId, MessageId
-		FROM @VoiByBetIdMsg
+		FROM @MsgTarget
 	)
-	SELECT r.VoidingHistoryCollectionId, r.MessageId, mt.MsgTargetId, mt.BetTransId, mt.TargetId, ISNULL(m.LeagueGroupID, '') AS LeagueGroupID
+	SELECT r.VoidingHistoryCollectionId
+		,r.MessageId
+		,mt.MsgTargetId
+		,mt.BetTransId
+		,mt.TargetId
+		,ISNULL(m.LeagueGroupID, '') AS LeagueGroupID
 	FROM CTE_Result r
 		INNER JOIN dbo.Msg m WITH(NOLOCK) ON m.MessageId = r.MessageId
 		INNER JOIN dbo.MsgTarget mt WITH(NOLOCK) ON mt.MessageId = r.MessageId
