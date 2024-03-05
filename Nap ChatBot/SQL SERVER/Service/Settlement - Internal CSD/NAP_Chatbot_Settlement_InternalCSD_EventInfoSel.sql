@@ -67,12 +67,14 @@ BEGIN
 		IF Customer Is Credit  
 			+ Site = CN88							--> Show Site = CN88
 			+ SiteLabel is 789y						--> Show Site = 789y
+			+ SiteLabel is 777						--> Show Site = 777
 			+ Site <> CN88 AND SiteLabel isn't 789y	--> show Site = NV88
 		IF Customer Is Deposit						--> Show Site = Customer.Site
 	*/
 	
 	UPDATE t
-		SET t.SiteName = CASE 
+		SET t.SiteName = CASE
+							WHEN ISNULL(st.SiteLabel, '') = '777'  THEN  '777'
 							WHEN ISNULL(st.SiteLabel, '') = '789y' THEN  '789y'
 							WHEN s.custId IS NULL AND c.site <> 'CN88' THEN 'NV88'   
 						 ELSE c.site END 
@@ -134,7 +136,7 @@ BEGIN
 					FROM #MessageDetail md 
 					WHERE md.MessageId = c.MessageId AND md.IsDeposit = 1 AND md.SiteNameGroup = c.SiteNameGroup
 					FOR XML PATH('')
-				), 1, 1, ''
+				), 1, 2, ''
 			) AS DepositSiteList
 			,STUFF
 			(
@@ -143,7 +145,7 @@ BEGIN
 					FROM #MessageDetail md 
 					WHERE md.MessageId = c.MessageId AND md.IsDeposit = 0 AND md.SiteNameGroup = c.SiteNameGroup
 					FOR XML PATH('')
-				), 1, 1, ''
+				), 1, 2, ''
 			) AS CreditSiteList
 		FROM CTE_CommonInfo c
 	)
