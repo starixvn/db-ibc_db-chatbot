@@ -30,17 +30,14 @@ AS
 		The outputs of this SP are serialized into XML again and passed into NAP_Chatbot_SpecialDelete_InternalCSD_Info.
 
 		VoidingHistoryCollectionId <> 0 :
-		--> Message is created from TVS function:
-			+ Abnormal bets		 : Issue type = 11, MsgContentsType = 103
-			+ Abnormal Accounts  : Issue type = 13, MsgContentsType = 103
-			+ AB real member	 : Issue type = 15, MsgContentsType = 103
-			+ Duplicated Tickets : Issue type = 20, MsgContentsType = 101, 102
+		--> Message is created from TVS function (manual request):
+			+ Abnormal bets		 : Issue type = 11
+			+ Abnormal Accounts  : Issue type = 13
+			+ AB real member	 : Issue type = 15
+			+ Duplicated Tickets : Issue type = 20
 
 		VoidingHistoryCollectionId = 0:
-		--> Message is Voided by betID function:
-			+ Abnormal bets		: IssueType = 11, MsgContentsType = 103
-			+ Abnormal Accounts : IssueType = 13, MsgContentsType = 103
-			+ AB real member	: IssueType = 15, MsgContentsType = 103
+		--> Message is Voided by betID function
 */
 
 BEGIN

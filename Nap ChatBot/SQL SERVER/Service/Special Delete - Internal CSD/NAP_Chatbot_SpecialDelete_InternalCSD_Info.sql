@@ -60,7 +60,12 @@ BEGIN
 	CREATE CLUSTERED INDEX CIX_MessageDetail ON #MessageDetail (MessageId)
 	
 	/*
-		With VoidingHistoryCollectionId = 0, only get data of void by betID function
+		Remove any dupplicates from result set of NAP_Chatbot_SpecialDelete_InternalCSD_MessageSel. 
+		Assume @BatchSize is 10, NAP_Chatbot_SpecialDelete_InternalCSD_MessageSel combines 20 rows 
+		from bodb02.dbo.VoidingHistoryCollectionDetail (void by request type) with 20 rows from 
+		bodb_Message.dbo.MsgTarget (which have both void by betid function and request type). So the result 
+		40 rows can have dupplicated void by request type (which can be determined by checking bodb02.TicketVoiding_VoidingHistory
+		and VoidingHistoryCollectionId = 0 (hardcoded from previous SP))
 	*/
 	BEGIN
 		DELETE m
@@ -89,6 +94,7 @@ BEGIN
 		WHERE c.roleid <> 1
 	END
 
+	/*Update IsSpecialMember */
 	;WITH CTE_Collection AS (
 		SELECT 
 			md.VoidingHistoryCollectionId
@@ -111,7 +117,7 @@ BEGIN
 	FROM #MessageInfo m
 		INNER JOIN CTE_IsRemoveSABA r ON r.VoidingHistoryCollectionId = m.VoidingHistoryCollectionId AND r.MessageId = m.MessageId
 
-	/*Abnormal Account (Issue Type = 13)*/
+	/*Abnormal Account (Issue Type = 13) from Void By Request, #AbnormalAccounts has one type*/
 	BEGIN
 		/*Get detail info of Abnormal Account (Issue Type = 13) : Affected Accounts, MinWinlostDate, MaxWinlostDate*/
 		CREATE TABLE #AbnormalAccounts (VoidingHistoryCollectionId INT, MessageId INT, Username VARCHAR(30), CustId INT, MinWinlostDate DATETIME, MaxWinlostDate DATETIME, SiteNameGroup VARCHAR(50), SiteName NVARCHAR(50), IsTest BIT)
@@ -164,7 +170,7 @@ BEGIN
 		GROUP BY u.VoidingHistoryCollectionId, u.MessageId, u.SiteNameGroup, u.custid, u.username
 	END
 
-	/*Duplicated Tickets (Issue Type = 20)*/
+	/*Duplicated Tickets (Issue Type = 20) from Void By Request, #DuplicatedInfo has one type*/
 	BEGIN
 		/*Get detail info of Duplicated tickets (Issue Type = 20): Status, Transtime, Stake*/
 		CREATE TABLE #DuplicatedInfo (VoidingHistoryCollectionId INT, MessageId INT, SiteNameGroup VARCHAR(50), OrgTransId BIGINT, VoidedTransId BIGINT, Custid INT, Status NVARCHAR(10), Stake MONEY, Transdate DATETIME)
@@ -200,7 +206,7 @@ BEGIN
 			
 	END
 
-	/*Get Void Ticket of Abnormal Bets, AB real member, Void by betID*/
+	/*Abnormal Bets (Issue Type = 11), AB real member (Issue Type = 15) from Void by Request AND also include Void by betID type here, #VoidedTicket has both types*/
 	BEGIN
 		CREATE TABLE #VoidedTicket (VoidingHistoryCollectionId INT, MessageId INT, SiteNameGroup VARCHAR(50), TransId BIGINT, CustId INT, IsTest BIT, Bettype SMALLINT, liveindicator BIT, Recommend INT, MatchId INT, SubIssueTypeId TINYINT)
 
@@ -236,7 +242,7 @@ BEGIN
 			INNER JOIN bodb02.dbo.Site st WITH(NOLOCK) ON st.site = c.site
 	END
 	
-	/*SiteNameGroup*/
+	/*combine all into #SiteNameGroup, this table feels... unneccessary*/
 	
 	CREATE TABLE #SiteNameGroup (VoidingHistoryCollectionId INT, MessageId INT, SiteNameGroup VARCHAR(50))
 	
@@ -253,7 +259,7 @@ BEGIN
 		FROM #VoidedTicket
 	) AS n
 	
-	-- Request Info
+	/*combine all into #RequestInfo*/
 	BEGIN
 		/*
 			Request Info : Request No, Decided by, Requested by, Voided by
@@ -481,7 +487,7 @@ BEGIN
 		FROM #RequestInfo r	
 			INNER JOIN CTE_Match m ON m.VoidingHistoryCollectionId = r.VoidingHistoryCollectionId AND m.MessageId = r.MessageId AND r.SiteNameGroup = m.SiteNameGroup
 
-		-- Event Info (Abnormal Bets, Ab real member, Void By betID)
+		-- Event Info (Abnormal Bets (11), Ab real member (15), Void By betID)
 		BEGIN
 			CREATE TABLE #EventInfo (
 				VoidingHistoryCollectionId INT, MessageId INT, SiteNameGroup VARCHAR(50), MatchId INT, KickOffTime VARCHAR(8), LeagueName NVARCHAR(500), HomeName NVARCHAR(100), AwayName NVARCHAR(100), HalfTimeHomeScore INT
@@ -538,7 +544,7 @@ BEGIN
 				INNER JOIN dbo.Team a WITH (NOLOCK) ON m.AwayId = a.TeamId
 		END
 
-		/*Bettype Info*/
+		/*Bettype Info (Abnormal Bets (11), Ab real member (15), Void By betID)*/
 		CREATE TABLE #Bettype (VoidingHistoryCollectionId INT, MessageId INT, SiteNameGroup VARCHAR(50), TypeName NVARCHAR(500))
 
 		;WITH CTE_Bettype AS (
