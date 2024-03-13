@@ -58,6 +58,7 @@ BEGIN
 	OPTION (OPTIMIZE FOR (@MessageDetail = NULL))
 
 	/*Detect duplicated tickets*/
+	-- UPDATE m.IssueType = n.IssueType should be enough
 	UPDATE m
 		SET m.IssueType = CASE WHEN n.IssueTypeId = 20 THEN 20 ELSE 0 END
 	FROM #Message m
@@ -69,6 +70,7 @@ BEGIN
 	) AS n
 	WHERE m.MsgContentsType IN (101, 102) -- Void Settled Tickets
 
+	-- MessageIdSpecial are messages that have "SABA" text removed
 	UPDATE m
 		SET m.IssueType = CASE WHEN n.IssueTypeId = 20 OR m.IssueType = 20 THEN 20 ELSE 0 END
 	FROM #Message m
@@ -82,6 +84,7 @@ BEGIN
 
 	WAITFOR DELAY '00:00:05'
 	
+	-- We do not trust the MatchID column from bodb_Message.dbo.Msg, so update it again here
 	;WITH CTE_Match AS (
 		SELECT m.MessageId, MAX(vh.MatchId) AS MatchId
 		FROM #Message m
@@ -95,7 +98,10 @@ BEGIN
 	FROM #Message ms
 		INNER JOIN CTE_Match m ON m.MessageId = ms.MessageId
 
-	-- Not remove SABA text for tcikets voided by TVS Function (Abnormal bet, Ab real member, Abnormal Accounts, Duplicated Tickets)
+	-- Purpose of this update set to 0 is to avoid falling into the CASE of next SP (NCB_SpecialDeleteMsg_Import),
+	-- so we skip the task of removing 'SABA' text for tickets generated from TVS (TVS side already did that for us).
+	-- We only remove SABA texts for tickets voided via BetID function.
+	-- Note: For consistency, we should cross check with TicketVoiding_* tables for real-time accuracy (CollectionDetail has delay of 20s)
 	UPDATE m
 		SET m.LeagueGroupId = 0
 	FROM #MessageDetail m
