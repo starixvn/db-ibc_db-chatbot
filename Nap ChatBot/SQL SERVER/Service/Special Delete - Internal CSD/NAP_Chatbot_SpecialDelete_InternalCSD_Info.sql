@@ -11,6 +11,7 @@ AS
 
 	Revisions:
 		- 20231229@Malcolm: Initialize SP [RedmineID: #199482]
+		- 20240329@Jaden: Account for the case of filterBy = 2 (System parlay void) from TVS changes [RedmineID: #203054]
 
 	Param's Explanation:
 		+ @MessageInfo
@@ -267,7 +268,7 @@ BEGIN
 		*/
 		CREATE TABLE #RequestInfo (
 			VoidingHistoryCollectionId INT, MessageId INT, RequestIdList VARCHAR(MAX), DecidedByList NVARCHAR(MAX), RequestByList VARCHAR(MAX), VoidByList NVARCHAR(MAX), ReasonList NVARCHAR(MAX)
-			,IssueTypeId TINYINT, IsParlay TINYINT, MatchId INT, MessageIdList VARCHAR(MAX), TypeNameLst NVARCHAR(MAX), CreditSiteLst NVARCHAR(MAX), DepositSiteLst NVARCHAR(MAX)
+			,IssueTypeId TINYINT, IsParlay BIT, MatchId INT, MessageIdList VARCHAR(MAX), TypeNameLst NVARCHAR(MAX), CreditSiteLst NVARCHAR(MAX), DepositSiteLst NVARCHAR(MAX)
 			,TotalTicket INT, IsTest BIT, SiteNameGroup VARCHAR(50), IsSpecialMember TINYINT DEFAULT (0)
 		)
 
@@ -285,7 +286,12 @@ BEGIN
 					,vd.RequestBy
 					,vd.DecidedBy
 					,vd.VoidBy
-					,IIF(vd.IssueTypeId IN (20, 11), ISNULL(vd.FilterBy, 0), 0) AS IsParlay /*(Abnoraml Bets + Duplicated ticket) and FilterBy = 1 --> Parlay*/
+					,IIF(
+						vd.IssueTypeId IN (20, 11), --Abormal Bets, Duplicated tickets
+						CASE FilterBy WHEN 1 THEN 1 --Mix parlay
+									  WHEN 2 THEN 1 --System parlay
+									  ELSE 0 END, 
+						0) AS IsParlay
 					,ISNULL(r.Reason, '') AS Reason
 					,m.IsSpecialMember
 			FROM bodb02.dbo.VoidingHistoryCollectionDetail vd WITH(NOLOCK)
@@ -298,10 +304,10 @@ BEGIN
 				,SiteNameGroup
 				,MAX(IsSpecialMember) AS IsSpecialMember
 				,MAX(IssueTypeId) AS IssueTypeId
-				,MAX(IsParlay) AS IsParlay
+				,IsParlay AS IsParlay --Can't mix voiding normal bets with parlay bets so VoidingHistoryCollectionId is either parlay or non-parlay, not both
 				,IIF(MIN(MatchId) = MAX(MatchId), MIN(MatchId), 0) AS MatchId /*-- if multi matchid then matchid = 0 else matchid*/
 			FROM CTE_RequetInfo
-			GROUP BY VoidingHistoryCollectionId, SiteNameGroup	
+			GROUP BY VoidingHistoryCollectionId, SiteNameGroup, IsParlay
 		), CTE_Result AS (
 			SELECT 
 			   VoidingHistoryCollectionId
