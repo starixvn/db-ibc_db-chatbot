@@ -1,4 +1,4 @@
-/*<info serverAlias="DBBOT-bodb_ChatBot" executers="bodbAdminNet,bodbDownlineNet" viewers="" selecters=""></info>*/
+/*<info serverAlias="DBBOT-bodb_ChatBot" executers="bodbAdminNet,bodbDownlineNet,wsv_nap,wsv_alp" viewers="" selecters=""></info>*/
 ALTER PROCEDURE [dbo].[Age_Chatbot_ServiceNotificationImport] 
 	@FunctionKey	VARCHAR(100) = ''
 	,@XmlData			XML
@@ -13,7 +13,7 @@ AS
 	Original:
 	Revisions:
 		- 20230425@Winfred: Alpha - Notify abnormal login via Telegram chatbot [RedmineID: #183746] 
-	
+		- 20240201@Luke: Auto Transfer Enhancement Phase 3 [Redmine: #195551]	
 	Paramter's Explanations:
 		 @XmlData = '<root>
 							<r UserId="1" BotId="1" MsgTargetId="2" MessageId="1" Message="XXX" Status="Initial"/>
@@ -61,7 +61,7 @@ BEGIN
 
 		INSERT INTO dbo.CustBotNotification (UserID, BotId, FunctionID, Message, Status, Description, CreatedDate, UpdatedTime, ReferenceId)
 		OUTPUT inserted.NotificationID INTO #TmpNotification (NotificationId)
-		SELECT UserID, BotId, @FunctionId, Message, Status, '', GETDATE(), GETDATE(), MessageID
+		SELECT UserID, BotId, @FunctionId, Message, Status, '', GETDATE(), GETDATE(), MessageID 
 		FROM #ImportData
 		WHERE ID >= @ID AND ID < @ID + 20000
 		ORDER BY ID ASC
@@ -82,7 +82,7 @@ BEGIN
 			INNER JOIN #TmpNotification tn ON tn.Id = i.Id
 
 		INSERT INTO dbo.NotificationReferenceLog (NotificationId, ReferenceId, FunctionId, Environment, CreatedDate)
-		SELECT NotificationId, MessageId, @FunctionId, @Environment, GETDATE()
+		SELECT NotificationId, ISNULL(MessageId, UserID), @FunctionId, @Environment, GETDATE()
 		FROM #ImportData
 		WHERE ID >= @ID AND ID < @ID + 20000
 		ORDER BY Id ASC
