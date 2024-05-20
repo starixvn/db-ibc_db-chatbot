@@ -4,7 +4,7 @@ DROP PROCEDURE IF EXISTS NCB_NotificationList_UpdatedNotification_Sel;
 DELIMITER //
 
 CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_NotificationList_UpdatedNotification_Sel`(
-     IN notificationIds VARCHAR(1000)
+     IN notificationIds VARCHAR(16383)
     /*
 		Creator: Oliver@20201401
         Redmine: https://nexdev.net/issues/129363
@@ -22,6 +22,7 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_NotificationList_UpdatedNotifi
                 - 20200907@Oliver: change data type of NotificationId temporary table - RedmineID: #141015
 				- 20220728@Malcolm: Add ChannelID, ChannelName [RedmineId: #175878]
                 - 20220118@Malcolm: Scale out for ChatBot [RedmineID: #181907]
+                - 20240520@Jaden: Increase size of notificationIds
     */
 )
 BEGIN
