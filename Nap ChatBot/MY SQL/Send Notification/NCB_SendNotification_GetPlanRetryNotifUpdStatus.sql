@@ -3,7 +3,7 @@ DROP PROCEDURE IF EXISTS NCB_SendNotification_GetPlanRetryNotifUpdStatus;
 DELIMITER //
 
 CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_SendNotification_GetPlanRetryNotifUpdStatus(
-	OUT updatedNotificationIds VARCHAR(300)
+	OUT updatedNotificationIds TEXT
     /*
 		Creator: Dominic@20190417
         Task: Chatbot For Licensee - Phase 1: Sending UM notification using Skype bot
@@ -20,6 +20,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_SendNotification_GetPlanRetr
                 - 20191016@Dominic: Limit  number of planned notifs and retrying notifs to send, they are 10 and 100 respectively
 				- 20200302@Oliver: get additional notificationTypeId - RedmineID: #129339
 				- 20210513@Malcolm: Integrate Telegram - RedmineID: #151807
+				- 20240520@Jaden: Increase size of notificationIds
         
     */
 )
