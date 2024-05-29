@@ -2,7 +2,7 @@
 /*
   Created: 20240219@malcolm
   DB: ChatBot
-  Task: Add Settings
+  Task: Add Settings - Step 3
 */
 
 SELECT MAX(NotificationTypeID) INTO @NotificationTypeID FROM NotificationType;

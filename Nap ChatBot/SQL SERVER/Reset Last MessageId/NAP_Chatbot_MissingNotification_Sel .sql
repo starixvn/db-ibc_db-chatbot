@@ -1,5 +1,5 @@
-/*<info serverAlias="DBCRM-MessageNotification" executers="bodbAdminNet" isFunction="0" isNested="0"></info>*/
-CREATE PROCEDURE [dbo].[NAP_Chatbot_MissingNotification_Sel ]
+/*<info serverAlias="DBCRM-MessageNotification" executers="wsv_nap" isFunction="0" isNested="0"></info>*/
+CREATE PROCEDURE [dbo].[NAP_Chatbot_MissingNotification_Sel]
 	@Setting XML
 	,@MessageList XML
 AS
@@ -75,8 +75,7 @@ BEGIN
 		SELECT NotificationID, NULL AS VoidingHistoryCollectionId, NULL AS MsgTargetId, NULL AS MessageId, NULL AS MessageIds, Content_en, DATEADD(HOUR, 12, InsertedTime) AS Posttime, 9 AS JobIdentify
 		FROM dbo.Notification n WITH(NOLOCK)
 		WHERE NotificationID >= @NotificationId
-		ORDER BY NotificationID ASC 
-	) AS M
+	) AS m
 	ORDER BY m.JobIdentify ASC, m.VoidingHistoryCollectionId DESC, ISNULL(m.MsgTargetId, 0) DESC, m.MessageId DESC, m.NotificationId ASC
 	
 	DROP TABLE #Messagetmp

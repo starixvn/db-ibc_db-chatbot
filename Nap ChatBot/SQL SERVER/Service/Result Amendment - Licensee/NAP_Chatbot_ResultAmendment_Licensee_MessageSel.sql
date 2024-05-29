@@ -1,4 +1,4 @@
-/*<info serverAlias="DBMSG-bodb_Message" executers="bodbAdminNet" isFunction="0" isNested="0"></info>*/
+/*<info serverAlias="DBMSG-bodb_Message" executers="wsv_nap" isFunction="0" isNested="0"></info>*/
 ALTER PROCEDURE [dbo].[NAP_Chatbot_ResultAmendment_Licensee_MessageSel]
 	@LastMsgTargetId		INT
 	,@BatchSize				INT
@@ -93,22 +93,18 @@ BEGIN
 			OR d.Currency NOT IN (20,27,28)
 	) AS t
 
-	DECLARE @Msg TABLE (MessageId INT PRIMARY KEY, MsgTargetId INT, LeagueGroupID SMALLINT, MatchId INT)
+	DECLARE @Msg TABLE (MessageId INT PRIMARY KEY, MsgTargetId INT)
 	
-	/*
-		- refund running ticket: Msg.Matchid > 0 AND Msg.Isbatch = 1 AND Msg.MsgContentsType = 105
-		- refund settled ticket: Msg.MsgContentsType = 110
-	*/
-	INSERT INTO @Msg (MessageId, MsgTargetId, MatchId, LeagueGroupID)
-	SELECT m.MessageId, MIN(mt.MsgTargetId) AS MsgTargetId, m.MatchId, m.LeagueGroupID
+	INSERT INTO @Msg (MessageId, MsgTargetId)
+	SELECT m.MessageId, MIN(mt.MsgTargetId) AS MsgTargetId
 	FROM dbo.MsgTarget mt WITH(NOLOCK)
 		CROSS APPLY (
-			SELECT TOP(2147483647) m.MessageId, m.MatchId, m.LeagueGroupID
+			SELECT TOP(2147483647) m.MessageId
 			FROM dbo.Msg m WITH(NOLOCK) 
 			WHERE m.MessageId = mt.MessageId AND m.MsgType = 1 AND m.MsgContentsType = 111
 		) AS m
 	WHERE mt.MsgTargetId > @LastMsgTargetId AND mt.MsgTargetId <= @MaxMsgTargetId
-	GROUP BY m.MessageId, m.MatchId, m.LeagueGroupID
+	GROUP BY m.MessageId
 
 	;WITH CTE_MsgTarget AS
 	(
@@ -122,16 +118,16 @@ BEGIN
 	SELECT @MaxMsgTargetId = MaxMsgTargetId
 	FROM CTE_MsgTarget
 
-	DECLARE @Result TABLE (MessageId INT, MsgTargetId INT, TargetId INT, LeagueGroupID INT)
+	DECLARE @Result TABLE (MessageId INT, MsgTargetId INT, TargetId INT)
 
-	INSERT INTO @Result (MessageId, MsgTargetId, TargetId, LeagueGroupID)
-	SELECT t.MessageId, t.MsgTargetId, t.TargetId, m.LeagueGroupID
+	INSERT INTO @Result (MessageId, MsgTargetId, TargetId)
+	SELECT t.MessageId, t.MsgTargetId, t.TargetId
 	FROM dbo.MsgTarget t WITH(NOLOCK) 
 		INNER JOIN @Msg m ON m.MessageId = t.MessageId
 	WHERE t.MsgTargetId <= @MaxMsgTargetId AND t.MsgTargetId > @LastMsgTargetId	
 	ORDER BY t.MsgTargetId ASC
 
-	SELECT m.MessageId, m.MatchId, m.MsgContentsType, m.Content_en, m.Content_cs
+	SELECT m.MessageId, m.MsgContentsType, m.Content_en, m.Content_cs
 	FROM dbo.Msg m WITH(NOLOCK)	
 	WHERE EXISTS (SELECT 1 FROM @Result r WHERE r.MessageId = m.MessageId)
 	ORDER BY m.MessageId
@@ -139,6 +135,7 @@ BEGIN
 	SELECT DISTINCT MessageId, ds.site
 	FROM @Result r
 		INNER JOIN @DepositSuper ds ON r.TargetId = ds.CustId
+	ORDER BY MessageId, site
 
 	SELECT MessageId, MsgTargetId FROM @Result ORDER BY MessageId, MsgTargetId
 

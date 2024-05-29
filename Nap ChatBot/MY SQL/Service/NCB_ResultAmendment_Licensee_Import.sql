@@ -10,7 +10,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_ResultAmendment_Licensee_Impo
     OUT errMsg VARCHAR(200)
 
     /*
-		Creator: Dominic@20191211
+		Creator: Malcolm@20231031
         Task: Add Job : Settlement Licensee
 		DB: DBCB-ChatBot
         Param:
@@ -22,9 +22,9 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_ResultAmendment_Licensee_Impo
 				- @MessageDetail
 							[  
 								{"MessageId":885128, "Site":"IBO"}
-								, {"MessageId":885128, "Site":"XTD3"}
-								, {"MessageId":885131,"Site":"mansion88"}
-								, {"MessageId":885131, "Site":"haifa"}
+								,{"MessageId":885128, "Site":"XTD3"}
+								,{"MessageId":885131,"Site":"mansion88"}
+								,{"MessageId":885131, "Site":"haifa"}
 							]
 				- @messageTarget:
 							[
@@ -32,7 +32,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_ResultAmendment_Licensee_Impo
 								,{"MessageId":"885128", "MsgTargetId":"9885129"}
 							]
         Revisions:
-				- 20231031@Malcolm: First Commit
+				- 20231031@Malcolm: First Commit [RedmineId : #197620]
     */
 )
 SQL SECURITY DEFINER
@@ -314,7 +314,7 @@ NCB_ResultAmendment_Licensee_Import:BEGIN
         ,LicenseeStatusID INT
 		,ChannelID TINYINT UNSIGNED
         ,INDEX Index_MessageID(MessageID)
-      );
+    );
             
 	INSERT INTO tmp_NotificationRecipientList (MessageID, Site, RecipientID, ConversationGroupID, ChatGroupTypeID, StatusID, Status, LicenseeStatusID, ChannelID)       
     SELECT DISTINCT 

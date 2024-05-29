@@ -5,7 +5,7 @@ DELIMITER //
 CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_ResultAmendment_InternalCSD_Import(
   IN messageHeader 			JSON
   ,IN messageDetail  		JSON
-  ,IN InMaxMsgTargetId		INT
+  ,IN InMaxNotificationId	INT
   ,OUT errCode 				INT
   ,OUT errMsg 				VARCHAR(200)
 
@@ -79,8 +79,8 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 	DROP TEMPORARY TABLE IF EXISTS tmp_MsgHeader;
 	CREATE TEMPORARY TABLE IF NOT EXISTS tmp_MsgHeader
 	(
-		Id							INT NOT NULL AUTO_INCREMENT
-		,NotificationId 					INT
+		Id								INT NOT NULL AUTO_INCREMENT
+		,NotificationId 				INT
 		,MatchId						TEXT
 		,EventDate		 				TEXT
 		,EventTime 						TEXT
@@ -206,12 +206,12 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 	CREATE TEMPORARY TABLE IF NOT EXISTS tmp_MsgDetail
 	(
 		NotificationId	INT 
-        ,LogId		INT 
-		,UNIQUE INDEX Index_NotificationId(NotificationId, LogId)
+        ,MessageId		INT 
+		,UNIQUE INDEX Index_NotificationId(NotificationId, MessageId)
 	);
     
-    INSERT INTO tmp_MsgDetail (NotificationId, LogId)
-	SELECT t.NotificationId, t.LogId
+    INSERT INTO tmp_MsgDetail (NotificationId, MessageId)
+	SELECT t.NotificationId, t.MessageId
 	FROM 
 		JSON_TABLE
 		(
@@ -220,7 +220,7 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 			COLUMNS
 			(
 				NotificationId		INT PATH "$.NotificationId"
-				,LogId			INT	PATH "$.LogId"
+				,MessageId			INT	PATH "$.MessageId"
 			)
 		) AS t;
 	
@@ -246,7 +246,7 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 		,'Total Affected Bets Counts: '
 		,'\r\n'
 		,'- Credit Total Bets: x', CreditTotalBets
-		IF
+		,IF
 		(
 			SiteNameGroup = '777'
 			,''
@@ -263,8 +263,7 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 				,'\r\n','\r\n'
 				,'- Negative Balance: x', NegativeBalance, '(Licensee)'
 			)
-		)
-		
+		)	
 		,'\r\n','\r\n'
 		,'Settlement Log (System time): ', SettlementLog
         ,'\r\n', '\r\n'
@@ -376,7 +375,7 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 	DROP TEMPORARY TABLE IF EXISTS tmp_NotificationRecipientList;
 	CREATE TEMPORARY TABLE IF NOT EXISTS tmp_NotificationRecipientList
 	(
-		NotificationId					INT
+		NotificationId				INT
 		,SiteNameGroup				VARCHAR(50)
 		,RecipientID 				INT
 		,ConversationGroupID 		INT
@@ -430,7 +429,7 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 			INSERT INTO NotificationSystemMsg(NotificationId, NotificationID, CheckMsg, CreatedDate)
 			SELECT pLastInsert, MessageId, NULL, startTime
 			FROM tmp_MsgDetail
-			WHERE NotificationId = pNotificationID
+			WHERE NotificationId = pNotificationID;
 
 			#Insert recipient list
 			INSERT INTO NotificationRecipientList(NotificationID, ConversationGroupID, ChatGroupTypeID, RecipientID, Status, StatusID)
@@ -463,10 +462,10 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 	END WHILE;
 
 	/*Step 9: Update Setting*/
-	#Update Max MsgTargetId
+	#Update Max NotificationId
 	UPDATE SystemSetting
-		SET Value = InMaxMsgTargetId
-	WHERE ID = 49 AND IFNULL(InMaxMsgTargetId, 0) > 0;
+		SET Value = InMaxNotificationId
+	WHERE ID = 49 AND IFNULL(InMaxNotificationId, 0) > 0;
 			
 	#Update flag to 'Done'
 	UPDATE SystemSetting
@@ -529,7 +528,7 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
         ,b.ConversationID AS BotConversationID
         ,b.Name AS BotName
         ,e.ChatGroupTypeID
-        ,CASE WHEN ct.ChatGroupTypeName = '777 sites Internal CSD Group' THEN '777' ELSE 'Normal' END AS SiteNameGroup
+        ,CASE WHEN ct.ChatGroupTypeName = 'New Credit Market Internal CSD Group' THEN '777' ELSE 'Normal' END AS SiteNameGroup
 	FROM ConversationGroup g
 		INNER JOIN ConversationGroupBot gb ON g.ConversationGroupID = gb.ConversationGroupID
 		INNER JOIN ConversationBot b ON b.ConversationBotID = gb.ConversationBotID
@@ -570,7 +569,7 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 	SET duration = TIMESTAMPDIFF(MICROSECOND, startTime, finishTime) / 1000; 	#miliseconds
 			
 	#Get Log Content JSON format
-	SET logContent = JSON_OBJECT('MessageHeader', messageHeader, 'messageDetail', messageDetail, 'InMaxMsgTargetId', InMaxMsgTargetId);
+	SET logContent = JSON_OBJECT('MessageHeader', messageHeader, 'messageDetail', messageDetail, 'InMaxNotificationId', InMaxNotificationId);
 						
 	#Write User Log
 	IF EXISTS (SELECT 1 FROM tmp_MsgHeader) THEN

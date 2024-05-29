@@ -23,7 +23,7 @@ SELECT 47 AS ID, 'Result Amendment - Internal CSD - Job Sync Status (Running/Don
 UNION ALL 
 SELECT 48 AS ID, 'Result Amendment - Internal CSD - Batch Size' 														AS Description, '10'    	AS Value, 9 AS JobIdentify, 'Result Amendment - Internal CSD' AS JobDescription, 'BatchSize' 				AS SettingName
 UNION ALL 
-SELECT 49 AS ID, 'Result Amendment - Internal CSD - ReferenceId - NotificationId' 										AS Description, '0' 		AS Value, 9 AS JobIdentify, 'Result Amendment - Internal CSD' AS JobDescription, 'NotificationId' 			AS SettingName
+SELECT 49 AS ID, 'Result Amendment - Internal CSD - ReferenceId - LastNotificationId' 									AS Description, '0' 		AS Value, 9 AS JobIdentify, 'Result Amendment - Internal CSD' AS JobDescription, 'LastNotificationId' 			AS SettingName
 UNION ALL 
 SELECT 50 AS ID, 'Result Amendment - Internal CSD - Notification Template ID / MsgContentsType / NotificationType' 		AS Description, '' 			AS Value, 9 AS JobIdentify, 'Result Amendment - Internal CSD' AS JobDescription, 'NotificationTemplate' 	AS SettingName
 UNION ALL 

@@ -2,7 +2,7 @@
 /*
   Created: 20230803@malcolm
   DB: ChatBot
-  Task: Add Settings - Step 4
+  Task: Add Settings - Step 2
 */
 
 INSERT INTO `System` VALUES (5, 'CRM Site');
