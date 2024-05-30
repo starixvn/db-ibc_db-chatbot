@@ -19,9 +19,26 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_JobInfo_Sel`(
 SQL SECURITY DEFINER
 BEGIN
 
+	DROP TEMPORARY TABLE IF EXISTS tmpSetting;
+    CREATE TEMPORARY TABLE tmpSetting
+    (
+		JobIdentify INT 
+        ,ReferenceId TEXT
+        ,SettingName VARCHAR(200)
+    );
+    
+    INSERT INTO tmpSetting (JobIdentify, ReferenceId, SettingName)
     SELECT JobIdentify, Value AS ReferenceId, SettingName
     FROM SystemSetting 
-    WHERE Description LIKE '%- ReferenceId -%'
+    WHERE Description LIKE '%- ReferenceId -%';
+    
+    INSERT INTO tmpSetting (JobIdentify, ReferenceId, SettingName)
+	SELECT 9 AS JobIdentify, GROUP_CONCAT(DISTINCT ReferenceId) AS ReferenceId, 'ListNotifications'  AS SettingName
+	FROM NotificationReference
+	WHERE CreatedDate >= DATE_ADD(utc_date(), INTERVAL -1 DAY ) AND DataSource = 'DBCRM.MessageNotification.dbo.Notification';
+            
+	SELECT JobIdentify, ReferenceId, SettingName
+    FROM tmpSetting
     ORDER BY JobIdentify;
     
 	SELECT s.JobIdentify, t.MsgContentsType

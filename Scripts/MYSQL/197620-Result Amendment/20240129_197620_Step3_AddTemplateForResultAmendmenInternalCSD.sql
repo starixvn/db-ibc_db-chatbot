@@ -101,9 +101,9 @@ SET Value = CONCAT(
         "NotificationTypeID": ',@NotificationTypeID_InternalCSDGroup777,',
         "NotificationTemplateID": ',@NotificationTemplateID_InternalCSDGroup777,',
         "TemplateRequiredParams": "{General Info}",
-         "SiteNameGroup": "777"
+        "SiteNameGroup": "777"
     }
 ]'
 )
-WHERE ID = 50;
+WHERE ID = 49;
 

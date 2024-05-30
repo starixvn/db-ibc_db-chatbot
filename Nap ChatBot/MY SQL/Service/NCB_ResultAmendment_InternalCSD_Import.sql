@@ -3,28 +3,17 @@ DROP PROCEDURE IF EXISTS NCB_ResultAmendment_InternalCSD_Import;
 DELIMITER //
 
 CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_ResultAmendment_InternalCSD_Import(
-  IN messageHeader 			JSON
-  ,IN messageDetail  		JSON
-  ,IN InMaxNotificationId	INT
+  IN message				JSON
+  ,IN LastModifiedTime		VARCHAR(200) 
   ,OUT errCode 				INT
   ,OUT errMsg 				VARCHAR(200)
 
   /*
     Creator   : 20240129@Malcolm
-    Task      : NAP ChatBot - Get Setting for Abnormal Bets
+    Task      : ResultAmendment for internal csd
 	DB: DBCB-ChatBot
     Params    :
-    - @messageHeader:
-							[  
-								{"NotificationId":"1", "MatchId":"1", "EventDate": "2023-01-01", "EventTime":"02:20", "LeagueName":America", "MatchInfo":"A VS B", "CreditSite":NV88",  "DepositSite":"12bet"
-								, "CreditTotalBets":"", "NormalLicenseeTotalBets":"", "CVLicenseeTotalBets":"", "JSLicenseeTotalBets":"", "JollySportsCVLicenseeTotalBets":"", "NegativeBalance":""
-								, "TotalLicensee":"", "TotalCVLicensee":"", "TotalJSLicensee":"", "TotalJollySportsCVLicensee":""
-								, "Wrongresult":"sss","Actualresult":"Actual", "SettlementLog":"log", "Content_en":"Content_en", "Content_cs":"Content_en", "MsgContentTypes":"111","IsTest":0, "SiteNameGroup":"777"}
-							]
-	- @messageDetail: 		[
-								{ "NotificationId":885128, "MessageId": 1}
-							]
-
+    - @message: [{"NotificationId":"1", "MessageId":"1", "SiteNameGroup":"777", "Content":"Content", "MsgContentsType":"111"}]
     Revisions :
       - 20240129@Malcolm: Initiliaze SP [RedmineID: #197620]
 	  
@@ -45,7 +34,6 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 	DECLARE createdDate DATETIME(3);
     DECLARE pMaxMsgTargetId INT;
 	DECLARE pLastInsert INT UNSIGNED;
-	DECLARE pIsTest TINYINT;
 	DECLARE pChannelId TINYINT UNSIGNED;
 	DECLARE pNotificationId INT;
 	DECLARE pSiteNameGroup VARCHAR(50);
@@ -68,6 +56,8 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 	
 	SET startTime = UTC_TIMESTAMP();
 	SET errCode = 0, errMsg = '';
+	
+	SET LastModifiedTime = DATE_FORMAT(LastModifiedTime, "%Y-%m-%d %H:%i:%s");
 
 	DROP TEMPORARY TABLE IF EXISTS tmp_Notification;
 	CREATE TEMPORARY TABLE IF NOT EXISTS tmp_Notification(
@@ -81,30 +71,9 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 	(
 		Id								INT NOT NULL AUTO_INCREMENT
 		,NotificationId 				INT
-		,MatchId						TEXT
-		,EventDate		 				TEXT
-		,EventTime 						TEXT
-		,LeagueName						TEXT
-		,MatchInfo						TEXT
-		,CreditSite 					TEXT
-		,DepositSite 	 				TEXT
-		,CreditTotalBets				TEXT
-		,NormalLicenseeTotalBets		TEXT
-		,CVLicenseeTotalBets			TEXT
-		,JSLicenseeTotalBets			TEXT
-		,JollySportsCVLicenseeTotalBets	TEXT
-		,NegativeBalance				TEXT
-		,TotalLicensee					TEXT
-		,TotalCVLicensee				TEXT
-		,TotalJSLicensee				TEXT
-		,TotalJollySportsCVLicensee		TEXT
-		,Wrongresult					TEXT
-		,Actualresult					TEXT
-		,SettlementLog					TEXT
-		,Content_en 					TEXT
-		,Content_cs 					TEXT
+		,MessageId						INT
+		,Content_Detail					TEXT
         ,MsgContentsType				TINYINT UNSIGNED 
-        ,IsTest 						TINYINT
 		,SiteNameGroup					TEXT
 		,PRIMARY KEY (Id)
 		,UNIQUE INDEX Index_NotificationId(NotificationId)
@@ -112,166 +81,40 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 
 	INSERT INTO tmp_MsgHeader
 	(
-		NotificationId				
-		,MatchId					
-		,EventDate		 			
-		,EventTime 					
-		,LeagueName
-		,MatchInfo
-		,CreditSite 			
-		,DepositSite 	 		
-		,CreditTotalBets				
-        ,NormalLicenseeTotalBets		
-        ,CVLicenseeTotalBets			
-        ,JSLicenseeTotalBets			
-        ,JollySportsCVLicenseeTotalBets	
-        ,NegativeBalance
-		,TotalLicensee	
-		,TotalCVLicensee	
-		,TotalJSLicensee	
-		,TotalJollySportsCVLicensee			
-		,Wrongresult				
-		,Actualresult				
-		,SettlementLog				
-		,Content_en 				
-		,Content_cs 				
-		,MsgContentsType			
-		,IsTest 
+		NotificationId								
+		,MessageId
+		,Content_Detail
+		,MsgContentsType
 		,SiteNameGroup
 	)
 	SELECT 
-		t.NotificationId
-		,t.MatchId					
-		,t.EventDate		 			
-		,t.EventTime 					
-		,t.LeagueName
-		,t.MatchInfo
-		,t.CreditSite 			
-		,t.DepositSite 	 		
-		,t.CreditTotalBets				
-        ,t.t.NormalLicenseeTotalBets		
-        ,t.t.CVLicenseeTotalBets			
-        ,t.t.JSLicenseeTotalBets			
-        ,t.t.JollySportsCVLicenseeTotalBets	
-        ,t.NegativeBalance
-		,t.TotalLicensee	
-		,t.TotalCVLicensee	
-		,t.TotalJSLicensee	
-		,t.TotalJollySportsCVLicensee	
-		,t.Wrongresult				
-		,t.Actualresult				
-		,t.SettlementLog				
-		,t.Content_en 				
-		,t.Content_cs 				
-		,t.MsgContentsType			
-		,t.IsTest
+		t.NotificationId								
+		,t.MessageId
+		,t.Content
+		,t.MsgContentsType
 		,t.SiteNameGroup
 	FROM 
 		JSON_TABLE
 		(
-			messageHeader
+			message
 			,"$[*]"
 			COLUMNS
 			(
-				NotificationId 						INT         		PATH "$.NotificationId"
-				,MatchId 							TEXT            	PATH "$.MatchId"
-				,EventDate 							TEXT            	PATH "$.EventDate"
-				,EventTime 							TEXT            	PATH "$.EventTime"
-				,LeagueName 						TEXT            	PATH "$.LeagueName"
-				,MatchInfo 							TEXT            	PATH "$.MatchInfo"
-				,CreditSite 						TEXT            	PATH "$.CreditSite"
-				,DepositSite 						TEXT            	PATH "$.DepositSite"
-				,CreditTotalBets 					TEXT            	PATH "$.CreditTotalBets"
-				,NormalLicenseeTotalBets 			TEXT            	PATH "$.NormalLicenseeTotalBets"
-				,CVLicenseeTotalBets 				TEXT            	PATH "$.CVLicenseeTotalBets"
-				,JSLicenseeTotalBets 				TEXT            	PATH "$.JSLicenseeTotalBets"
-				,JollySportsCVLicenseeTotalBets 	TEXT            	PATH "$.JollySportsCVLicenseeTotalBets"
-				,NegativeBalance 					TEXT            	PATH "$.NegativeBalance"
-				,TotalLicensee 						TEXT            	PATH "$.TotalLicensee"
-				,TotalCVLicensee 					TEXT            	PATH "$.TotalCVLicensee"
-				,TotalJSLicensee 					TEXT            	PATH "$.TotalJSLicensee"
-				,TotalJollySportsCVLicensee 		TEXT            	PATH "$.TotalJollySportsCVLicensee"
-				,Wrongresult 						TEXT            	PATH "$.Wrongresult"
-				,Actualresult 						TEXT            	PATH "$.Actualresult"
-				,SettlementLog 						TEXT            	PATH "$.SettlementLog"
-				,Content_en 						TEXT            	PATH "$.Content_en"
-				,Content_cs 						TEXT            	PATH "$.Content_cs"
-				,MsgContentsType 					TINYINT UNSIGNED    PATH "$.MsgContentsType"
-				,IsTest 							TINYINT 			PATH "$.IsTest"
-				,SiteNameGroup 						TEXT            	PATH "$.SiteNameGroup"
+				NotificationId 		INT         		PATH "$.NotificationId"
+				,MessageId 			INT            		PATH "$.MessageId"
+				,Content 			TEXT            	PATH "$.Content"
+				,MsgContentsType 	TINYINT UNSIGNED    PATH "$.MsgContentsType"
+				,SiteNameGroup 		TEXT            	PATH "$.SiteNameGroup"
 			)
 		) AS t;
-        
-	DROP TEMPORARY TABLE IF EXISTS tmp_MsgDetail;
-	CREATE TEMPORARY TABLE IF NOT EXISTS tmp_MsgDetail
-	(
-		NotificationId	INT 
-        ,MessageId		INT 
-		,UNIQUE INDEX Index_NotificationId(NotificationId, MessageId)
-	);
-    
-    INSERT INTO tmp_MsgDetail (NotificationId, MessageId)
-	SELECT t.NotificationId, t.MessageId
-	FROM 
-		JSON_TABLE
-		(
-			messageDetail
-			,"$[*]"
-			COLUMNS
-			(
-				NotificationId		INT PATH "$.NotificationId"
-				,MessageId			INT	PATH "$.MessageId"
-			)
-		) AS t;
+		
+	DELETE m 
+	FROM tmp_MsgHeader m
+	WHERE EXISTS (SELECT 1 FROM NotificationReference nr WHERE nr.DataSource = 'DBCRM.MessageNotification.dbo.Notification' AND nr.ReferenceId = m.NotificationId);
 	
-	/*Refund ticket*/
-	UPDATE tmp_MsgHeader
-    SET Content_Detail = CONCAT(
-		'**Result Amendment Announcement**'
-		,'\r\n', '\r\n'
-        ,'MatchID: ', MatchID
-		,'\r\n'
-		,'Event Date: ', DATE_FORMAT(EventDate, '%Y/%m/%d %H:%i')  
-		,'\r\n'
-		,'Event Time: ', IFNULL(EventTime, '')
-		,'\r\n'
-		,'League: ', LeagueName
-		,'\r\n'
-		,'Match: ', MatchInfo
-        ,'\r\n', '\r\n'
-        ,'**Affected Credit sites:', CASE WHEN CreditSite > '' THEN CONCAT(' ', CreditSite, '**') ELSE '**' END
-        ,'\r\n'
-        ,'**Affected Licensee sites:', CASE WHEN DepositSite > '' THEN CONCAT(' ', DepositSite, '**') ELSE '**' END
-		,'\r\n','\r\n'
-		,'Total Affected Bets Counts: '
-		,'\r\n'
-		,'- Credit Total Bets: x', CreditTotalBets
-		,IF
-		(
-			SiteNameGroup = '777'
-			,''
-			,CONCAT 
-			(
-				'\r\n'
-				,'- Normal Licensee Total Bets: x', NormalLicenseeTotalBets,'; Total Licensee: x', TotalLicensee
-				,'\r\n'
-				,'CV Licensee Total Bets: x', CVLicenseeTotalBets,'; Total CV Licensee: x', TotalCVLicensee
-				,'\r\n'
-				,'JS Licensee Total Bets: x', JSLicenseeTotalBets,'; Total JS Licensee: x', TotalJSLicensee
-				,'\r\n'
-				,'- JollySportsCV Licensee Total Bets: x', JollySportsCVLicenseeTotalBets,'; Total JollySportsCV Licensee: x', TotalJollySportsCVLicensee
-				,'\r\n','\r\n'
-				,'- Negative Balance: x', NegativeBalance, '(Licensee)'
-			)
-		)	
-		,'\r\n','\r\n'
-		,'Settlement Log (System time): ', SettlementLog
-        ,'\r\n', '\r\n'
-        ,IFNULL(REPLACE(Content_en, '@@', ''), '')
-        ,'\r\n', '\r\n'
-        ,IFNULL(REPLACE(Content_cs, '@@', ''), '')
-        )
-	WHERE MsgContentsType = 111;
+	IF NOT EXISTS (SELECT 1 FROM tmp_MsgHeader) THEN
+		LEAVE NCB_ResultAmendment_InternalCSD_Import;
+	END IF;
     
 	/*Step 2: Parse JSON data for message template notification type*/
 	DROP TEMPORARY TABLE IF EXISTS tmp_MsgContentsTypeTemplate;
@@ -310,7 +153,7 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 				)
 			) AS t
 	) AS t
-	WHERE s.ID = 50;
+	WHERE s.ID = 49;
 	
  
 	# Update Default status: if IsTest=1 then 'Draft' else 'Planned'
@@ -408,7 +251,7 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 	SET iLoop = 1;
 	SET createdDate = UTC_TIMESTAMP();
 	WHILE (EXISTS (SELECT 1 FROM tmp_MsgHeader WHERE Id = iLoop)) DO
-		SELECT IsTest, NotificationId, SiteNameGroup INTO pIsTest, pNotificationId, pSiteNameGroup FROM tmp_MsgHeader WHERE Id = iLoop;
+		SELECT NotificationId, SiteNameGroup INTO pNotificationId, pSiteNameGroup FROM tmp_MsgHeader WHERE Id = iLoop;
 
 		WHILE EXISTS(SELECT 1 FROM tmpMessageChannel m WHERE m.NotificationId = pNotificationId AND m.SiteNameGroup = pSiteNameGroup) DO
 			SELECT ChannelId INTO pChannelId FROM tmpMessageChannel m WHERE m.NotificationId = pNotificationId AND m.SiteNameGroup = pSiteNameGroup LIMIT 1; 
@@ -426,47 +269,42 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 			VALUES (pLastInsert);
       
 			# Insert NotificationSystemMsg
-			INSERT INTO NotificationSystemMsg(NotificationId, NotificationID, CheckMsg, CreatedDate)
+			INSERT INTO NotificationSystemMsg(NotificationId, MessageId, CheckMsg, CreatedDate)
 			SELECT pLastInsert, MessageId, NULL, startTime
-			FROM tmp_MsgDetail
+			FROM tmp_MsgHeader
 			WHERE NotificationId = pNotificationID;
 
 			#Insert recipient list
 			INSERT INTO NotificationRecipientList(NotificationID, ConversationGroupID, ChatGroupTypeID, RecipientID, Status, StatusID)
 			SELECT pLastInsert, d.ConversationGroupID, d.ChatGroupTypeID, d.RecipientID, d.Status, d.StatusID
 			FROM tmp_NotificationRecipientList d
-			WHERE d.NotificationId = pLastInsert AND d.ChannelId = pChannelId AND d.SiteNameGroup = pSiteNameGroup;
+			WHERE d.NotificationId = pNotificationID AND d.ChannelId = pChannelId AND d.SiteNameGroup = pSiteNameGroup;
 
 			#Update Status for Notification
-			IF pIsTest = 1 THEN
-				UPDATE Notification
-				SET Status = DRAFT_NOTIFICATION_STATUS
-					,StatusID = DRAFT_NOTIFICATION_STATUSID
-				WHERE NotificationID = pLastInsert;
-	
-				UPDATE NotificationRecipientList
-				SET Status = DRAFT_NOTIFICATION_STATUS
-					,StatusID = DRAFT_NOTIFICATION_STATUSID
-				WHERE NotificationID = pLastInsert;
-			ELSE
-				UPDATE Notification n
-				INNER JOIN (SELECT DISTINCT nrl.NotificationId, nrl.SiteNameGroup, nrl.ChannelId, nrl.Status, nrl.StatusID FROM tmp_NotificationRecipientList nrl) AS t 
-					ON t.NotificationId = pLastInsert AND t.SiteNameGroup = pSiteNameGroup AND t.ChannelId = pChannelId
-				SET n.Status = t.Status
-  				    ,n.StatusID = t.StatusID
-				WHERE n.NotificationID = pLastInsert;
-			END IF;
-			DELETE FROM tmpMessageChannel m WHERE m.NotificationId = pLastInsert AND m.ChannelId = pChannelId AND m.SiteNameGroup = pSiteNameGroup;
+			UPDATE Notification n
+			INNER JOIN (SELECT DISTINCT nrl.NotificationId, nrl.SiteNameGroup, nrl.ChannelId, nrl.Status, nrl.StatusID FROM tmp_NotificationRecipientList nrl) AS t 
+				ON t.NotificationId = pNotificationID AND t.SiteNameGroup = pSiteNameGroup AND t.ChannelId = pChannelId
+			SET n.Status = t.Status ,n.StatusID = t.StatusID
+			WHERE n.NotificationID = pLastInsert;
+			
+			INSERT INTO NotificationReference (NotificationID, ReferenceId, DataSource)
+			VALUES (pLastInsert, pNotificationID, 'DBCRM.MessageNotification.dbo.Notification');
+			
+			DELETE FROM tmpMessageChannel m WHERE m.NotificationId = pNotificationID AND m.ChannelId = pChannelId AND m.SiteNameGroup = pSiteNameGroup;
 		END WHILE;
 		SET iLoop := iLoop + 1;
 	END WHILE;
 
 	/*Step 9: Update Setting*/
-	#Update Max NotificationId
-	UPDATE SystemSetting
-		SET Value = InMaxNotificationId
-	WHERE ID = 49 AND IFNULL(InMaxNotificationId, 0) > 0;
-			
+	
+	#Update flag to 'Done'
+	
+	IF IFNULL(LastModifiedTime, '') <> '' THEN
+		UPDATE SystemSetting
+			SET Value = LastModifiedTime
+		WHERE ID = 48;
+	END IF;
+	
 	#Update flag to 'Done'
 	UPDATE SystemSetting
 		SET Value = VALUE_DONE
@@ -490,7 +328,7 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 			,'$[*]' COLUMNS (value INT UNSIGNED PATH '$.value')
 		) AS t
 	) AS t
-	WHERE ID = 51;
+	WHERE ID = 50;
   
 	#Return Bot Chatgroup
 	DROP TEMPORARY TABLE IF EXISTS tmp_ConversationGroupCarbon;
@@ -569,7 +407,7 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 	SET duration = TIMESTAMPDIFF(MICROSECOND, startTime, finishTime) / 1000; 	#miliseconds
 			
 	#Get Log Content JSON format
-	SET logContent = JSON_OBJECT('MessageHeader', messageHeader, 'messageDetail', messageDetail, 'InMaxNotificationId', InMaxNotificationId);
+	SET logContent = JSON_OBJECT('Message', message);
 						
 	#Write User Log
 	IF EXISTS (SELECT 1 FROM tmp_MsgHeader) THEN
