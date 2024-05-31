@@ -27,12 +27,19 @@ BEGIN
 	SET NOCOUNT ON
 
 	DECLARE @Notification TABLE (NotificationId INT, MessageId INT, RequestId INT)
-	
-	DECLARE @FromNotificationId INT, @NotificationId INT
 
-	SELECT @FromNotificationId = t.c.value ('@ReferenceId', 'INT') 
+	DECLARE @ListNotifications VARCHAR(MAX)
+	
+	DECLARE @LastModifiedTime DATETIME
+
+	SELECT @LastModifiedTime = t.c.value ('@ReferenceId', 'DATETIME') 
 	FROM @Setting.nodes('root/r') t(c)
-	WHERE t.c.value ('@JobIdentify', 'TINYINT') = 9 AND t.c.value ('@SettingName', 'VARCHAR(200)') = 'NotificationId'
+	WHERE t.c.value ('@JobIdentify', 'TINYINT') = 9 AND t.c.value ('@SettingName', 'VARCHAR(200)') = 'LastModifiedTime'
+	OPTION (OPTIMIZE FOR (@Setting = NULL))
+
+	SELECT @ListNotifications = t.c.value ('@ReferenceId', 'VARCHAR(MAX)') 
+	FROM @Setting.nodes('root/r') t(c)
+	WHERE t.c.value ('@JobIdentify', 'TINYINT') = 9 AND t.c.value ('@SettingName', 'VARCHAR(200)') = 'ListNotificationsOfNotificationCenter'
 	OPTION (OPTIMIZE FOR (@Setting = NULL))
 
 	CREATE TABLE #Messagetmp 
@@ -67,16 +74,17 @@ BEGIN
 	FROM @MessageList.nodes('root/r') t(c)
 	OPTION (OPTIMIZE FOR (@MessageList = NULL))
 
-	SELECT  NotificationId, VoidingHistoryCollectionId, MsgTargetId, MessageId, MessageIds, Content_en, Posttime, JobIdentify
+	SELECT NotificationId, VoidingHistoryCollectionId, MsgTargetId, MessageId, MessageIds, Content_en, Posttime, JobIdentify
 	FROM (
 		SELECT NULL AS NotificationId, VoidingHistoryCollectionId, MsgTargetId, MessageId, MessageIds, Content_en, Posttime, JobIdentify
 		FROM #Messagetmp
 		UNION ALL
-		SELECT NotificationID, NULL AS VoidingHistoryCollectionId, NULL AS MsgTargetId, NULL AS MessageId, NULL AS MessageIds, Content_en, DATEADD(HOUR, 12, InsertedTime) AS Posttime, 9 AS JobIdentify
+		SELECT NotificationID, NULL AS VoidingHistoryCollectionId, NULL AS MsgTargetId, NULL AS MessageId, NULL AS MessageIds, Content_en, DATEADD(HOUR, 12, LastModifiedTime) AS Posttime, 9 AS JobIdentify
 		FROM dbo.Notification n WITH(NOLOCK)
-		WHERE NotificationID >= @NotificationId
+		WHERE LastModifiedTime >= @LastModifiedTime AND StatusID = 13 and NotificationType = 1 AND RefID IS NOT NULL
+			AND n.NotificationID NOT IN (SELECT Value FROM STRING_SPLIT(@ListNotifications, ','))
 	) AS m
-	ORDER BY m.JobIdentify ASC, m.VoidingHistoryCollectionId DESC, ISNULL(m.MsgTargetId, 0) DESC, m.MessageId DESC, m.NotificationId ASC
+	ORDER BY m.JobIdentify ASC, m.VoidingHistoryCollectionId DESC, ISNULL(m.MsgTargetId, 0) DESC, m.MessageId DESC, m.Posttime DESC, m.NotificationId DESC
 	
 	DROP TABLE #Messagetmp
 END

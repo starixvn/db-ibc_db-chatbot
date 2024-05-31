@@ -60,7 +60,7 @@ BEGIN
 		t.c.value ('@JobIdentify', 'TINYINT') AS JobIdentify
 		,t.c.value ('@MessageId', 'INT') AS MessageId
 	FROM @MessageList.nodes('root/r') t(c)
-	WHERE t.c.value ('@JobIdentify', 'TINYINT') <> 0
+	WHERE t.c.value ('@JobIdentify', 'TINYINT') <> 9
 	OPTION (OPTIMIZE FOR (@MessageList = NULL))
 
 	BEGIN TRY 

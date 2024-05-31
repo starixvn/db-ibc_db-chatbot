@@ -13,7 +13,8 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_JobInfo_Sel`(
 			- 20230128@Malcolm: Scale for ChatBot [RedmineId : #181907] 
 			- 20231027@Malcolm: Get Setting [RedmineId : #195404]
 			- 20231101@Malcolm: Add Settledment - Internal CSD, Settledment - Licensee [RedmineID: #195404]		
-            - 20231122@Malcolm: Add MsgTargetId for Job : Internal - CSD [RedmineID: #196660]	
+            - 20231122@Malcolm: Add MsgTargetId for Job : Internal - CSD [RedmineID: #196660]
+			- 20240129@Malcolm: Add result amendment - Licness/ Internal CSD [RedmineID: #197620]			
     */
 )
 SQL SECURITY DEFINER
@@ -33,7 +34,7 @@ BEGIN
     WHERE Description LIKE '%- ReferenceId -%';
     
     INSERT INTO tmpSetting (JobIdentify, ReferenceId, SettingName)
-	SELECT 9 AS JobIdentify, GROUP_CONCAT(DISTINCT ReferenceId) AS ReferenceId, 'ListNotifications'  AS SettingName
+	SELECT 9 AS JobIdentify, GROUP_CONCAT(DISTINCT ReferenceId) AS ReferenceId, 'ListNotificationsOfNotificationCenter'  AS SettingName
 	FROM NotificationReference
 	WHERE CreatedDate >= DATE_ADD(utc_date(), INTERVAL -1 DAY ) AND DataSource = 'DBCRM.MessageNotification.dbo.Notification';
             

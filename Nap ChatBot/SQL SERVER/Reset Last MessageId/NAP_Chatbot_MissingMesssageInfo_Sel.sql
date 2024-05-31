@@ -97,7 +97,7 @@ BEGIN
 		,t.c.value ('@ReferenceId', 'INT') AS FromReferenceId
 		,t.c.value ('@SettingName', 'VARCHAR(200)') AS SettingName
 	FROM @MessageList.nodes('root/r') t(c)
-	WHERE t.c.value ('@JobIdentify', 'TINYINT') <> 0
+	WHERE t.c.value ('@JobIdentify', 'TINYINT') <> 9
 	OPTION (OPTIMIZE FOR (@MessageList = NULL))
 
 	DECLARE @Request TABLE (VoidingHistoryCollectionId INT, MessageId INT, RequestId INT)
