@@ -110,6 +110,16 @@ BEGIN
          , ActualValue NVARCHAR(500) '$.ActualValue_en'
            )
 
+        --SettlementResultHist's table structure and how it maps to NotificationID in CRM
+        --SessionID 1 > SeqNo 1 > SiteGroupDB 1 > [Changes] 1 > SettlementLogID 1 [unique id]   :   NotificationID 1
+        --SessionID 1 > SeqNo 1 > SiteGroupDB 2 > [Changes] 1 > SettlementLogID 2 [unique id]   :   NotificationID 1
+        --SessionID 1 > SeqNo 2 > SiteGroupDB 1 > [Changes] 2 > SettlementLogID 3 [unique id]   :   NotificationID 2
+        --SessionID 1 > SeqNo 2 > SiteGroupDB 2 > [Changes] 2 > SettlementLogID 4 [unique id]   :   NotificationID 2
+        --([Changes] are logged in ExtraInfo, WrongResult, ActualResult columns)
+
+        --so the below query here which filters by one NotificationID will actually returns multiple rows, 
+        --but since [Changes] across SiteGroupDBs are the same, variable assignment can proceed as normal 
+        --(assign only the last row of result set)
         SELECT @SettlementExtraInfo = CAST(ExtraInfo AS XML)
         FROM SettlementResultHist WITH (NOLOCK)
         WHERE SettlementLogID IN ( SELECT SettlementLogID FROM @SettlementLogs )
@@ -128,7 +138,7 @@ BEGIN
 
         IF @Debug = 1
         BEGIN
-            SELECT * FROM SettlementResultHist WHERE SettlementLogID IN ( SELECT SettlementLogID FROM @SettlementLogs )
+            SELECT * FROM SettlementResultHist WITH (NOLOCK) WHERE SettlementLogID IN ( SELECT SettlementLogID FROM @SettlementLogs )
 
             SELECT * FROM @AmendmentInfo
         END
@@ -146,22 +156,24 @@ BEGIN
     -- get affected sites' info and their bet counts for this match
     BEGIN
         /* 
-        NotificationTarget also contains notifications that should be sent to higher level of the resettled customer (agent, master...),
+        NotificationTarget also contains records of higher lines of the resettled customer (agent, master, super)
 
-        Cust | Agent | Master | Super | TransID 
-        c1   | a1    | m1     | s1    | 10000, 10001
-        c2   | a2    | m1     | s1    | 10002
+        Cust | Agent | Master | Super | TargetSite (from agent's Site) | TransID of Cust
+        c1   | a1    | m1     | s1    | A                              | 10000, 10001
+        c2   | a2    | m1     | s1    | B                              | 10002
 
         NotificationTarget:
         NotificationID | TargetID | TargetSite | ExtraInfo
-        1              | c1       | A          | [{"TransID": 10000}, {"TransID": 10001}]
-        1              | c2       | B          | [{"TransID": 10002}]
-        1              | a1       | A          | [{"TransID": 10000}, {"TransID": 10001}]
-        1              | a2       | B          | [{"TransID": 10002}]
-        1              | m1       | A          | [{"TransID": 10000}, {"TransID": 10001}, {"TransID": 10002}]
-        1              | s1       | A          | [{"TransID": 10000}, {"TransID": 10001}, {"TransID": 10002}]
+        1              | c1       | A          | [{"TransID": 10000}, {"TransID": 10001}]   --> base custid from SettlementResultHistDetail
+        1              | c2       | B          | [{"TransID": 10002}]                       --> base custid from SettlementResultHistDetail
+        1              | a1       | A          | [{"TransID": 10000}, {"TransID": 10001}]   --> notification for agent
+        1              | a2       | B          | [{"TransID": 10002}]                       --> notification for agent
+        1              | m1       | A          | [{"TransID": 10000}, {"TransID": 10001}]   --> notification for master
+        1              | s1       | A          | [{"TransID": 10000}, {"TransID": 10001}]   --> notification for master
+        1              | m1       | B          | [{"TransID": 10002}]                       --> notification for super
+        1              | s1       | B          | [{"TransID": 10002}]                       --> notification for super
 
-        For the above example, to include site data of both A and B, we count the TransID of agent/cust level records, in this case it is 3
+        For the above example, we select one level and count the TransID by TargetSite, in this case it is 2 for A and 1 for B
         */
         DECLARE @SiteInfo TABLE
         (
@@ -188,10 +200,9 @@ BEGIN
            SELECT TargetSite
                 -- count the number of times the word "TransID" appears in ExtraInfo
                 , SUM((LEN(ExtraInfo) - LEN(REPLACE(ExtraInfo, 'TransID', ''))) / LEN('TransID')) AS BetCount
-           FROM [dbo].[NotificationTarget]   t WITH (NOLOCK)
-           INNER JOIN bodb02.dbo.vw_Customer c WITH (NOLOCK) ON t.TargetID = c.CustID
-                                                            AND c.roleid = 2
+           FROM [dbo].[NotificationTarget] t WITH (NOLOCK)
            WHERE t.NotificationID = @NotificationID
+             AND t.TargetID IN ( SELECT CustID FROM bodb02.dbo.vw_Customer c WITH (NOLOCK) WHERE c.RoleID = 2 )
            GROUP BY TargetSite
            ) AS NotificationTarget
         INNER JOIN [bodb02].[dbo].[Site] WITH (NOLOCK) ON TargetSite = [site].[site]
