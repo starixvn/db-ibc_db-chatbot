@@ -178,7 +178,7 @@ BEGIN
         DECLARE @SiteInfo TABLE
         (
             [Site]               VARCHAR(500) NOT NULL PRIMARY KEY
-          , [Type]               VARCHAR(20)
+          , [Type]               VARCHAR(50)
           , [SiteNameGroup]      VARCHAR(20)
           , [BetCount]           INT
           , [HasNegativeBalance] BIT
@@ -209,6 +209,17 @@ BEGIN
 
         SELECT @SiteNameGroup = [SiteNameGroup] FROM @SiteInfo
 
+        DECLARE @DisplayType TABLE ([Type] VARCHAR(50), [ShowTotal] BIT, [Order] TINYINT IDENTITY(1, 1))
+        INSERT INTO @DisplayType ([Type], [ShowTotal]) VALUES ('Credit', 0)
+
+        IF @SiteNameGroup = 'Normal'
+            INSERT INTO @DisplayType ([Type], [ShowTotal])
+            VALUES
+            ('Normal Licensee', 1)
+          , ('CV Licensee', 1)
+          , ('JS Licensee', 1)
+          , ('JollySportsCV Licensee', 1)
+
         UPDATE @SiteInfo
         SET HasNegativeBalance = 1
         FROM @SiteInfo s
@@ -238,16 +249,17 @@ BEGIN
 
     -- build content
     BEGIN
-        DECLARE @mMatchInfo               VARCHAR(MAX)
-              , @mAffectedCreditSites     VARCHAR(MAX)
-              , @mAffectedLicenseeSites   VARCHAR(MAX)
-              , @mTotalAffectedBetsCounts VARCHAR(MAX)
-              , @mWrongResult             VARCHAR(MAX)
-              , @mActualResult            VARCHAR(MAX)
-              , @mCalcTime                VARCHAR(MAX)
-              , @mReCalcTime              VARCHAR(MAX)
-              , @mContent_en              VARCHAR(MAX)
-              , @mContent_cs              NVARCHAR(MAX)
+        DECLARE @mMatchInfo               VARCHAR(MAX)  = ''
+              , @mAffectedCreditSites     VARCHAR(MAX)  = ''
+              , @mAffectedLicenseeSites   VARCHAR(MAX)  = ''
+              , @mTotalAffectedBetsCounts VARCHAR(MAX)  = ''
+              , @mWrongResult             VARCHAR(MAX)  = ''
+              , @mActualResult            VARCHAR(MAX)  = ''
+              , @mCalcTime                VARCHAR(MAX)  = ''
+              , @mReCalcTime              VARCHAR(MAX)  = ''
+              , @mContent_en              VARCHAR(MAX)  = ''
+              , @mContent_cs              NVARCHAR(MAX) = N''
+
 
         SELECT @mMatchInfo =
             'MatchID: ' + CAST(MatchID AS VARCHAR) + CHAR(10) + 'Event Date: ' + FORMAT(EventDate, 'dd/MM/yyyy')
@@ -261,44 +273,49 @@ BEGIN
               , '777'
               , IIF((SELECT COUNT(1)FROM @SiteInfo WHERE [Type] = 'Credit') <> 0, 'NV88', NULL))
 
+
         SELECT @mAffectedLicenseeSites = STRING_AGG([Site], ', ')WITHIN GROUP(ORDER BY [Site])
         FROM @SiteInfo
-        WHERE [Type] <> 'Credit'
+        WHERE [Type] <> 'Credit';
 
+
+        WITH LicenseeData
+        AS (SELECT st.[Type]
+                 , [ShowTotal]
+                 , [Order]
+                 , ISNULL(SUM(BetCount), 0)  AS BetCount
+                 , ISNULL(COUNT(si.Site), 0) AS Count
+            FROM @DisplayType   st
+            LEFT JOIN @SiteInfo si ON si.Type = st.Type
+            GROUP BY st.[Type]
+                   , [ShowTotal]
+                   , [Order])
         SELECT @mTotalAffectedBetsCounts =
-            '- Credit Total Bets: x' + CAST(SUM(IIF([Type] = 'Credit', [BetCount], 0)) AS VARCHAR)
-            + IIF(@SiteNameGroup = 'Normal'
-                , CONCAT(
-                        CHAR(10)
-                      , '- Normal Licensee Total Bets: x'
-                      , CAST(SUM(IIF([Type] = 'Normal Licensee', [BetCount], 0)) AS VARCHAR)
-                      , '; Total Licensee: x'
-                      , CAST(COUNT(IIF([Type] = 'Normal Licensee', 1, NULL)) AS VARCHAR)
-                      , CHAR(10)
-                      , '- CV Licensee Total Bets: x'
-                      , CAST(SUM(IIF([Type] = 'CV Licensee', [BetCount], 0)) AS VARCHAR)
-                      , '; Total CV Licensee: x'
-                      , CAST(COUNT(IIF([Type] = 'CV Licensee', 1, NULL)) AS VARCHAR)
-                      , CHAR(10)
-                      , '- JS Licensee Total Bets: x'
-                      , CAST(SUM(IIF([Type] = 'JS Licensee', [BetCount], 0)) AS VARCHAR)
-                      , '; Total JS Licensee: x'
-                      , CAST(COUNT(IIF([Type] = 'JS Licensee', 1, NULL)) AS VARCHAR)
-                      , CHAR(10)
-                      , '- JollySportsCV Licensee Total Bets: x'
-                      , CAST(SUM(IIF([Type] = 'JollySportsCV Licensee', [BetCount], 0)) AS VARCHAR)
-                      , '; Total JollySportsCV Licensee: x'
-                      , CAST(COUNT(IIF([Type] = 'JollySportsCV Licensee', 1, NULL)) AS VARCHAR)
-                      , CHAR(10)
-                      , '- Negative Balance: x'
-                      , CAST(SUM(IIF([HasNegativeBalance] = 1, 1, 0)) AS VARCHAR) + ' (Licensee)'
-                        )
-                , '')
-        FROM @SiteInfo
+            @mTotalAffectedBetsCounts
+            + CONCAT(
+                    N'- '
+                  , [Type]
+                  , N' Total Bets: '
+                  , BetCount
+                  , IIF(ShowTotal = 1, CONCAT(N'; Total ', [Type], N': ', Count), N'')
+                  , CHAR(10)
+                    )
+        FROM LicenseeData
+        ORDER BY [Order]
+
+        IF @SiteNameGroup = 'Normal'
+            WITH NegativeBalanceCount
+            AS (SELECT SUM(CASE WHEN [HasNegativeBalance] = 1 THEN 1 ELSE 0 END) AS NegativeBalanceCount FROM @SiteInfo)
+            SELECT @mTotalAffectedBetsCounts =
+                @mTotalAffectedBetsCounts
+                + CONCAT(N'- Negative Balance: ', NegativeBalanceCount.NegativeBalanceCount, N' (Licensee)')
+            FROM NegativeBalanceCount
+
 
         SELECT @mWrongResult  = STRING_AGG(CONCAT('- ', ResultName, ': ', WrongValue), CHAR(10))
              , @mActualResult = STRING_AGG(CONCAT('- ', ResultName, ': ', ActualValue), CHAR(10))
         FROM @AmendmentInfo
+
 
         SELECT @mCalcTime = STRING_AGG(str, CHAR(10))
         FROM
@@ -309,6 +326,7 @@ BEGIN
            GROUP BY CalcTime
            ) AS s(str)
 
+
         SELECT @mReCalcTime = STRING_AGG(str, CHAR(10))
         FROM
            (
@@ -317,6 +335,7 @@ BEGIN
            FROM @AmendmentInfo
            GROUP BY ReCalcTime
            ) AS s(str)
+
 
         SELECT @mContent_en = REPLACE(Content_en, '@@', ''), @mContent_cs = REPLACE(Content_cs, '@@', '')FROM @Contents
     END
