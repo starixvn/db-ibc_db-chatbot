@@ -24,13 +24,11 @@ BEGIN
     DECLARE @ErrMessage VARCHAR(4000)
 
     DECLARE @SettlementLogs TABLE (SettlementLogID INT NOT NULL PRIMARY KEY)
-
     INSERT INTO @SettlementLogs (SettlementLogID)
     SELECT SettlementLogID FROM [NotiMapping] m WITH (NOLOCK) WHERE m.NotificationID = @NotificationID
 
-    DECLARE @SiteNameGroup VARCHAR(20)
-    DECLARE @NotificationAffectedResult NVARCHAR(MAX) --json
-    DECLARE @SettlementExtraInfo XML
+    --'Normal' or '777', different message display format for '777'
+    DECLARE @TargetGroup VARCHAR(20)
 
     --get match info
     BEGIN
@@ -43,12 +41,11 @@ BEGIN
           , MatchNameEN    NVARCHAR(120)
           , AffectedResult NVARCHAR(MAX)
         )
-
         INSERT INTO @MatchInfo (MatchID, EventDate, KOTime, LeagueNameEN, MatchNameEN, AffectedResult)
         SELECT ext.MatchID
              , ex.EventDate
-             , ext.KOTime                                                                   AS KOTime
-             , ext.LeagueNameEN                                                             AS LeagueNameEN
+             , ext.KOTime AS KOTime
+             , ext.LeagueNameEN AS LeagueNameEN
              , ext.HomeNameEN + ISNULL(' ' + ext.NeutralEN, '') + ' -vs- ' + ext.AwayNameEN AS MatchNameEN
              , ext.AffectedResult
         FROM NotificationExtra AS ex
@@ -63,7 +60,7 @@ BEGIN
          , NeutralEN NVARCHAR(10) '$.NeutralEN'
          , AwayNameEN NVARCHAR(500) '$.AwayNameEN'
          , AffectedResult NVARCHAR(MAX) AS JSON
-           )                   AS ext
+           ) AS ext
         WHERE ex.NotificationID = @NotificationID
 
         IF @Debug = 1
@@ -72,15 +69,20 @@ BEGIN
 
     BEGIN --error check
         IF (SELECT COUNT(1)FROM @MatchInfo) = 0
-            SET @ErrMessage = ISNULL(@ErrMessage, '') + CHAR(10) + 'Has no match in NotificationExtra'
+            SET @ErrMessage =
+                ISNULL(@ErrMessage, '') + CHAR(10) + 'Has no match in NotificationExtra'
 
         IF (SELECT COUNT(1)FROM @MatchInfo) > 1
-            SET @ErrMessage = ISNULL(@ErrMessage, '') + CHAR(10) + 'Has more than one match in NotificationExtra'
+            SET @ErrMessage =
+                ISNULL(@ErrMessage, '') + CHAR(10) + 'Has more than one match in NotificationExtra'
 
+        DECLARE @NotificationAffectedResult NVARCHAR(MAX)
         SELECT @NotificationAffectedResult = AffectedResult FROM @MatchInfo
 
         IF @NotificationAffectedResult IS NULL
-            SET @ErrMessage = ISNULL(@ErrMessage, '') + CHAR(10) + 'Has invalid affected result in NotificationExtra'
+            SET @ErrMessage =
+                ISNULL(@ErrMessage, '') + CHAR(10)
+                + 'Has invalid affected result in NotificationExtra'
     END
 
     --get correction info
@@ -94,7 +96,6 @@ BEGIN
           , CalcTime    DATETIME
           , ReCalcTime  DATETIME
         )
-
         INSERT INTO @AmendmentInfo (ResourceID, ResultName, WrongValue, ActualValue)
         SELECT ResourceID
              , ResultName
@@ -120,9 +121,12 @@ BEGIN
         --so the below query here which filters by one NotificationID will actually returns multiple rows, 
         --but since [Changes] across SiteGroupDBs are the same, variable assignment can proceed as normal 
         --(assign only the last row of result set)
+        DECLARE @SettlementExtraInfo XML
+
         SELECT @SettlementExtraInfo = CAST(ExtraInfo AS XML)
         FROM SettlementResultHist WITH (NOLOCK)
         WHERE SettlementLogID IN ( SELECT SettlementLogID FROM @SettlementLogs )
+
 
         UPDATE cinfo
         SET CalcTime = c.Calc
@@ -131,14 +135,17 @@ BEGIN
         LEFT JOIN
            (
            SELECT rh.ex.value('@Id', 'NVARCHAR(100)') AS ResourceID
-                , rh.ex.value('@ReCalc', 'DATETIME')  AS ReCalc
-                , rh.ex.value('@Calc', 'DATETIME')    AS Calc
+                , rh.ex.value('@ReCalc', 'DATETIME') AS ReCalc
+                , rh.ex.value('@Calc', 'DATETIME') AS Calc
            FROM @SettlementExtraInfo.nodes('root/r') rh(ex)
-           )                AS c ON cinfo.ResourceID = c.ResourceID
+           ) AS c ON cinfo.ResourceID = c.ResourceID
+
 
         IF @Debug = 1
         BEGIN
-            SELECT * FROM SettlementResultHist WITH (NOLOCK) WHERE SettlementLogID IN ( SELECT SettlementLogID FROM @SettlementLogs )
+            SELECT *
+            FROM SettlementResultHist WITH (NOLOCK)
+            WHERE SettlementLogID IN ( SELECT SettlementLogID FROM @SettlementLogs )
 
             SELECT * FROM @AmendmentInfo
         END
@@ -175,7 +182,7 @@ BEGIN
 
         For the above example, we select one level and count the TransID by TargetSite, in this case it is 2 for A and 1 for B
         */
-        DECLARE @SiteInfo TABLE
+        DECLARE @DetailSiteInfo TABLE
         (
             [Site]               VARCHAR(500) NOT NULL PRIMARY KEY
           , [Type]               VARCHAR(50)
@@ -183,68 +190,110 @@ BEGIN
           , [BetCount]           INT
           , [HasNegativeBalance] BIT
                 DEFAULT 0
-        )
-
-        INSERT INTO @SiteInfo ([Site], [Type], [SiteNameGroup], [BetCount])
+        );
+        WITH NotificationTarget
+        AS (SELECT TargetSite
+                 -- count the number of times the word "TransID" appears in ExtraInfo
+                 , SUM((LEN(ExtraInfo) - LEN(REPLACE(ExtraInfo, 'TransID', ''))) / LEN('TransID')) AS BetCount
+            FROM [dbo].[NotificationTarget] t WITH (NOLOCK)
+            WHERE t.NotificationID = @NotificationID
+              AND t.TargetID IN ( SELECT CustID FROM bodb02.dbo.vw_Customer c WITH (NOLOCK) WHERE c.RoleID = 2 )
+            GROUP BY TargetSite)
+           , BalanceNegativeHist
+        AS (SELECT [Site]
+            FROM [dbo].[BalanceNegativeHist] WITH (NOLOCK)
+            WHERE SettlementLogID IN ( SELECT SettlementLogID FROM @SettlementLogs ))
+        INSERT INTO @DetailSiteInfo ([Site], [Type], [SiteNameGroup], [BetCount], [HasNegativeBalance])
         SELECT [site].[site]
              , CASE WHEN [site].[IsChinaView] = 1 THEN 'CV Licensee'               --ChinaView
                    WHEN [site].[SpecialPlatfrom] = 2 THEN 'JS Licensee'            --JollySports
                    WHEN [site].[SpecialPlatfrom] = 3 THEN 'JollySportsCV Licensee' --JollySportsCV
                    WHEN [site].[isLicensee] = 1 THEN 'Normal Licensee'             --Licencee
                    ELSE 'Credit'
-               END                                              AS [Type]
+               END AS [Type]
              , IIF([site].[SiteLabel] = '777', '777', 'Normal') AS [SiteNameGroup]
              , [NotificationTarget].[BetCount]
-        FROM
-           (
-           SELECT TargetSite
-                -- count the number of times the word "TransID" appears in ExtraInfo
-                , SUM((LEN(ExtraInfo) - LEN(REPLACE(ExtraInfo, 'TransID', ''))) / LEN('TransID')) AS BetCount
-           FROM [dbo].[NotificationTarget] t WITH (NOLOCK)
-           WHERE t.NotificationID = @NotificationID
-             AND t.TargetID IN ( SELECT CustID FROM bodb02.dbo.vw_Customer c WITH (NOLOCK) WHERE c.RoleID = 2 )
-           GROUP BY TargetSite
-           ) AS NotificationTarget
+             , ISNULL((SELECT TOP 1 1 FROM BalanceNegativeHist WHERE [Site] = [site].[Site]), 0) AS HasNegativeBalance
+        FROM NotificationTarget
         INNER JOIN [bodb02].[dbo].[Site] WITH (NOLOCK) ON TargetSite = [site].[site]
 
-        SELECT @SiteNameGroup = [SiteNameGroup] FROM @SiteInfo
+        --should be one group only for one notification
+        SELECT @TargetGroup = [SiteNameGroup] FROM @DetailSiteInfo
 
-        DECLARE @DisplayType TABLE ([Type] VARCHAR(50), [ShowTotal] BIT, [Order] TINYINT IDENTITY(1, 1))
-        INSERT INTO @DisplayType ([Type], [ShowTotal]) VALUES ('Credit', 0)
-
-        IF @SiteNameGroup = 'Normal'
-            INSERT INTO @DisplayType ([Type], [ShowTotal])
+        DECLARE @SumSiteType TABLE
+        (
+            [Type]                 VARCHAR(50) NOT NULL
+          , [ShowTotal]            BIT         NOT NULL
+          , [BetCount]             INT
+                DEFAULT 0
+          , [SiteCount]            INT
+                DEFAULT 0
+          , [NegativeBalanceCount] INT
+                DEFAULT 0
+          , [Order]                TINYINT     IDENTITY(1, 1)
+        )
+        INSERT INTO @SumSiteType ([Type], [ShowTotal]) VALUES ('Credit', 0)
+        IF @TargetGroup = 'Normal'
+            INSERT INTO @SumSiteType ([Type], [ShowTotal])
             VALUES
             ('Normal Licensee', 1)
           , ('CV Licensee', 1)
           , ('JS Licensee', 1)
           , ('JollySportsCV Licensee', 1)
 
-        UPDATE @SiteInfo
-        SET HasNegativeBalance = 1
-        FROM @SiteInfo s
-        WHERE s.Site IN
-              (
-              SELECT [Site]
-              FROM BalanceNegativeHist WITH (NOLOCK)
-              WHERE SettlementLogID IN ( SELECT SettlementLogID FROM @SettlementLogs )
-              )
+        UPDATE t
+        SET t.BetCount = s.BetCount
+          , t.SiteCount = s.SiteCount
+          , t.NegativeBalanceCount = s.NegativeBalanceCount
+        FROM @SumSiteType t
+        INNER JOIN
+            (
+            SELECT [Type]
+                 , SUM([BetCount]) AS BetCount
+                 , COUNT([Site]) AS SiteCount
+                 , SUM([HasNegativeBalance] * 1) AS NegativeBalanceCount
+            FROM @DetailSiteInfo
+            GROUP BY [Type]
+            ) s ON t.[Type] = s.[Type]
 
-        IF @Debug = 1
-            SELECT * FROM @SiteInfo
+        --for Credit sites, display either 'NV88' or '777'
+        DECLARE @CresitSiteDisplay VARCHAR(50)
+        IF @TargetGroup = '777'
+            SET @CresitSiteDisplay = '777'
+        ELSE
+        BEGIN
+            IF (SELECT SiteCount FROM @SumSiteType WHERE [Type] = 'Credit') > 0
+                SET @CresitSiteDisplay = 'NV88'
+        END
+
+        DECLARE @NegativeBalanceLicenseeCount INT
+        IF @TargetGroup = 'Normal'
+          SELECT @NegativeBalanceLicenseeCount = SUM([NegativeBalanceCount])
+          FROM @SumSiteType
+          WHERE [Type] <> 'Credit'
+
+        IF @Debug = 1 BEGIN
+            SELECT * FROM @DetailSiteInfo
+
+            SELECT * FROM @SumSiteType
+        END
     END
 
     BEGIN --error check
-        IF (SELECT COUNT(DISTINCT SiteNameGroup)FROM @SiteInfo) > 1
-            SET @ErrMessage = ISNULL(@ErrMessage, '') + CHAR(10) + 'One notification should target only one site group'
+        IF (SELECT COUNT(DISTINCT SiteNameGroup)FROM @DetailSiteInfo) > 1
+            SET @ErrMessage =
+                ISNULL(@ErrMessage, '') + CHAR(10)
+                + 'One notification should target only one site group'
     END
 
     --get notification contents
     BEGIN
         DECLARE @Contents TABLE (Content_en VARCHAR(MAX), Content_cs NVARCHAR(MAX))
-
         INSERT INTO @Contents (Content_en, Content_cs)
-        SELECT Content_en, Content_cs FROM dbo.Notification WITH (NOLOCK) WHERE NotificationID = @NotificationID
+        SELECT Content_en
+             , Content_cs
+        FROM dbo.Notification WITH (NOLOCK)
+        WHERE NotificationID = @NotificationID
     END
 
     -- build content
@@ -260,104 +309,98 @@ BEGIN
               , @mContent_en              VARCHAR(MAX)  = ''
               , @mContent_cs              NVARCHAR(MAX) = N''
 
-
         SELECT @mMatchInfo =
-            'MatchID: ' + CAST(MatchID AS VARCHAR) + CHAR(10) + 'Event Date: ' + FORMAT(EventDate, 'dd/MM/yyyy')
-            + CHAR(10) + 'Event Time: ' + FORMAT(KOTime, 'hh:mm tt') + CHAR(10) + 'League: '
-            + CAST(LeagueNameEN AS VARCHAR(500)) + CHAR(10) + 'Match: ' + CAST(MatchNameEN AS VARCHAR(500))
+            'MatchID: ' + CAST(MatchID AS VARCHAR) + CHAR(10) + 'Event Date: '
+            + FORMAT(EventDate, 'dd/MM/yyyy') + CHAR(10) + 'Event Time: '
+            + FORMAT(KOTime, 'hh:mm tt') + CHAR(10) + 'League: '
+            + CAST(LeagueNameEN AS VARCHAR(500)) + CHAR(10) + 'Match: '
+            + CAST(MatchNameEN AS VARCHAR(500))
         FROM @MatchInfo
 
-
-        SET @mAffectedCreditSites =
-            IIF(@SiteNameGroup = '777'
-              , '777'
-              , IIF((SELECT COUNT(1)FROM @SiteInfo WHERE [Type] = 'Credit') <> 0, 'NV88', NULL))
-
+        SET @mAffectedCreditSites = @CresitSiteDisplay
 
         SELECT @mAffectedLicenseeSites = STRING_AGG([Site], ', ')WITHIN GROUP(ORDER BY [Site])
-        FROM @SiteInfo
+        FROM @DetailSiteInfo
         WHERE [Type] <> 'Credit';
 
-
-        WITH LicenseeData
-        AS (SELECT st.[Type]
-                 , [ShowTotal]
-                 , [Order]
-                 , ISNULL(SUM(BetCount), 0)  AS BetCount
-                 , ISNULL(COUNT(si.Site), 0) AS Count
-            FROM @DisplayType   st
-            LEFT JOIN @SiteInfo si ON si.Type = st.Type
-            GROUP BY st.[Type]
-                   , [ShowTotal]
-                   , [Order])
         SELECT @mTotalAffectedBetsCounts =
             @mTotalAffectedBetsCounts
             + CONCAT(
-                    N'- '
+                    '- '
                   , [Type]
-                  , N' Total Bets: '
+                  , ' Total Bets: '
+                  , 'x'
                   , BetCount
-                  , IIF(ShowTotal = 1, CONCAT(N'; Total ', [Type], N': ', Count), N'')
+                  , IIF(ShowTotal = 1, CONCAT('; Total ', [Type], ': ', 'x', [BetCount]), '')
                   , CHAR(10)
                     )
-        FROM LicenseeData
+        FROM @SumSiteType
         ORDER BY [Order]
 
-        IF @SiteNameGroup = 'Normal'
-            WITH NegativeBalanceCount
-            AS (SELECT SUM(CASE WHEN [HasNegativeBalance] = 1 THEN 1 ELSE 0 END) AS NegativeBalanceCount FROM @SiteInfo)
+        IF @NegativeBalanceLicenseeCount IS NOT NULL
             SELECT @mTotalAffectedBetsCounts =
                 @mTotalAffectedBetsCounts
-                + CONCAT(N'- Negative Balance: ', NegativeBalanceCount.NegativeBalanceCount, N' (Licensee)')
-            FROM NegativeBalanceCount
+                + CONCAT('- Negative Balance: ', 'x', @NegativeBalanceLicenseeCount, '(Licensee)')
 
-
-        SELECT @mWrongResult  = STRING_AGG(CONCAT('- ', ResultName, ': ', WrongValue), CHAR(10))
+        SELECT @mWrongResult = STRING_AGG(CONCAT('- ', ResultName, ': ', WrongValue), CHAR(10))
              , @mActualResult = STRING_AGG(CONCAT('- ', ResultName, ': ', ActualValue), CHAR(10))
         FROM @AmendmentInfo
-
 
         SELECT @mCalcTime = STRING_AGG(str, CHAR(10))
         FROM
            (
            SELECT '- Calculation time: ' + FORMAT(CalcTime, 'MMM dd, yyyy hh:mm:ss tt') + ' ['
-                  + STRING_AGG(ResultName + '; ' + WrongValue, ' | ')WITHIN GROUP(ORDER BY CalcTime) + ']'
+                  + STRING_AGG(ResultName + '; ' + WrongValue, ' | ')WITHIN GROUP(ORDER BY CalcTime)
+                  + ']'
            FROM @AmendmentInfo
            GROUP BY CalcTime
            ) AS s(str)
-
 
         SELECT @mReCalcTime = STRING_AGG(str, CHAR(10))
         FROM
            (
            SELECT '- ReCalculation time: ' + FORMAT(ReCalcTime, 'MMM dd, yyyy hh:mm:ss tt') + ' ['
-                  + STRING_AGG(ResultName + '; ' + ActualValue, ' | ')WITHIN GROUP(ORDER BY ReCalcTime) + ']'
+                  + STRING_AGG(ResultName + '; ' + ActualValue, ' | ')WITHIN GROUP(ORDER BY ReCalcTime)
+                  + ']'
            FROM @AmendmentInfo
            GROUP BY ReCalcTime
            ) AS s(str)
 
-
-        SELECT @mContent_en = REPLACE(Content_en, '@@', ''), @mContent_cs = REPLACE(Content_cs, '@@', '')FROM @Contents
+        SELECT @mContent_en = REPLACE(Content_en, '@@', '')
+             , @mContent_cs = REPLACE(Content_cs, '@@', '')
+        FROM @Contents
     END
 
-    SELECT @SiteNameGroup AS SiteNameGroup
+    SELECT @TargetGroup AS SiteNameGroup
          , CONVERT(
                   XML
                 , CONCAT('**Result Amendment Announcement**', CHAR(10), CHAR(10))
                   + CONCAT(ISNULL(@mMatchInfo, ''), CHAR(10), CHAR(10))
                   + IIF(@mAffectedCreditSites IS NOT NULL
-                      , CONCAT('**Affected Credit sites:** ', '**', @mAffectedCreditSites, '**', CHAR(10))
+                      , CONCAT(
+                              '**Affected Credit sites:** '
+                              , '**'
+                              , @mAffectedCreditSites
+                              , '**'
+                              , CHAR(10)
+                              )
                       , '')
                   + IIF(@mAffectedLicenseeSites IS NOT NULL
-                      , CONCAT('**Affected Licensee sites:** ', '**', @mAffectedLicenseeSites, '**', CHAR(10))
+                      , CONCAT(
+                              '**Affected Licensee sites:** '
+                              , '**'
+                              , @mAffectedLicenseeSites
+                              , '**'
+                              , CHAR(10)
+                              )
                       , '')
                   + CONCAT(
                           CHAR(10)
-                          , '**Total Affected Bets Counts:** '
-                          , CHAR(10)
-                          , @mTotalAffectedBetsCounts
-                          , CHAR(10)
-                          , CHAR(10)
+                        , '**Total Affected Bets Counts:** '
+                        , CHAR(10)
+                        , @mTotalAffectedBetsCounts
+                        , CHAR(10)
+                        , CHAR(10)
                           ) + CONCAT('Wrong Result: ', CHAR(10), @mWrongResult, CHAR(10))
                   + CONCAT('Actual Result: ', CHAR(10), @mActualResult, CHAR(10), CHAR(10))
                   + CONCAT(
@@ -370,7 +413,7 @@ BEGIN
                         , CHAR(10)
                           ) + CONCAT(ISNULL(@mContent_en, ''), CHAR(10), CHAR(10))
                   + CONCAT(ISNULL(@mContent_cs, ''), CHAR(10))
-                  )       AS Content
+                  ) AS Content
 
     IF ISNULL(@ErrMessage, '') <> ''
     BEGIN
