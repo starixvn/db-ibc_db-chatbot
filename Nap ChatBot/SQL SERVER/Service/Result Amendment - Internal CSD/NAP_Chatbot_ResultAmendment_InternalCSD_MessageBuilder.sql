@@ -335,22 +335,25 @@ BEGIN
         WHERE [Type] <> 'Credit';
 
         SELECT @mTotalAffectedBetsCounts =
-            @mTotalAffectedBetsCounts
-            + CONCAT(
-                    '- '
-                  , [Type]
-                  , ' Total Bets: '
-                  , 'x'
-                  , BetCount
-                  , IIF(ShowTotal = 1, CONCAT('; Total ', [Type], ': ', 'x', [BetCount]), '')
-                  , CHAR(10)
-                    )
+            STRING_AGG(
+                      CONCAT(
+                            '- '
+                          , [Type]
+                          , ' Total Bets: '
+                          , 'x'
+                          , BetCount
+                          , IIF(ShowTotal = 1
+                                , CONCAT('; Total ', [Type], ': ', 'x', [BetCount])
+                                , '')
+                            )
+                    , CHAR(10)
+                      ) WITHIN GROUP (ORDER BY [Order])
         FROM @SumSiteType
-        ORDER BY [Order]
 
         IF @NegativeBalanceLicenseeCount IS NOT NULL
             SELECT @mTotalAffectedBetsCounts =
                 @mTotalAffectedBetsCounts
+                + CHAR(10)
                 + CONCAT('- Negative Balance: ', 'x', @NegativeBalanceLicenseeCount, '(Licensee)')
 
         SELECT @mWrongResult = STRING_AGG(CONCAT('- ', ResultName, ': ', WrongValue), CHAR(10))
