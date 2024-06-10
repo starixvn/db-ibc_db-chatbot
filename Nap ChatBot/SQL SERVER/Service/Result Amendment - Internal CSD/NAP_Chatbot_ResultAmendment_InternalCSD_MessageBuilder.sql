@@ -27,6 +27,9 @@ BEGIN
     INSERT INTO @SettlementLogs (SettlementLogID)
     SELECT SettlementLogID FROM [NotiMapping] m WITH (NOLOCK) WHERE m.NotificationID = @NotificationID
 
+    IF @@ROWCOUNT = 0
+        SET @ErrMessage = 'Not found in NotiMapping'
+
     --'Normal' or '777', different message display format for '777'
     DECLARE @TargetGroup VARCHAR(20)
 
@@ -63,23 +66,25 @@ BEGIN
            ) AS ext
         WHERE ex.NotificationID = @NotificationID
 
+        DECLARE @NotificationAffectedResult NVARCHAR(MAX)
+        SELECT @NotificationAffectedResult = AffectedResult FROM @MatchInfo
+
         IF @Debug = 1
             SELECT * FROM @MatchInfo
     END
 
     BEGIN --error check
-        IF (SELECT COUNT(1)FROM @MatchInfo) = 0
+        DECLARE @MatchCount INT = (SELECT COUNT(1)FROM @MatchInfo)
+
+        IF @MatchCount = 0
             SET @ErrMessage =
                 ISNULL(@ErrMessage, '') + CHAR(10) + 'Has no match in NotificationExtra'
 
-        IF (SELECT COUNT(1)FROM @MatchInfo) > 1
+        IF @MatchCount > 1
             SET @ErrMessage =
                 ISNULL(@ErrMessage, '') + CHAR(10) + 'Has more than one match in NotificationExtra'
 
-        DECLARE @NotificationAffectedResult NVARCHAR(MAX)
-        SELECT @NotificationAffectedResult = AffectedResult FROM @MatchInfo
-
-        IF @NotificationAffectedResult IS NULL
+        IF (@MatchCount = 1 AND @NotificationAffectedResult IS NULL)
             SET @ErrMessage =
                 ISNULL(@ErrMessage, '') + CHAR(10)
                 + 'Has invalid affected result in NotificationExtra'
@@ -122,11 +127,9 @@ BEGIN
         --but since [Changes] across SiteGroupDBs are the same, variable assignment can proceed as normal 
         --(assign only the last row of result set)
         DECLARE @SettlementExtraInfo XML
-
         SELECT @SettlementExtraInfo = CAST(ExtraInfo AS XML)
         FROM SettlementResultHist WITH (NOLOCK)
         WHERE SettlementLogID IN ( SELECT SettlementLogID FROM @SettlementLogs )
-
 
         UPDATE cinfo
         SET CalcTime = c.Calc
@@ -139,7 +142,6 @@ BEGIN
                 , rh.ex.value('@Calc', 'DATETIME') AS Calc
            FROM @SettlementExtraInfo.nodes('root/r') rh(ex)
            ) AS c ON cinfo.ResourceID = c.ResourceID
-
 
         IF @Debug = 1
         BEGIN
@@ -158,6 +160,14 @@ BEGIN
             SET @ErrMessage =
                 ISNULL(@ErrMessage, '') + CHAR(10)
                 + 'Has different counts of amendments in NotificationExtra ($.ExtraInfo.AffectedResult) and SettlementResultHist (ExtraInfo/root/r)'
+
+        --check if CalcTime or RecalcTime columns in @AmendmentInfo are NULL
+        IF (SELECT COUNT(1)FROM @AmendmentInfo WHERE CalcTime IS NULL OR ReCalcTime IS NULL) > 0
+            SELECT @ErrMessage =
+                ISNULL(@ErrMessage, '') + CHAR(10)
+                + 'Unable to get CalcTime/ReCalcTime from SettlementResultHist with ResourceID = '
+                + STRING_AGG(ResourceID, ',')
+            FROM @AmendmentInfo
     END
 
     -- get affected sites' info and their bet counts for this match
@@ -268,11 +278,12 @@ BEGIN
 
         DECLARE @NegativeBalanceLicenseeCount INT
         IF @TargetGroup = 'Normal'
-          SELECT @NegativeBalanceLicenseeCount = SUM([NegativeBalanceCount])
-          FROM @SumSiteType
-          WHERE [Type] <> 'Credit'
+            SELECT @NegativeBalanceLicenseeCount = SUM([NegativeBalanceCount])
+            FROM @SumSiteType
+            WHERE [Type] <> 'Credit'
 
-        IF @Debug = 1 BEGIN
+        IF @Debug = 1
+        BEGIN
             SELECT * FROM @DetailSiteInfo
 
             SELECT * FROM @SumSiteType
@@ -417,10 +428,8 @@ BEGIN
 
     IF ISNULL(@ErrMessage, '') <> ''
     BEGIN
-        SELECT @ErrMessage =
-            '[NotificationID: ' + CAST(@NotificationID AS VARCHAR) + ']' + '[SettlementLogIDs: '
-            + STRING_AGG(SettlementLogID, ',') + ']' + @ErrMessage
-        FROM @SettlementLogs;
+        SET @ErrMessage =
+            '[NotificationID: ' + CAST(@NotificationID AS VARCHAR) + ']' + CHAR(10) + @ErrMessage;
 
         THROW 51000, @ErrMessage, 1
     END
