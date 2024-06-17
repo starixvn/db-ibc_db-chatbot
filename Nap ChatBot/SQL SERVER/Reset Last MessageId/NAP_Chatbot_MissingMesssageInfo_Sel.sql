@@ -22,11 +22,11 @@ AS
 	
 	. @MessageList
 			<root>
-				<r JobIdentify="1" ReferenceId="1" SettingName=""/>
-				<r JobIdentify="3" ReferenceId="1" SettingName=""/>
-				<r JobIdentify="6" ReferenceId="1" SettingName=""/>
-				<r JobIdentify="7" ReferenceId="1" SettingName=""/>
-				<r JobIdentify="8" ReferenceId="1" SettingName=""/>
+				<r JobIdentify="1" ReferenceValue="1" SettingName=""/>
+				<r JobIdentify="3" ReferenceValue="1" SettingName=""/>
+				<r JobIdentify="6" ReferenceValue="1" SettingName=""/>
+				<r JobIdentify="7" ReferenceValue="1" SettingName=""/>
+				<r JobIdentify="8" ReferenceValue="1" SettingName=""/>
 			</root>
 
 	. @MsgContentsTypeList
@@ -94,7 +94,7 @@ BEGIN
 	INSERT INTO @Message (JobIdentify, FromReferenceId, SettingName)
 	SELECT 
 		t.c.value ('@JobIdentify', 'TINYINT') AS JobIdentify
-		,t.c.value ('@ReferenceId', 'INT') AS FromReferenceId
+		,t.c.value ('@ReferenceValue', 'INT') AS FromReferenceId
 		,t.c.value ('@SettingName', 'VARCHAR(200)') AS SettingName
 	FROM @MessageList.nodes('root/r') t(c)
 	WHERE t.c.value ('@JobIdentify', 'TINYINT') <> 9

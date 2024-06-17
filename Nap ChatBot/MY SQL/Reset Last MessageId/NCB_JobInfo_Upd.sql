@@ -21,7 +21,7 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_JobInfo_Upd`(
 		Param:
 				- @JobInfo
 							[  
-								{ "JobIdentify":2, "Value":"12", "SettingName":"LastMsgTargetId"}
+								{ "JobIdentify":2, "ReferenceValue":"12", "SettingName":"LastMsgTargetId"}
 							]
 				- @JobDetail
 							[  
@@ -34,22 +34,22 @@ BEGIN
     DROP TEMPORARY TABLE IF EXISTS tmp_JobInfo;
     CREATE TEMPORARY TABLE IF NOT EXISTS tmp_JobInfo
     (
-		JobIdentify TINYINT UNSIGNED, 
-        Value 		VARCHAR(2000),
-		SettingName VARCHAR(200)
+		JobIdentify 	TINYINT UNSIGNED, 
+        ReferenceValue 	VARCHAR(2000),
+		SettingName 	VARCHAR(200)
     );
 	
 	DROP TEMPORARY TABLE IF EXISTS tmp_JobDetail;
 	CREATE TEMPORARY TABLE IF NOT EXISTS tmp_JobDetail
 	(
-		JobIdentify TINYINT UNSIGNED
+		JobIdentify 	TINYINT UNSIGNED
 		,NotificationId INT UNSIGNED
 	);
     
     SET errCode = 0, errMsg = '';
     
-    INSERT INTO tmp_JobInfo (JobIdentify, Value, SettingName)
-    SELECT t.JobIdentify, t.Value, t.SettingName
+    INSERT INTO tmp_JobInfo (JobIdentify, ReferenceValue, SettingName)
+    SELECT t.JobIdentify, t.ReferenceValue, t.SettingName
     FROM 
 		JSON_TABLE
         (
@@ -57,14 +57,14 @@ BEGIN
             "$[*]"
             COLUMNS
             (
-				JobIdentify TINYINT PATH "$.JobIdentify", 
-				Value 		VARCHAR(2000) PATH "$.Value",
-				SettingName VARCHAR(200) PATH "$.SettingName"
+				JobIdentify 	TINYINT PATH "$.JobIdentify", 
+				ReferenceValue 	VARCHAR(2000) PATH "$.ReferenceValue",
+				SettingName 	VARCHAR(200) PATH "$.SettingName"
             )
         ) AS t;
 		
 	UPDATE tmp_JobInfo
-		SET Value = CONVERT(DATE_ADD(CONVERT(Value, DATETIME), INTERVAL -12 HOUR), NCHAR)
+		SET ReferenceValue = CONVERT(DATE_ADD(CONVERT(ReferenceValue, DATETIME), INTERVAL -12 HOUR), NCHAR)
 	WHERE JobIdentify = 9 AND SettingName = 'LastModifiedTime';
 		
 	INSERT INTO tmp_JobDetail (JobIdentify, NotificationId)
@@ -83,7 +83,7 @@ BEGIN
         
     UPDATE SystemSetting AS s
 	INNER JOIN tmp_JobInfo AS j ON j.JobIdentify = s.JobIdentify AND s.SettingName = j.SettingName
-		SET s.Value = j.Value;
+		SET s.Value = j.ReferenceValue;
 
     UPDATE SystemSetting AS s
 	INNER JOIN tmp_JobInfo AS j ON j.JobIdentify = s.JobIdentify

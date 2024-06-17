@@ -24,21 +24,21 @@ BEGIN
     CREATE TEMPORARY TABLE tmpSetting
     (
 		JobIdentify INT 
-        ,ReferenceId TEXT
+        ,ReferenceValue TEXT
         ,SettingName VARCHAR(200)
     );
     
-    INSERT INTO tmpSetting (JobIdentify, ReferenceId, SettingName)
-    SELECT JobIdentify, Value AS ReferenceId, SettingName
+    INSERT INTO tmpSetting (JobIdentify, ReferenceValue, SettingName)
+    SELECT JobIdentify, Value, SettingName
     FROM SystemSetting 
     WHERE Description LIKE '%- ReferenceId -%';
     
-    INSERT INTO tmpSetting (JobIdentify, ReferenceId, SettingName)
-	SELECT 9 AS JobIdentify, GROUP_CONCAT(DISTINCT ReferenceId) AS ReferenceId, 'ListNotificationsOfNotificationCenter'  AS SettingName
+    INSERT INTO tmpSetting (JobIdentify, ReferenceValue, SettingName)
+	SELECT 9 AS JobIdentify, GROUP_CONCAT(DISTINCT ReferenceId) AS ReferenceValue, 'ListNotificationsOfNotificationCenter'  AS SettingName
 	FROM NotificationReference
 	WHERE CreatedDate >= DATE_ADD(utc_date(), INTERVAL -1 DAY ) AND DataSource = 'DBCRM.MessageNotification.dbo.Notification';
             
-	SELECT JobIdentify, ReferenceId, SettingName
+	SELECT JobIdentify, ReferenceValue, SettingName
     FROM tmpSetting
     ORDER BY JobIdentify;
     

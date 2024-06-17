@@ -14,8 +14,8 @@ AS
 	Param's Explanation:
 	- @Setting: 
 			<root>
-				<r JobIdentify="1" ReferenceId="1" SettingName="LastVoidingHistoryCollectionId" />
-				<r JobIdentify="3" ReferenceId="12" SettingName="LastVoidingHistoryCollectionId"/>
+				<r JobIdentify="1" ReferenceValue="1" SettingName="LastVoidingHistoryCollectionId" />
+				<r JobIdentify="3" ReferenceValue="12" SettingName="LastVoidingHistoryCollectionId"/>
 			</root>
 
 	- @MessageList: 
@@ -32,12 +32,12 @@ BEGIN
 	
 	DECLARE @LastModifiedTime DATETIME
 
-	SELECT @LastModifiedTime = t.c.value ('@ReferenceId', 'DATETIME') 
+	SELECT @LastModifiedTime = t.c.value ('@ReferenceValue', 'DATETIME') 
 	FROM @Setting.nodes('root/r') t(c)
 	WHERE t.c.value ('@JobIdentify', 'TINYINT') = 9 AND t.c.value ('@SettingName', 'VARCHAR(200)') = 'LastModifiedTime'
 	OPTION (OPTIMIZE FOR (@Setting = NULL))
 
-	SELECT @ListNotifications = t.c.value ('@ReferenceId', 'VARCHAR(MAX)') 
+	SELECT @ListNotifications = t.c.value ('@ReferenceValue', 'VARCHAR(MAX)') 
 	FROM @Setting.nodes('root/r') t(c)
 	WHERE t.c.value ('@JobIdentify', 'TINYINT') = 9 AND t.c.value ('@SettingName', 'VARCHAR(200)') = 'ListNotificationsOfNotificationCenter'
 	OPTION (OPTIMIZE FOR (@Setting = NULL))

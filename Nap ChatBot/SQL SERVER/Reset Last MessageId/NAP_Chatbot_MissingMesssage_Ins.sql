@@ -16,6 +16,7 @@ AS
 		- 20211007@Malcolm: Initialize SP [RedmineID: #162825]
 		- 20230118@Malcolm: Scale out for ChatBot [RedmineID: #181907]
 		- 20230515@Roy: Database - HA DB061/DB062 [RedmineID: #169643]
+		- 20240129@Malcolm: Add result amendment - Licness/ Internal CSD [RedmineID: #197620]
 
 	. @MessageList
 			<root>

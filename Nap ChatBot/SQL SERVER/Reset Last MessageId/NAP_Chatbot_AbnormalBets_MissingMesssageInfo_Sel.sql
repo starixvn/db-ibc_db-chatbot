@@ -1,4 +1,4 @@
-/*<info serverAlias="DBACC-bodb02" executers="bodbAdminNet" isFunction="0" isNested="0"></info>*/
+/*<info serverAlias="DBACC-bodb02" executers="wsv_nap" isFunction="0" isNested="0"></info>*/
 CREATE PROCEDURE [dbo].[NAP_Chatbot_AbnormalBets_MissingMesssageInfo_Sel]
 	@MessageList XML
 AS
@@ -12,12 +12,13 @@ AS
 		- 20230118@Malcolm: Scale out for ChatBot [RedmineID: #181907]
 		- 20231122@Malcolm: Get setting for Internal - CSD [RedmineID: #196660]
 		- 20240108@Malcolm: Remove SABA text for TVS [RedmineID: #199482]
+		- 20240129@Malcolm: Add result amendment - Licness/ Internal CSD [RedmineID: #197620]	
 
 	Param's Explanation:
 	@MessageList: 
 			<root>
-				<r JobIdentify="1" ReferenceId="1" SettingName="LastVoidingHistoryCollectionId" />
-				<r JobIdentify="3" ReferenceId="12" SettingName="LastVoidingHistoryCollectionId"/>
+				<r JobIdentify="1" ReferenceValue="1" SettingName="LastVoidingHistoryCollectionId" />
+				<r JobIdentify="3" ReferenceValue="12" SettingName="LastVoidingHistoryCollectionId"/>
 			</root>
 */
 BEGIN
@@ -27,7 +28,7 @@ BEGIN
 	
 	DECLARE @FromVoidingHistoryCollectionId INT, @MaxVoidingHistoryCollectionId INT
 
-	SELECT @FromVoidingHistoryCollectionId = t.c.value ('@ReferenceId', 'INT') 
+	SELECT @FromVoidingHistoryCollectionId = t.c.value ('@ReferenceValue', 'INT') 
 	FROM @MessageList.nodes('root/r') t(c)
 	WHERE t.c.value ('@JobIdentify', 'TINYINT') = 2 AND t.c.value ('@SettingName', 'VARCHAR(200)') = 'LastVoidingHistoryCollectionId'
 	OPTION (OPTIMIZE FOR (@MessageList = NULL))
