@@ -20,7 +20,7 @@ AS
 
 	- @MessageList: 
 			<root>
-				<r VoidingHistoryCollectionId="1" MsgTargetId="1" MessageId="" MessageIds="" Content_en="" Posttime="" JobIdentify=""/>
+				<r VoidingHistoryCollectionId="1" MsgTargetId="1" MessageId="" MessageIds="" Content_en="" PostTime="" JobIdentify=""/>
 			</root>
 */
 BEGIN
@@ -69,7 +69,7 @@ BEGIN
 		,t.c.value ('@MessageId', 'INT') 
 		,t.c.value ('@MessageIds', 'VARCHAR(MAX)') 
 		,t.c.value ('@Content_en', 'NVARCHAR(MAX)') 
-		,t.c.value ('@Posttime', 'DATETIME') 
+		,t.c.value ('@PostTime', 'DATETIME') 
 		,t.c.value ('@JobIdentify', 'TINYINT') 
 	FROM @MessageList.nodes('root/r') t(c)
 	OPTION (OPTIMIZE FOR (@MessageList = NULL))
