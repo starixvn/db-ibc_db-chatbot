@@ -28,10 +28,10 @@ BEGIN
 
     INSERT INTO @Notifications (NotificationID, MessageID, LastModifiedTime)
     SELECT NotificationID
-         , RefID           AS MessageID
+         , RefID AS MessageID
          , LastModifiedTime
     FROM [Notification]
-    WHERE StatusID = 13
+    WHERE StatusID = (SELECT StatusID FROM NotiStatus WHERE [Status] = 'Sent')
       AND NotificationType = 1 -- Msg
       AND LastModifiedTime >= @LastModifiedTime
 
@@ -66,8 +66,8 @@ BEGIN
         BEGIN CATCH
             --TODO: insert error log?
             SELECT @NotificationID [NotificationID]
-                 , @MessageID      [MessageID]
-                 , ERROR_NUMBER()  [ErrorNumber]
+                 , @MessageID [MessageID]
+                 , ERROR_NUMBER() [ErrorNumber]
                  , ERROR_MESSAGE() [ErrorMessage];
 
             THROW
@@ -86,7 +86,10 @@ BEGIN
     CLOSE NotificationCursor
     DEALLOCATE NotificationCursor
 
-    SELECT TOP 1 @NewLastModifiedTime = LastModifiedTime FROM @Notifications ORDER BY LastModifiedTime DESC
+    SELECT TOP 1
+           @NewLastModifiedTime = LastModifiedTime
+    FROM @Notifications
+    ORDER BY LastModifiedTime DESC
 
     SELECT * FROM @Messages ORDER BY NotificationID
 END

@@ -25,10 +25,20 @@ BEGIN
 
     DECLARE @SettlementLogs TABLE (SettlementLogID INT NOT NULL PRIMARY KEY)
     INSERT INTO @SettlementLogs (SettlementLogID)
-    SELECT SettlementLogID FROM [NotiMapping] m WITH (NOLOCK) WHERE m.NotificationID = @NotificationID
+    SELECT SettlementLogID FROM [NotiMapping] m WHERE m.NotificationID = @NotificationID
 
     IF @@ROWCOUNT = 0
         SET @ErrMessage = 'Not found in NotiMapping'
+
+    --see @SettlementExtraInfo comment section below for table structure
+    DECLARE @SessionID VARCHAR(50)
+    SELECT @SessionID = SessionID
+    FROM SettlementResultHist
+    WHERE SettlementLogID IN ( SELECT SettlementLogID FROM @SettlementLogs )
+      AND StatusID = (SELECT StatusID FROM NotiStatus WHERE [Status] = 'Successfully Generated')
+
+    IF @@ROWCOUNT = 0
+        SET @ErrMessage = 'SessionID not found in SettlementResultHist with success status'
 
     --'Normal' or '777', different message display format for '777'
     DECLARE @TargetGroup VARCHAR(20)
@@ -128,7 +138,7 @@ BEGIN
         --(assign only the last row of result set)
         DECLARE @SettlementExtraInfo XML
         SELECT @SettlementExtraInfo = CAST(ExtraInfo AS XML)
-        FROM SettlementResultHist WITH (NOLOCK)
+        FROM SettlementResultHist
         WHERE SettlementLogID IN ( SELECT SettlementLogID FROM @SettlementLogs )
 
         UPDATE cinfo
@@ -146,7 +156,7 @@ BEGIN
         IF @Debug = 1
         BEGIN
             SELECT *
-            FROM SettlementResultHist WITH (NOLOCK)
+            FROM SettlementResultHist
             WHERE SettlementLogID IN ( SELECT SettlementLogID FROM @SettlementLogs )
 
             SELECT * FROM @AmendmentInfo
@@ -205,14 +215,12 @@ BEGIN
         AS (SELECT TargetSite
                  -- count the number of times the word "TransID" appears in ExtraInfo
                  , SUM((LEN(ExtraInfo) - LEN(REPLACE(ExtraInfo, 'TransID', ''))) / LEN('TransID')) AS BetCount
-            FROM [dbo].[NotificationTarget] t WITH (NOLOCK)
+            FROM [dbo].[NotificationTarget] t
             WHERE t.NotificationID = @NotificationID
               AND t.TargetID IN ( SELECT CustID FROM bodb02.dbo.vw_Customer c WITH (NOLOCK) WHERE c.RoleID = 2 )
             GROUP BY TargetSite)
            , BalanceNegativeHist
-        AS (SELECT [Site]
-            FROM [dbo].[BalanceNegativeHist] WITH (NOLOCK)
-            WHERE SettlementLogID IN ( SELECT SettlementLogID FROM @SettlementLogs ))
+        AS (SELECT [Site] FROM [dbo].[BalanceNegativeHist] WHERE SessionID = @SessionID)
         INSERT INTO @DetailSiteInfo ([Site], [Type], [SiteNameGroup], [BetCount], [HasNegativeBalance])
         SELECT [site].[site]
              , CASE WHEN [site].[IsChinaView] = 1 THEN 'CV Licensee'               --ChinaView
@@ -303,7 +311,7 @@ BEGIN
         INSERT INTO @Contents (Content_en, Content_cs)
         SELECT Content_en
              , Content_cs
-        FROM dbo.Notification WITH (NOLOCK)
+        FROM dbo.Notification
         WHERE NotificationID = @NotificationID
     END
 
@@ -347,13 +355,12 @@ BEGIN
                                 , '')
                             )
                     , CHAR(10)
-                      ) WITHIN GROUP (ORDER BY [Order])
+                      )WITHIN GROUP(ORDER BY [Order])
         FROM @SumSiteType
 
         IF @NegativeBalanceLicenseeCount IS NOT NULL
             SELECT @mTotalAffectedBetsCounts =
-                @mTotalAffectedBetsCounts
-                + CHAR(10)
+                @mTotalAffectedBetsCounts + CHAR(10)
                 + CONCAT('- Negative Balance: ', 'x', @NegativeBalanceLicenseeCount, '(Licensee)')
 
         SELECT @mWrongResult = STRING_AGG(CONCAT('- ', ResultName, ': ', WrongValue), CHAR(10))
