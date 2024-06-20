@@ -44,7 +44,7 @@ BEGIN
       , MsgContentType INT
             DEFAULT 111 --hardcode as 111 for now
       , SiteNameGroup  VARCHAR(50)
-      , Content        XML
+      , Content        NVARCHAR(MAX)
     )
 
     --loop through each notification and build message content
@@ -57,7 +57,7 @@ BEGIN
 
     WHILE @@FETCH_STATUS = 0
     BEGIN
-        DECLARE @BuilderResult TABLE (SiteNameGroup VARCHAR(50), Content XML)
+        DECLARE @BuilderResult TABLE (SiteNameGroup VARCHAR(50), Content NVARCHAR(MAX))
 
         BEGIN TRY
             INSERT INTO @BuilderResult

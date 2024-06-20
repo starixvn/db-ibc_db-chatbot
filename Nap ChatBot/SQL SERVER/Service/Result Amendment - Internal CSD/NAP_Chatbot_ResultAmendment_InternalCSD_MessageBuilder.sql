@@ -38,7 +38,8 @@ BEGIN
       AND StatusID = (SELECT StatusID FROM NotiStatus WHERE [Status] = 'Successfully Generated')
 
     IF @@ROWCOUNT = 0
-        SET @ErrMessage = 'SessionID not found in SettlementResultHist with success status'
+        SET @ErrMessage =
+            'SessionID not found in SettlementResultHist with success status, try again later'
 
     --'Normal' or '777', different message display format for '777'
     DECLARE @TargetGroup VARCHAR(20)
@@ -170,6 +171,10 @@ BEGIN
             SET @ErrMessage =
                 ISNULL(@ErrMessage, '') + CHAR(10)
                 + 'Has different counts of amendments in NotificationExtra ($.ExtraInfo.AffectedResult) and SettlementResultHist (ExtraInfo/root/r)'
+                + CHAR(10) + ' - AffectedResult count: '
+                +    (SELECT CAST(COUNT(1) AS VARCHAR)FROM @AmendmentInfo) + CHAR(10)
+                + ' - SettlementResultHist count: '
+                + @SettlementExtraInfo.value('count(/root/r)', 'varchar')
 
         --check if CalcTime or RecalcTime columns in @AmendmentInfo are NULL
         IF (SELECT COUNT(1)FROM @AmendmentInfo WHERE CalcTime IS NULL OR ReCalcTime IS NULL) > 0
@@ -309,10 +314,7 @@ BEGIN
     BEGIN
         DECLARE @Contents TABLE (Content_en VARCHAR(MAX), Content_cs NVARCHAR(MAX))
         INSERT INTO @Contents (Content_en, Content_cs)
-        SELECT Content_en
-             , Content_cs
-        FROM dbo.Notification
-        WHERE NotificationID = @NotificationID
+        SELECT Content_en, Content_cs FROM dbo.Notification WHERE NotificationID = @NotificationID
     END
 
     -- build content
@@ -393,48 +395,39 @@ BEGIN
     END
 
     SELECT @TargetGroup AS SiteNameGroup
-         , CONVERT(
-                  XML
-                , CONCAT('**Result Amendment Announcement**', CHAR(10), CHAR(10))
-                  + CONCAT(ISNULL(@mMatchInfo, ''), CHAR(10), CHAR(10))
-                  + IIF(@mAffectedCreditSites IS NOT NULL
-                      , CONCAT(
-                              '**Affected Credit sites:** '
-                              , '**'
-                              , @mAffectedCreditSites
-                              , '**'
-                              , CHAR(10)
-                              )
-                      , '')
-                  + IIF(@mAffectedLicenseeSites IS NOT NULL
-                      , CONCAT(
-                              '**Affected Licensee sites:** '
-                              , '**'
-                              , @mAffectedLicenseeSites
-                              , '**'
-                              , CHAR(10)
-                              )
-                      , '')
-                  + CONCAT(
-                          CHAR(10)
-                        , '**Total Affected Bets Counts:** '
-                        , CHAR(10)
-                        , @mTotalAffectedBetsCounts
-                        , CHAR(10)
-                        , CHAR(10)
-                          ) + CONCAT('Wrong Result: ', CHAR(10), @mWrongResult, CHAR(10))
-                  + CONCAT('Actual Result: ', CHAR(10), @mActualResult, CHAR(10), CHAR(10))
-                  + CONCAT(
-                          'Settlement Log (System time):'
-                        , CHAR(10)
-                        , ISNULL(@mCalcTime, '')
-                        , CHAR(10)
-                        , ISNULL(@mReCalcTime, '')
-                        , CHAR(10)
-                        , CHAR(10)
-                          ) + CONCAT(ISNULL(@mContent_en, ''), CHAR(10), CHAR(10))
-                  + CONCAT(ISNULL(@mContent_cs, ''), CHAR(10))
-                  ) AS Content
+         , CONCAT('**Result Amendment Announcement**', CHAR(10), CHAR(10))
+           + CONCAT(ISNULL(@mMatchInfo, ''), CHAR(10), CHAR(10))
+           + IIF(@mAffectedCreditSites IS NOT NULL
+               , CONCAT('**Affected Credit sites:** ', '**', @mAffectedCreditSites, '**', CHAR(10))
+               , '')
+           + IIF(@mAffectedLicenseeSites IS NOT NULL
+               , CONCAT(
+                       '**Affected Licensee sites:** '
+                       , '**'
+                       , @mAffectedLicenseeSites
+                       , '**'
+                       , CHAR(10)
+                       )
+               , '')
+           + CONCAT(
+                   CHAR(10)
+                 , '**Total Affected Bets Counts:** '
+                 , CHAR(10)
+                 , @mTotalAffectedBetsCounts
+                 , CHAR(10)
+                 , CHAR(10)
+                   ) + CONCAT('Wrong Result: ', CHAR(10), @mWrongResult, CHAR(10))
+           + CONCAT('Actual Result: ', CHAR(10), @mActualResult, CHAR(10), CHAR(10))
+           + CONCAT(
+                   'Settlement Log (System time):'
+                 , CHAR(10)
+                 , ISNULL(@mCalcTime, '')
+                 , CHAR(10)
+                 , ISNULL(@mReCalcTime, '')
+                 , CHAR(10)
+                 , CHAR(10)
+                   ) + CONCAT(ISNULL(@mContent_en, ''), CHAR(10), CHAR(10))
+           + CONCAT(ISNULL(@mContent_cs, ''), CHAR(10)) AS Content
 
     IF ISNULL(@ErrMessage, '') <> ''
     BEGIN
