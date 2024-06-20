@@ -32,6 +32,10 @@ BEGIN
     SELECT JobIdentify, Value, SettingName
     FROM SystemSetting 
     WHERE Description LIKE '%- ReferenceId -%';
+	
+	UPDATE tmpSetting
+		SET ReferenceValue = DATE_FORMAT(ReferenceValue, '%m/%d/%Y %r')
+	WHERE JobIdentify = 9 AND SettingName = 'LastModifiedTime';
     
     INSERT INTO tmpSetting (JobIdentify, ReferenceValue, SettingName)
 	SELECT 9 AS JobIdentify, GROUP_CONCAT(DISTINCT ReferenceId) AS ReferenceValue, 'ListNotificationsOfNotificationCenter'  AS SettingName
