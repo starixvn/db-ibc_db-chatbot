@@ -164,13 +164,15 @@ BEGIN
         END
     END
 
-    --SettlementResultHist's ExtraInfo column should be XML type and should contain 
-    --same amount of <r> nodes as the number of elements in the @AmendmentInfo's AffectedResult json array
     BEGIN --error check
-        IF @SettlementExtraInfo.value('count(/root/r)', 'int') <> (SELECT COUNT(1)FROM @AmendmentInfo)
+        /*
+        some settlement amendments might not affect any real transaction, hence the count of AffectedResult and SettlementResultHist
+        might be different because AffectedResult is based on SettlementResultHistDetail
+        */
+        IF @SettlementExtraInfo.value('count(/root/r)', 'int') < (SELECT COUNT(1)FROM @AmendmentInfo)
             SET @ErrMessage =
                 ISNULL(@ErrMessage, '') + CHAR(10)
-                + 'Has different counts of amendments in NotificationExtra ($.ExtraInfo.AffectedResult) and SettlementResultHist (ExtraInfo/root/r)'
+                + 'NotificationExtra ($.ExtraInfo.AffectedResult) has more changes than SettlementResultHist (ExtraInfo/root/r)'
                 + CHAR(10) + ' - AffectedResult count: '
                 +    (SELECT CAST(COUNT(1) AS VARCHAR)FROM @AmendmentInfo) + CHAR(10)
                 + ' - SettlementResultHist count: '
