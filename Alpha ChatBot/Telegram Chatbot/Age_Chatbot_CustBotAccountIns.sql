@@ -1,4 +1,4 @@
-/*<info serverAlias="DBBOT-bodb_ChatBot" executers="bodbDownlineNet" viewers="" selecters=""></info>*/
+/*<info serverAlias="DBBOT-bodb_ChatBot" executers="wsv_alp" viewers="" selecters=""></info>*/
 ALTER PROCEDURE [dbo].[Age_Chatbot_CustBotAccountIns] 	
 	@CustID INT,
 	@SubAccID INT = 0,
@@ -18,6 +18,7 @@ AS
 	Revisions:
 		- 20220323@Johnson: initial sp [redmine: #167819]
 		- 20221124@Johnson: dont insert botfunction has parentid is NULL into CustBotFunction [redmine:#179253]
+		- 20240617@Johnson: User can not unlink chatbot for archive account [redmine:#206532]
 */
 BEGIN
 	SET NOCOUNT ON;
@@ -84,15 +85,33 @@ BEGIN
 		RETURN;	
 	END	
 	
-	IF EXISTS (SELECT 1 FROM CustBotMessenger WITH(NOLOCK) 
-				WHERE ChatID = @ChatID
-					AND Status = 1
-					AND IsVerifyOTP = 1
-			)
+	DECLARE @CustID_tmp INT
+	
+	SELECT @CustID_tmp = custid 
+	FROM CustBotMessenger c WITH(NOLOCK)
+		INNER JOIN CustBotAccount ca WITH(NOLOCK) ON c.UserID = ca.UserID
+	WHERE ChatID = @ChatID
+		AND Status = 1
+		AND IsVerifyOTP = 1
+	
+	IF @CustID_tmp IS NOT NULL
 	BEGIN
-		SELECT @ErrCode = 104,
-			@ErrMsg = 'Your Telegram ID''s already linked to this chatbot using other Account. If this isn''t your Account, please contact us for support.'
-		RETURN;	
+		IF NOT EXISTS(SELECT 1 FROM bodb02.dbo.custinfo WITH(NOLOCK) WHERE custid = @CustID_tmp)
+			OR EXISTS (SELECT 1 FROM bodb02.dbo.custinfo WITH(NOLOCK) WHERE custid = @CustID_tmp AND Enabled = 0)
+		BEGIN
+			UPDATE CustBotMessenger WITH(ROWLOCK)	
+			SET Status = 0,
+				IsVerifyOTP = 0
+			WHERE ChatID = @ChatID
+				AND Status = 1
+				AND IsVerifyOTP = 1
+		END
+		ELSE
+		BEGIN		
+			SELECT @ErrCode = 104,
+				@ErrMsg = 'Your Telegram ID''s already linked to this chatbot using other Account. If this isn''t your Account, please contact us for support.'
+			RETURN;
+		END	
 	END
 	
 	UPDATE CustBotAccount WITH(ROWLOCK)
