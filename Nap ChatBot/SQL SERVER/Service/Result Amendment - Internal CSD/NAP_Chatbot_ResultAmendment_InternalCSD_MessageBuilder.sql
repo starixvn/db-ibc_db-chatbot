@@ -7,6 +7,7 @@ ALTER PROCEDURE [dbo].[NAP_Chatbot_ResultAmendment_InternalCSD_MessageBuilder]
 , @TargetGroupFilter VARCHAR(20) = 'Normal'
 , @ContentTemplate   VARCHAR(20) = 'Normal'
 , @Debug             BIT         = 0
+, @OutputContent     NVARCHAR(MAX) = NULL OUTPUT
 AS
 
 /*
@@ -395,8 +396,7 @@ BEGIN
         FROM @Contents
     END
 
-    SELECT @ContentTemplate AS SiteNameGroup
-         , CONCAT('**Result Amendment Announcement**', CHAR(10), CHAR(10))
+    SELECT @OutputContent = CONCAT('**Result Amendment Announcement**', CHAR(10), CHAR(10))
            + CONCAT(ISNULL(@mMatchInfo, ''), CHAR(10), CHAR(10))
            + IIF(@mAffectedCreditSites IS NOT NULL
                , CONCAT('**Affected Credit sites:** ', '**', @mAffectedCreditSites, '**', CHAR(10))
@@ -428,7 +428,10 @@ BEGIN
                  , CHAR(10)
                  , CHAR(10)
                    ) + CONCAT(ISNULL(@mContent_en, ''), CHAR(10), CHAR(10))
-           + CONCAT(ISNULL(@mContent_cs, ''), CHAR(10)) AS Content
+           + CONCAT(ISNULL(@mContent_cs, ''), CHAR(10))
+
+    IF @Debug = 1
+        SELECT @OutputContent AS Content
 
     IF ISNULL(@ErrMessage, '') <> ''
     BEGIN

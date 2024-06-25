@@ -39,12 +39,12 @@ BEGIN
     DECLARE @MessageID INT
     DECLARE @Messages TABLE
     (
-        NotificationID  INT NOT NULL
-      , MessageID       INT NOT NULL
+        NotificationID  INT           NOT NULL
+      , MessageID       INT           NOT NULL
       , MsgContentsType INT
             DEFAULT 111 --hardcode as 111 for now
-      , SiteNameGroup   VARCHAR(50)
-      , Content         NVARCHAR(MAX)
+      , SiteNameGroup   VARCHAR(50)   NOT NULL
+      , Content         NVARCHAR(MAX) NOT NULL
     )
 
     --loop through each notification and build message content
@@ -57,20 +57,36 @@ BEGIN
 
     WHILE @@FETCH_STATUS = 0
     BEGIN
-        DECLARE @BuilderResult TABLE (SiteNameGroup VARCHAR(50), Content NVARCHAR(MAX))
+        DECLARE @Content NVARCHAR(MAX)
 
         BEGIN TRY
-            INSERT INTO @BuilderResult
             EXEC [dbo].[NAP_Chatbot_ResultAmendment_InternalCSD_MessageBuilder] @NotificationID
                                                                               , @TargetGroupFilter = 'Normal'
                                                                               , @ContentTemplate = 'Normal'
                                                                               , @Debug = 0
+                                                                              , @OutputContent = @Content OUTPUT
 
-            INSERT INTO @BuilderResult
+            IF @Content IS NOT NULL BEGIN
+                INSERT INTO @Messages (NotificationID, MessageID, SiteNameGroup, Content)
+                VALUES
+                (@NotificationID, @MessageID, 'Normal', @Content)
+
+                SET @Content = NULL
+            END
+
             EXEC [dbo].[NAP_Chatbot_ResultAmendment_InternalCSD_MessageBuilder] @NotificationID
                                                                               , @TargetGroupFilter = '777'
                                                                               , @ContentTemplate = '777'
                                                                               , @Debug = 0
+                                                                              , @OutputContent = @Content OUTPUT
+
+            IF @Content IS NOT NULL BEGIN
+                INSERT INTO @Messages (NotificationID, MessageID, SiteNameGroup, Content)
+                VALUES
+                (@NotificationID, @MessageID, '777', @Content)
+
+                SET @Content = NULL
+            END
         END TRY
         BEGIN CATCH
             --TODO: insert error log?
@@ -81,11 +97,6 @@ BEGIN
 
             THROW
         END CATCH
-
-        INSERT INTO @Messages (NotificationID, MessageID, SiteNameGroup, Content)
-        SELECT @NotificationID, @MessageID, SiteNameGroup, Content FROM @BuilderResult
-
-        DELETE FROM @BuilderResult
 
         FETCH NEXT FROM NotificationCursor
         INTO @NotificationID
