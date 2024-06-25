@@ -417,7 +417,7 @@ BEGIN
                  , @mTotalAffectedBetsCounts
                  , CHAR(10)
                  , CHAR(10)
-                   ) + CONCAT('Wrong Result: ', CHAR(10), @mWrongResult, CHAR(10))
+                   ) + CONCAT('Wrong Result: ', CHAR(10), @mWrongResult, CHAR(10), CHAR(10))
            + CONCAT('Actual Result: ', CHAR(10), @mActualResult, CHAR(10), CHAR(10))
            + CONCAT(
                    'Settlement Log (System time):'
