@@ -3,8 +3,10 @@ USE MessageNotification
 GO
 
 ALTER PROCEDURE [dbo].[NAP_Chatbot_ResultAmendment_InternalCSD_MessageBuilder]
-@NotificationID INT
-, @Debug        BIT = 0
+@NotificationID      INT
+, @TargetGroupFilter VARCHAR(20) = 'Normal'
+, @ContentTemplate   VARCHAR(20) = 'Normal'
+, @Debug             BIT         = 0
 AS
 
 /*
@@ -18,6 +20,13 @@ AS
 
 	Param's Explanation:
 		@NotificationID: inner param passed from NAP_Chatbot_ResultAmendment_InternalCSD_MessageSel
+        @TargetGroupFilter: filter by '777' sites or 'Normal' sites (using SiteLabel column of table Site)
+            Note that one notificationID might targets customers of both sites (777 and normal groups)
+        @ContentTemplate: 'Normal' or '777', changes how content is rendered
+
+    Remarks:
+        Outer SP (NAP_Chatbot_ResultAmendment_InternalCSD_MessageSel) calls this twice, one for normal target group and one for '777' group,
+        if there's no customers of site 777 in this notification, return empty result set
 */
 
 BEGIN
@@ -40,9 +49,6 @@ BEGIN
     IF @@ROWCOUNT = 0
         SET @ErrMessage =
             'SessionID not found in SettlementResultHist with success status, try again later'
-
-    --'Normal' or '777', different message display format for '777'
-    DECLARE @TargetGroup VARCHAR(20)
 
     --get match info
     BEGIN
@@ -213,7 +219,6 @@ BEGIN
         (
             [Site]               VARCHAR(500) NOT NULL PRIMARY KEY
           , [Type]               VARCHAR(50)
-          , [SiteNameGroup]      VARCHAR(20)
           , [BetCount]           INT
           , [HasNegativeBalance] BIT
                 DEFAULT 0
@@ -228,7 +233,7 @@ BEGIN
             GROUP BY TargetSite)
            , BalanceNegativeHist
         AS (SELECT [Site] FROM [dbo].[BalanceNegativeHist] WHERE SessionID = @SessionID)
-        INSERT INTO @DetailSiteInfo ([Site], [Type], [SiteNameGroup], [BetCount], [HasNegativeBalance])
+        INSERT INTO @DetailSiteInfo ([Site], [Type], [BetCount], [HasNegativeBalance])
         SELECT [site].[site]
              , CASE WHEN [site].[IsChinaView] = 1 THEN 'CV Licensee'               --ChinaView
                    WHEN [site].[SpecialPlatfrom] = 2 THEN 'JS Licensee'            --JollySports
@@ -236,14 +241,15 @@ BEGIN
                    WHEN [site].[isLicensee] = 1 THEN 'Normal Licensee'             --Licencee
                    ELSE 'Credit'
                END AS [Type]
-             , IIF([site].[SiteLabel] = '777', '777', 'Normal') AS [SiteNameGroup]
              , [NotificationTarget].[BetCount]
              , ISNULL((SELECT TOP 1 1 FROM BalanceNegativeHist WHERE [Site] = [site].[Site]), 0) AS HasNegativeBalance
         FROM NotificationTarget
         INNER JOIN [bodb02].[dbo].[Site] WITH (NOLOCK) ON TargetSite = [site].[site]
+        WHERE IIF([site].[SiteLabel] = '777', '777', 'Normal') = @TargetGroupFilter
 
-        --should be one group only for one notification
-        SELECT @TargetGroup = [SiteNameGroup] FROM @DetailSiteInfo
+        --yeet when empty
+        IF @@ROWCOUNT = 0
+            RETURN
 
         DECLARE @SumSiteType TABLE
         (
@@ -258,7 +264,7 @@ BEGIN
           , [Order]                TINYINT     IDENTITY(1, 1)
         )
         INSERT INTO @SumSiteType ([Type], [ShowTotal]) VALUES ('Credit', 0)
-        IF @TargetGroup = 'Normal'
+        IF @ContentTemplate = 'Normal'
             INSERT INTO @SumSiteType ([Type], [ShowTotal])
             VALUES
             ('Normal Licensee', 1)
@@ -283,7 +289,7 @@ BEGIN
 
         --for Credit sites, display either 'NV88' or '777'
         DECLARE @CresitSiteDisplay VARCHAR(50)
-        IF @TargetGroup = '777'
+        IF @ContentTemplate = '777'
             SET @CresitSiteDisplay = '777'
         ELSE
         BEGIN
@@ -292,7 +298,7 @@ BEGIN
         END
 
         DECLARE @NegativeBalanceLicenseeCount INT
-        IF @TargetGroup = 'Normal'
+        IF @ContentTemplate = 'Normal'
             SELECT @NegativeBalanceLicenseeCount = SUM([NegativeBalanceCount])
             FROM @SumSiteType
             WHERE [Type] <> 'Credit'
@@ -303,13 +309,6 @@ BEGIN
 
             SELECT * FROM @SumSiteType
         END
-    END
-
-    BEGIN --error check
-        IF (SELECT COUNT(DISTINCT SiteNameGroup)FROM @DetailSiteInfo) > 1
-            SET @ErrMessage =
-                ISNULL(@ErrMessage, '') + CHAR(10)
-                + 'One notification should target only one site group'
     END
 
     --get notification contents
@@ -396,7 +395,7 @@ BEGIN
         FROM @Contents
     END
 
-    SELECT @TargetGroup AS SiteNameGroup
+    SELECT @ContentTemplate AS SiteNameGroup
          , CONCAT('**Result Amendment Announcement**', CHAR(10), CHAR(10))
            + CONCAT(ISNULL(@mMatchInfo, ''), CHAR(10), CHAR(10))
            + IIF(@mAffectedCreditSites IS NOT NULL

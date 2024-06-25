@@ -39,12 +39,12 @@ BEGIN
     DECLARE @MessageID INT
     DECLARE @Messages TABLE
     (
-        NotificationID INT NOT NULL
-      , MessageID      INT NOT NULL
-      , MsgContentType INT
+        NotificationID  INT NOT NULL
+      , MessageID       INT NOT NULL
+      , MsgContentsType INT
             DEFAULT 111 --hardcode as 111 for now
-      , SiteNameGroup  VARCHAR(50)
-      , Content        NVARCHAR(MAX)
+      , SiteNameGroup   VARCHAR(50)
+      , Content         NVARCHAR(MAX)
     )
 
     --loop through each notification and build message content
@@ -61,7 +61,16 @@ BEGIN
 
         BEGIN TRY
             INSERT INTO @BuilderResult
-            EXEC [dbo].[NAP_Chatbot_ResultAmendment_InternalCSD_MessageBuilder] @NotificationID, @Debug = 0
+            EXEC [dbo].[NAP_Chatbot_ResultAmendment_InternalCSD_MessageBuilder] @NotificationID
+                                                                              , @TargetGroupFilter = 'Normal'
+                                                                              , @ContentTemplate = 'Normal'
+                                                                              , @Debug = 0
+
+            INSERT INTO @BuilderResult
+            EXEC [dbo].[NAP_Chatbot_ResultAmendment_InternalCSD_MessageBuilder] @NotificationID
+                                                                              , @TargetGroupFilter = '777'
+                                                                              , @ContentTemplate = '777'
+                                                                              , @Debug = 0
         END TRY
         BEGIN CATCH
             --TODO: insert error log?
