@@ -74,9 +74,9 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 		,MessageId						INT
 		,Content_Detail					TEXT
         ,MsgContentsType				TINYINT UNSIGNED 
-		,SiteNameGroup					TEXT
+		,SiteNameGroup					VARCHAR(30)
 		,PRIMARY KEY (Id)
-		,UNIQUE INDEX Index_NotificationId(NotificationId)
+		,UNIQUE INDEX Index_NotificationId(NotificationId, SiteNameGroup)
 	);
 
 	INSERT INTO tmp_MsgHeader
@@ -272,7 +272,7 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 			INSERT INTO NotificationSystemMsg(NotificationId, MessageId, CheckMsg, CreatedDate)
 			SELECT pLastInsert, MessageId, NULL, startTime
 			FROM tmp_MsgHeader
-			WHERE NotificationId = pNotificationID;
+			WHERE NotificationId = pNotificationID AND SiteNameGroup = pSiteNameGroup;
 
 			#Insert recipient list
 			INSERT INTO NotificationRecipientList(NotificationID, ConversationGroupID, ChatGroupTypeID, RecipientID, Status, StatusID)
