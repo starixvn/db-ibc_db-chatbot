@@ -62,7 +62,6 @@ BEGIN
         BEGIN TRY
             EXEC [dbo].[NAP_Chatbot_ResultAmendment_InternalCSD_MessageBuilder] @NotificationID
                                                                               , @TargetGroupFilter = 'Normal'
-                                                                              , @ContentTemplate = 'Normal'
                                                                               , @Debug = 0
                                                                               , @OutputContent = @Content OUTPUT
 
@@ -76,7 +75,6 @@ BEGIN
 
             EXEC [dbo].[NAP_Chatbot_ResultAmendment_InternalCSD_MessageBuilder] @NotificationID
                                                                               , @TargetGroupFilter = '777'
-                                                                              , @ContentTemplate = '777'
                                                                               , @Debug = 0
                                                                               , @OutputContent = @Content OUTPUT
 

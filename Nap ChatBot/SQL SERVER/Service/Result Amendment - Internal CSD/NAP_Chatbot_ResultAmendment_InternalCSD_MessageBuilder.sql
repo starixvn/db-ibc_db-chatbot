@@ -5,7 +5,6 @@ GO
 ALTER PROCEDURE [dbo].[NAP_Chatbot_ResultAmendment_InternalCSD_MessageBuilder]
 @NotificationID      INT
 , @TargetGroupFilter VARCHAR(20) = 'Normal'
-, @ContentTemplate   VARCHAR(20) = 'Normal'
 , @Debug             BIT         = 0
 , @OutputContent     NVARCHAR(MAX) = NULL OUTPUT
 AS
@@ -23,7 +22,6 @@ AS
 		@NotificationID: inner param passed from NAP_Chatbot_ResultAmendment_InternalCSD_MessageSel
         @TargetGroupFilter: filter by '777' sites or 'Normal' sites (using SiteLabel column of table Site)
             Note that one notificationID might targets customers of both sites (777 and normal groups)
-        @ContentTemplate: 'Normal' or '777', changes how content is rendered
 
     Remarks:
         Outer SP (NAP_Chatbot_ResultAmendment_InternalCSD_MessageSel) calls this twice, one for normal target group and one for '777' group,
@@ -265,7 +263,7 @@ BEGIN
           , [Order]                TINYINT     IDENTITY(1, 1)
         )
         INSERT INTO @SumSiteType ([Type], [ShowTotal]) VALUES ('Credit', 0)
-        IF @ContentTemplate = 'Normal'
+        IF @TargetGroupFilter = 'Normal'
             INSERT INTO @SumSiteType ([Type], [ShowTotal])
             VALUES
             ('Normal Licensee', 1)
@@ -290,7 +288,7 @@ BEGIN
 
         --for Credit sites, display either 'NV88' or '777'
         DECLARE @CresitSiteDisplay VARCHAR(50)
-        IF @ContentTemplate = '777'
+        IF @TargetGroupFilter = '777'
             SET @CresitSiteDisplay = '777'
         ELSE
         BEGIN
@@ -299,7 +297,7 @@ BEGIN
         END
 
         DECLARE @NegativeBalanceLicenseeCount INT
-        IF @ContentTemplate = 'Normal'
+        IF @TargetGroupFilter = 'Normal'
             SELECT @NegativeBalanceLicenseeCount = SUM([NegativeBalanceCount])
             FROM @SumSiteType
             WHERE [Type] <> 'Credit'
