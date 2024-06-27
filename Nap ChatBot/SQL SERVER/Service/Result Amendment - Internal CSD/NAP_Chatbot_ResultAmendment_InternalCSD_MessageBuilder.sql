@@ -347,7 +347,7 @@ BEGIN
         SELECT @mTotalAffectedBetsCounts =
             STRING_AGG(
                       CONCAT(
-                            '- '
+                            '\- '
                           , [Type]
                           , ' Total Bets: '
                           , 'x'
@@ -363,16 +363,16 @@ BEGIN
         IF @NegativeBalanceLicenseeCount IS NOT NULL
             SELECT @mTotalAffectedBetsCounts =
                 @mTotalAffectedBetsCounts + CHAR(10)
-                + CONCAT('- Negative Balance: ', 'x', @NegativeBalanceLicenseeCount, '(Licensee)')
+                + CONCAT('\- Negative Balance: ', 'x', @NegativeBalanceLicenseeCount, '(Licensee)')
 
-        SELECT @mWrongResult = STRING_AGG(CONCAT('- ', ResultName, ': ', WrongValue), CHAR(10))
-             , @mActualResult = STRING_AGG(CONCAT('- ', ResultName, ': ', ActualValue), CHAR(10))
+        SELECT @mWrongResult = STRING_AGG(CONCAT('\- ', ResultName, ': ', WrongValue), CHAR(10))
+             , @mActualResult = STRING_AGG(CONCAT('\- ', ResultName, ': ', ActualValue), CHAR(10))
         FROM @AmendmentInfo
 
         SELECT @mCalcTime = STRING_AGG(str, CHAR(10))
         FROM
            (
-           SELECT '- Calculation time: ' + FORMAT(CalcTime, 'MMM dd, yyyy hh:mm:ss tt') + ' ['
+           SELECT '\- Calculation time: ' + FORMAT(CalcTime, 'MMM dd, yyyy hh:mm:ss tt') + ' ['
                   + STRING_AGG(ResultName + '; ' + WrongValue, ' | ')WITHIN GROUP(ORDER BY CalcTime)
                   + ']'
            FROM @AmendmentInfo
@@ -382,7 +382,7 @@ BEGIN
         SELECT @mReCalcTime = STRING_AGG(str, CHAR(10))
         FROM
            (
-           SELECT '- ReCalculation time: ' + FORMAT(ReCalcTime, 'MMM dd, yyyy hh:mm:ss tt') + ' ['
+           SELECT '\- ReCalculation time: ' + FORMAT(ReCalcTime, 'MMM dd, yyyy hh:mm:ss tt') + ' ['
                   + STRING_AGG(ResultName + '; ' + ActualValue, ' | ')WITHIN GROUP(ORDER BY ReCalcTime)
                   + ']'
            FROM @AmendmentInfo
@@ -409,16 +409,15 @@ BEGIN
                        )
                , '')
            + CONCAT(
-                   CHAR(10)
-                 , '**Total Affected Bets Counts:** '
+                   '**Total Affected Bets Counts:** '
                  , CHAR(10)
                  , @mTotalAffectedBetsCounts
                  , CHAR(10)
                  , CHAR(10)
-                   ) + CONCAT('Wrong Result: ', CHAR(10), @mWrongResult, CHAR(10), CHAR(10))
-           + CONCAT('Actual Result: ', CHAR(10), @mActualResult, CHAR(10), CHAR(10))
+                   ) + CONCAT('**Wrong Result:** ', CHAR(10), @mWrongResult, CHAR(10))
+           + CONCAT('**Actual Result:** ', CHAR(10), @mActualResult, CHAR(10), CHAR(10))
            + CONCAT(
-                   'Settlement Log (System time):'
+                   '**Settlement Log (System time):**'
                  , CHAR(10)
                  , ISNULL(@mCalcTime, '')
                  , CHAR(10)
