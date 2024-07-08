@@ -409,7 +409,7 @@ BEGIN
                        )
                , '')
            + CONCAT(
-                   '**Total Affected Bets Counts:** '
+                   '**Total Affected Bet Count:** '
                  , CHAR(10)
                  , @mTotalAffectedBetsCounts
                  , CHAR(10)
