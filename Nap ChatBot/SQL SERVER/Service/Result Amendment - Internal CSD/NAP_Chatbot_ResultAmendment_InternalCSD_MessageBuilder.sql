@@ -353,7 +353,7 @@ BEGIN
                           , 'x'
                           , BetCount
                           , IIF(ShowTotal = 1
-                                , CONCAT('; Total ', [Type], ': ', 'x', [BetCount])
+                                , CONCAT('; Total ', [Type], ': ', 'x', [SiteCount])
                                 , '')
                             )
                     , CHAR(10)
