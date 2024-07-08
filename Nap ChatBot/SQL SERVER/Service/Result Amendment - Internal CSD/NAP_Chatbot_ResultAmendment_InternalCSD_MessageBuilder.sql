@@ -4,8 +4,8 @@ GO
 
 ALTER PROCEDURE [dbo].[NAP_Chatbot_ResultAmendment_InternalCSD_MessageBuilder]
 @NotificationID      INT
-, @TargetGroupFilter VARCHAR(20) = 'Normal'
-, @Debug             BIT         = 0
+, @TargetGroupFilter VARCHAR(20)   = 'Normal'
+, @Debug             BIT           = 0
 , @OutputContent     NVARCHAR(MAX) = NULL OUTPUT
 AS
 
@@ -338,9 +338,10 @@ BEGIN
             + CAST(MatchNameEN AS VARCHAR(500))
         FROM @MatchInfo
 
-        SET @mAffectedCreditSites = @CresitSiteDisplay
+        SET @mAffectedCreditSites = ISNULL(@CresitSiteDisplay, '')
 
-        SELECT @mAffectedLicenseeSites = STRING_AGG([Site], ', ')WITHIN GROUP(ORDER BY [Site])
+        SELECT @mAffectedLicenseeSites =
+            ISNULL(STRING_AGG([Site], ', ')WITHIN GROUP(ORDER BY [Site]), '')
         FROM @DetailSiteInfo
         WHERE [Type] <> 'Credit';
 
@@ -394,38 +395,29 @@ BEGIN
         FROM @Contents
     END
 
-    SELECT @OutputContent = CONCAT('**Result Amendment Announcement**', CHAR(10), CHAR(10))
-           + CONCAT(ISNULL(@mMatchInfo, ''), CHAR(10), CHAR(10))
-           + IIF(@mAffectedCreditSites IS NOT NULL
-               , CONCAT('**Affected Credit sites:** ', '**', @mAffectedCreditSites, '**', CHAR(10))
-               , '')
-           + IIF(@mAffectedLicenseeSites IS NOT NULL
-               , CONCAT(
-                       '**Affected Licensee sites:** '
-                       , '**'
-                       , @mAffectedLicenseeSites
-                       , '**'
-                       , CHAR(10)
-                       )
-               , '')
-           + CONCAT(
-                   '**Total Affected Bet Count:** '
-                 , CHAR(10)
-                 , @mTotalAffectedBetsCounts
-                 , CHAR(10)
-                 , CHAR(10)
-                   ) + CONCAT('**Wrong Result:** ', CHAR(10), @mWrongResult, CHAR(10))
-           + CONCAT('**Actual Result:** ', CHAR(10), @mActualResult, CHAR(10), CHAR(10))
-           + CONCAT(
-                   '**Settlement Log (System time):**'
-                 , CHAR(10)
-                 , ISNULL(@mCalcTime, '')
-                 , CHAR(10)
-                 , ISNULL(@mReCalcTime, '')
-                 , CHAR(10)
-                 , CHAR(10)
-                   ) + CONCAT(ISNULL(@mContent_en, ''), CHAR(10), CHAR(10))
-           + CONCAT(ISNULL(@mContent_cs, ''), CHAR(10))
+    SELECT @OutputContent =
+        CONCAT('**Result Amendment Announcement**', CHAR(10), CHAR(10))
+        + CONCAT(ISNULL(@mMatchInfo, ''), CHAR(10), CHAR(10))
+        + CONCAT('**Affected Credit sites:** ', '**', @mAffectedCreditSites, '**', CHAR(10))
+        + CONCAT('**Affected Licensee sites:** ', '**', @mAffectedLicenseeSites, '**', CHAR(10))
+        + CONCAT(
+                '**Total Affected Bet Count:** '
+                , CHAR(10)
+                , @mTotalAffectedBetsCounts
+                , CHAR(10)
+                , CHAR(10)
+                ) + CONCAT('**Wrong Result:** ', CHAR(10), @mWrongResult, CHAR(10))
+        + CONCAT('**Actual Result:** ', CHAR(10), @mActualResult, CHAR(10), CHAR(10))
+        + CONCAT(
+                '**Settlement Log (System time):**'
+              , CHAR(10)
+              , ISNULL(@mCalcTime, '')
+              , CHAR(10)
+              , ISNULL(@mReCalcTime, '')
+              , CHAR(10)
+              , CHAR(10)
+                ) + CONCAT(ISNULL(@mContent_en, ''), CHAR(10), CHAR(10))
+        + CONCAT(ISNULL(@mContent_cs, ''), CHAR(10))
 
     IF @Debug = 1
         SELECT @OutputContent AS Content
