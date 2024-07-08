@@ -41,11 +41,11 @@ This is Customer Service. Kindly take note of the below message [请注意以下
 
 {CN Announcement}
 
->> Above match result has been changed. This might caused some customer bets will have negative balance shown in the account.
->> 以上赛事赛果已被更正。这将导致某些有下注于该盘口的客户帐号会出现负数。
+\>> Above match result has been changed. This might caused some customer bets will have negative balance shown in the account.
+\>> 以上赛事赛果已被更正。这将导致某些有下注于该盘口的客户帐号会出现负数。
 
->> Please be informed that we will not be sending any email notification with attached affected list from now onwards if there is any "Result Amended/Recalculation". You may access to the provided Internal Admin, click onto "Notification" - "Resettlement" on the left panel for the checking of matches'' affected list.
->> 请知悉，目前所有“重新结算”事项之受影响客户名单将不以邮件方式提供。贵司可透过后台系统登录并点击 “通知” - “重新结算” 查询赛事受影响客户名单。
+\>> Please be informed that we will not be sending any email notification with attached affected list from now onwards if there is any "Result Amended/Recalculation". You may access to the provided Internal Admin, click onto "Notification" - "Resettlement" on the left panel for the checking of matches'' affected list.
+\>> 请知悉，目前所有“重新结算”事项之受影响客户名单将不以邮件方式提供。贵司可透过后台系统登录并点击 “通知” - “重新结算” 查询赛事受影响客户名单。
 
 Thank you for your kind attention ~', 8, UTC_TIMESTAMP, NULL, NULL);
 
