@@ -338,10 +338,9 @@ BEGIN
             + CAST(MatchNameEN AS VARCHAR(500))
         FROM @MatchInfo
 
-        SET @mAffectedCreditSites = ISNULL(@CresitSiteDisplay, '')
+        SET @mAffectedCreditSites = @CresitSiteDisplay
 
-        SELECT @mAffectedLicenseeSites =
-            ISNULL(STRING_AGG([Site], ', ')WITHIN GROUP(ORDER BY [Site]), '')
+        SELECT @mAffectedLicenseeSites = STRING_AGG([Site], ', ')WITHIN GROUP(ORDER BY [Site])
         FROM @DetailSiteInfo
         WHERE [Type] <> 'Credit';
 
@@ -398,8 +397,10 @@ BEGIN
     SELECT @OutputContent =
         CONCAT('**Result Amendment Announcement**', CHAR(10), CHAR(10))
         + CONCAT(ISNULL(@mMatchInfo, ''), CHAR(10), CHAR(10))
-        + CONCAT('**Affected Credit sites:** ', '**', @mAffectedCreditSites, '**', CHAR(10))
-        + CONCAT('**Affected Licensee sites:** ', '**', @mAffectedLicenseeSites, '**', CHAR(10))
+        + CONCAT('**Affected Credit sites:** ', '**' + @mAffectedCreditSites + '**', CHAR(10))
+        + IIF(@TargetGroupFilter <> '777'
+            , CONCAT('**Affected Licensee sites:** ', '**' + @mAffectedLicenseeSites + '**', CHAR(10))
+            , '')
         + CONCAT(
                 '**Total Affected Bet Count:** '
                 , CHAR(10)
