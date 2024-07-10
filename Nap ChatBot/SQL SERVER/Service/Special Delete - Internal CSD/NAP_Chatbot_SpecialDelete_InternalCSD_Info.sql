@@ -12,6 +12,7 @@ AS
 	Revisions:
 		- 20231229@Malcolm: Initialize SP [RedmineID: #199482]
 		- 20240329@Jaden: Account for the case of filterBy = 2 (System parlay void) from TVS changes [RedmineID: #203054]
+		- 20240710@Jaden: Support VS5 [RedmineId : #207626]
 
 	Param's Explanation:
 		+ @MessageInfo
@@ -542,6 +543,55 @@ BEGIN
 				INNER JOIN dbo.League l WITH (NOLOCK) ON m.LeagueId = l.LeagueId
 				INNER JOIN dbo.Team h WITH (NOLOCK) ON m.HomeId = h.TeamId
 				INNER JOIN dbo.Team a WITH (NOLOCK) ON m.AwayId = a.TeamId
+
+			;WITH CTE_Match AS (
+				SELECT DISTINCT VoidingHistoryCollectionId, MessageId, SiteNameGroup, MatchId
+				FROM #RequestInfo
+				WHERE IssueTypeId IN (11, 15, 0)
+			)
+			INSERT INTO #EventInfo 
+			(
+				VoidingHistoryCollectionId
+				,MessageId
+				,SiteNameGroup
+				,MatchId
+				,KickOffTime
+				,LeagueName
+				,HomeName
+				,AwayName
+				,HalfTimeHomeScore
+				,HalfTimeAwayScore
+				,FullTimeHomeScore
+				,FullTimeAwayScore
+				,LeagueGroupId
+			)
+			SELECT DISTINCT 
+				r.VoidingHistoryCollectionId
+				,r.MessageId
+				,r.SiteNameGroup
+				,r.MatchId
+				,FORMAT(DATEADD(HOUR, 12, StartTime), N'h:mm tt') AS KickOffTime
+				,l.LeagueName
+				,h.TeamName AS HomeName
+				,a.TeamName AS AwayName
+				,m.hthomescore
+				,m.htawayscore
+				,m.finalhomescore
+				,m.finalawayscore
+				,0 AS LeagueGroupId
+			FROM CTE_Match r
+				CROSS APPLY (
+					SELECT m.hthomescore, m.htawayscore, m.finalhomescore, m.finalawayscore, m.StartTime, m.League3rdId, m.homeid, m.awayid
+					FROM dbo.Match3rd m WITH(NOLOCK)
+					WHERE m.Match3rdId = r.matchId
+					UNION
+					SELECT m.hthomescore, m.htawayscore, m.finalhomescore, m.finalawayscore, m.StartTime, m.League3rdId, m.homeid, m.awayid
+					FROM dbo.Match3rd14 m WITH(NOLOCK)
+					WHERE m.Match3rdId = r.matchId
+				) m
+				INNER JOIN dbo.League3rd l WITH (NOLOCK) ON m.League3rdId = l.League3rdId
+				INNER JOIN dbo.Team3rd h WITH (NOLOCK) ON m.HomeId = h.Team3rdId
+				INNER JOIN dbo.Team3rd a WITH (NOLOCK) ON m.AwayId = a.Team3rdId
 		END
 
 		/*Bettype Info*/
