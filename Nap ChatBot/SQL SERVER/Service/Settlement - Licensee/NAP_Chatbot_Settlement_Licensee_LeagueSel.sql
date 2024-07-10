@@ -1,4 +1,4 @@
-/*<info serverAlias="DBACC-bodb02" executers="bodbAdminNet" isFunction="0" isNested="0"></info>*/
+/*<info serverAlias="DBACC-bodb02" executers="wsv_nap" isFunction="0" isNested="0"></info>*/
 ALTER PROCEDURE [dbo].[NAP_Chatbot_Settlement_Licensee_LeagueSel]
 	@Message XML
 AS
@@ -10,6 +10,7 @@ AS
 
 	Revisions:
 		- 20231031@Malcolm: Initialize SPs [RedmineId : #195404]
+		- 20240710@Jaden: Support VS5 [RedmineId : #207626]
 
 	Param's Explanation:
 		+ @Message:
@@ -41,6 +42,11 @@ BEGIN
 			FROM bodb02.dbo.match m WITH(NOLOCK) 
 				INNER JOIN bodb02.dbo.league l WITH(NOLOCK) ON l.leagueid = m.leagueid
 			WHERE m.matchid = ms.MatchId
+			UNION
+			SELECT l.LeagueName, l.LeagueNameSC
+			FROM bodb02.dbo.Match3rd m WITH(NOLOCK)
+				INNER JOIN bodb02.dbo.League3rd l WITH(NOLOCK) ON l.League3rdId = m.League3rdId
+			WHERE m.Match3rdId = ms.MatchId
 		) AS l
 
 	DROP TABLE #Message
