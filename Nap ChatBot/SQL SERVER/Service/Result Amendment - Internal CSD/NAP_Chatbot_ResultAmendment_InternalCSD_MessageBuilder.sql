@@ -332,10 +332,14 @@ BEGIN
 
         SELECT @mMatchInfo =
             'MatchID: ' + CAST(MatchID AS VARCHAR) + CHAR(10) + 'Event Date: '
-            + FORMAT(EventDate, 'dd/MM/yyyy') + CHAR(10) + 'Event Time: '
-            + FORMAT(KOTime, 'hh:mm tt') + CHAR(10) + 'League: '
-            + CAST(LeagueNameEN AS VARCHAR(500)) + CHAR(10) + 'Match: '
-            + CAST(MatchNameEN AS VARCHAR(500))
+            + FORMAT(EventDate, 'MMM dd, yyyy') + CHAR(10) + 'Event Time (GMT+8): '
+            --KOTime - ISNULL(GlobalShowTime, KickOffTime) from match and match14 table
+            --is converted from GMT-4 (system time) to GMT+8
+            + FORMAT(
+                    KOTime AT TIME ZONE 'SA Western Standard Time' AT TIME ZONE 'Taipei Standard Time'
+                  , 'MMM dd, yyyy hh:mm tt'
+                    ) + CHAR(10) + 'League: ' + CAST(LeagueNameEN AS VARCHAR(500)) + CHAR(10)
+            + 'Match: ' + CAST(MatchNameEN AS VARCHAR(500))
         FROM @MatchInfo
 
         SET @mAffectedCreditSites = @CresitSiteDisplay
@@ -399,7 +403,11 @@ BEGIN
         + CONCAT(ISNULL(@mMatchInfo, ''), CHAR(10), CHAR(10))
         + CONCAT('**Affected Credit sites:** ', '**' + @mAffectedCreditSites + '**', CHAR(10))
         + IIF(@TargetGroupFilter <> '777'
-            , CONCAT('**Affected Licensee sites:** ', '**' + @mAffectedLicenseeSites + '**', CHAR(10))
+            , CONCAT(
+                    '**Affected Licensee sites:** '
+                    , '**' + @mAffectedLicenseeSites + '**'
+                    , CHAR(10)
+                    )
             , '')
         + CONCAT(
                 '**Total Affected Bet Count:** '
