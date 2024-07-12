@@ -218,6 +218,7 @@ BEGIN
         (
             [Site]               VARCHAR(500) NOT NULL PRIMARY KEY
           , [Type]               VARCHAR(50)
+          , [Label]              VARCHAR(50) --actual value to display on message
           , [BetCount]           INT
           , [HasNegativeBalance] BIT
                 DEFAULT 0
@@ -232,7 +233,7 @@ BEGIN
             GROUP BY TargetSite)
            , BalanceNegativeHist
         AS (SELECT [Site] FROM [dbo].[BalanceNegativeHist] WHERE SessionID = @SessionID)
-        INSERT INTO @DetailSiteInfo ([Site], [Type], [BetCount], [HasNegativeBalance])
+        INSERT INTO @DetailSiteInfo ([Site], [Type], [Label], [BetCount], [HasNegativeBalance])
         SELECT [site].[site]
              , CASE WHEN [site].[IsChinaView] = 1 THEN 'CV Licensee'               --ChinaView
                    WHEN [site].[SpecialPlatfrom] = 2 THEN 'JS Licensee'            --JollySports
@@ -240,6 +241,11 @@ BEGIN
                    WHEN [site].[isLicensee] = 1 THEN 'Normal Licensee'             --Licencee
                    ELSE 'Credit'
                END AS [Type]
+             , CASE WHEN [site].[SiteLabel] IN ('777', '789Y') THEN [SiteLabel]
+                    WHEN [site].[isLicensee] = 1 THEN [site].[site]
+                    WHEN [site].[isLicensee] = 0 THEN 'NV88'
+                    ELSE [site].[site]
+                END AS [Label]
              , [NotificationTarget].[BetCount]
              , ISNULL((SELECT TOP 1 1 FROM BalanceNegativeHist WHERE [Site] = [site].[Site]), 0) AS HasNegativeBalance
         FROM NotificationTarget
@@ -285,16 +291,6 @@ BEGIN
             FROM @DetailSiteInfo
             GROUP BY [Type]
             ) s ON t.[Type] = s.[Type]
-
-        --for Credit sites, display either 'NV88' or '777'
-        DECLARE @CresitSiteDisplay VARCHAR(50)
-        IF @TargetGroupFilter = '777'
-            SET @CresitSiteDisplay = '777'
-        ELSE
-        BEGIN
-            IF (SELECT SiteCount FROM @SumSiteType WHERE [Type] = 'Credit') > 0
-                SET @CresitSiteDisplay = 'NV88'
-        END
 
         DECLARE @NegativeBalanceLicenseeCount INT
         IF @TargetGroupFilter = 'Normal'
@@ -342,9 +338,11 @@ BEGIN
             + 'Match: ' + CAST(MatchNameEN AS VARCHAR(500))
         FROM @MatchInfo
 
-        SET @mAffectedCreditSites = @CresitSiteDisplay
+        SELECT @mAffectedCreditSites = STRING_AGG([Label], ', ')WITHIN GROUP(ORDER BY [Site])
+        FROM @DetailSiteInfo
+        WHERE [Type] = 'Credit';
 
-        SELECT @mAffectedLicenseeSites = STRING_AGG([Site], ', ')WITHIN GROUP(ORDER BY [Site])
+        SELECT @mAffectedLicenseeSites = STRING_AGG([Label], ', ')WITHIN GROUP(ORDER BY [Site])
         FROM @DetailSiteInfo
         WHERE [Type] <> 'Credit';
 
