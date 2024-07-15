@@ -245,11 +245,11 @@ BEGIN
                    WHEN [site].[isLicensee] = 1 THEN 'Normal Licensee'             --Licencee
                    ELSE 'Credit'
                END AS [Type]
-             , CASE WHEN [site].[SiteLabel] IN ('777', '789Y') THEN [SiteLabel]
-                    WHEN [site].[isLicensee] = 1 THEN [site].[site]
-                    WHEN [site].[isLicensee] = 0 THEN 'NV88'
-                    ELSE [site].[site]
-                END AS [Label]
+             , CASE WHEN [site].[SiteLabel] IN ( '777', '789Y' ) THEN [SiteLabel]
+                   WHEN [site].[isLicensee] = 1 THEN [site].[site]
+                   WHEN [site].[isLicensee] = 0 THEN 'NV88'
+                   ELSE [site].[site]
+               END AS [Label]
              , [NotificationTarget].[BetCount]
              , ISNULL((SELECT TOP 1 1 FROM BalanceNegativeHist WHERE [Site] = [site].[Site]), 0) AS HasNegativeBalance
         FROM NotificationTarget
@@ -342,13 +342,11 @@ BEGIN
             + 'Match: ' + CAST(MatchNameEN AS VARCHAR(500))
         FROM @MatchInfo
 
-        SELECT @mAffectedCreditSites = STRING_AGG([Label], ', ')WITHIN GROUP(ORDER BY [Site])
-        FROM @DetailSiteInfo
-        WHERE [Type] = 'Credit';
+        SELECT @mAffectedCreditSites = STRING_AGG([Label], ', ')
+        FROM (SELECT DISTINCT [Label] FROM @DetailSiteInfo WHERE [Type] = 'Credit') AS c;
 
-        SELECT @mAffectedLicenseeSites = STRING_AGG([Label], ', ')WITHIN GROUP(ORDER BY [Site])
-        FROM @DetailSiteInfo
-        WHERE [Type] <> 'Credit';
+        SELECT @mAffectedLicenseeSites = STRING_AGG([Label], ', ')
+        FROM (SELECT DISTINCT [Label] FROM @DetailSiteInfo WHERE [Type] <> 'Credit') AS c;
 
         SELECT @mTotalAffectedBetsCounts =
             STRING_AGG(
