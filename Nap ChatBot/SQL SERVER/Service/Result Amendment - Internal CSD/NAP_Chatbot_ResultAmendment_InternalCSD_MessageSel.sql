@@ -33,7 +33,7 @@ BEGIN
     FROM [Notification]
     WHERE StatusID = (SELECT StatusID FROM NotiStatus WHERE [Status] = 'Sent')
       AND NotificationType = 1 -- Msg
-      AND LastModifiedTime >= @LastModifiedTime
+      AND LastModifiedTime > @LastModifiedTime
 
     DECLARE @NotificationID INT
     DECLARE @MessageID INT
