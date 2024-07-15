@@ -7,6 +7,7 @@ ALTER PROCEDURE [dbo].[NAP_Chatbot_ResultAmendment_InternalCSD_MessageBuilder]
 , @TargetGroupFilter VARCHAR(20)   = 'Normal'
 , @Debug             BIT           = 0
 , @OutputContent     NVARCHAR(MAX) = NULL OUTPUT
+, @IsTest            BIT           = 1 OUTPUT
 AS
 
 /*
@@ -59,14 +60,16 @@ BEGIN
           , LeagueNameEN   NVARCHAR(100)
           , MatchNameEN    NVARCHAR(120)
           , AffectedResult NVARCHAR(MAX)
+          , IsTest         BIT
         )
-        INSERT INTO @MatchInfo (MatchID, EventDate, KOTime, LeagueNameEN, MatchNameEN, AffectedResult)
+        INSERT INTO @MatchInfo (MatchID, EventDate, KOTime, LeagueNameEN, MatchNameEN, AffectedResult, IsTest)
         SELECT ext.MatchID
              , ex.EventDate
              , ext.KOTime AS KOTime
              , ext.LeagueNameEN AS LeagueNameEN
              , ext.HomeNameEN + ISNULL(' ' + ext.NeutralEN, '') + ' -vs- ' + ext.AwayNameEN AS MatchNameEN
              , ext.AffectedResult
+             , ext.IsTest
         FROM NotificationExtra AS ex
         CROSS APPLY
         OPENJSON(ex.ExtraInfo)
@@ -78,6 +81,7 @@ BEGIN
          , HomeNameEN NVARCHAR(500) '$.HomeNameEN'
          , NeutralEN NVARCHAR(10) '$.NeutralEN'
          , AwayNameEN NVARCHAR(500) '$.AwayNameEN'
+         , IsTest BIT '$.IsTest'
          , AffectedResult NVARCHAR(MAX) AS JSON
            ) AS ext
         WHERE ex.NotificationID = @NotificationID
@@ -425,6 +429,8 @@ BEGIN
               , CHAR(10)
                 ) + CONCAT(ISNULL(@mContent_en, ''), CHAR(10), CHAR(10))
         + CONCAT(ISNULL(@mContent_cs, ''), CHAR(10))
+
+    SELECT @IsTest = IsTest FROM @MatchInfo
 
     IF @Debug = 1
         SELECT @OutputContent AS Content

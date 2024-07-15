@@ -13,7 +13,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_ResultAmendment_InternalCSD_I
     Task      : ResultAmendment for internal csd
 	DB: DBCB-ChatBot
     Params    :
-    - @message: [{"NotificationId":"1", "MessageId":"1", "SiteNameGroup":"777", "Content":"Content", "MsgContentsType":"111"}]
+    - @message: [{"NotificationId":"1", "MessageId":"1", "SiteNameGroup":"777", "Content":"Content", "MsgContentsType":"111", "IsTest": 0}]
     Revisions :
       - 20240129@Malcolm: Initiliaze SP [RedmineID: #197620]
 	  
@@ -37,6 +37,7 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 	DECLARE pChannelId TINYINT UNSIGNED;
 	DECLARE pNotificationId INT;
 	DECLARE pSiteNameGroup VARCHAR(50);
+	DECLARE pIsTest BOOL;
 
 	# Constants
 	DECLARE ACTION_ID INT DEFAULT 35;
@@ -75,6 +76,7 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 		,Content_Detail					TEXT
         ,MsgContentsType				TINYINT UNSIGNED 
 		,SiteNameGroup					VARCHAR(30)
+		,IsTest							BOOL
 		,PRIMARY KEY (Id)
 		,UNIQUE INDEX Index_NotificationId(NotificationId, SiteNameGroup)
 	);
@@ -86,6 +88,7 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 		,Content_Detail
 		,MsgContentsType
 		,SiteNameGroup
+		,IsTest
 	)
 	SELECT 
 		t.NotificationId								
@@ -93,6 +96,7 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 		,t.Content
 		,t.MsgContentsType
 		,t.SiteNameGroup
+		,t.IsTest
 	FROM 
 		JSON_TABLE
 		(
@@ -105,6 +109,7 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 				,Content 			TEXT            	PATH "$.Content"
 				,MsgContentsType 	TINYINT UNSIGNED    PATH "$.MsgContentsType"
 				,SiteNameGroup 		TEXT            	PATH "$.SiteNameGroup"
+				,IsTest 			BOOL         		PATH "$.IsTest"
 			)
 		) AS t;
 		
@@ -251,7 +256,7 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 	SET iLoop = 1;
 	SET createdDate = UTC_TIMESTAMP();
 	WHILE (EXISTS (SELECT 1 FROM tmp_MsgHeader WHERE Id = iLoop)) DO
-		SELECT NotificationId, SiteNameGroup INTO pNotificationId, pSiteNameGroup FROM tmp_MsgHeader WHERE Id = iLoop;
+		SELECT NotificationId, SiteNameGroup, IsTest INTO pNotificationId, pSiteNameGroup, pIsTest FROM tmp_MsgHeader WHERE Id = iLoop;
 
 		WHILE EXISTS(SELECT 1 FROM tmpMessageChannel m WHERE m.NotificationId = pNotificationId AND m.SiteNameGroup = pSiteNameGroup) DO
 			SELECT ChannelId INTO pChannelId FROM tmpMessageChannel m WHERE m.NotificationId = pNotificationId AND m.SiteNameGroup = pSiteNameGroup LIMIT 1; 
@@ -281,11 +286,23 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 			WHERE d.NotificationId = pNotificationID AND d.ChannelId = pChannelId AND d.SiteNameGroup = pSiteNameGroup;
 
 			#Update Status for Notification
-			UPDATE Notification n
-			INNER JOIN (SELECT DISTINCT nrl.NotificationId, nrl.SiteNameGroup, nrl.ChannelId, nrl.Status, nrl.StatusID FROM tmp_NotificationRecipientList nrl) AS t 
-				ON t.NotificationId = pNotificationID AND t.SiteNameGroup = pSiteNameGroup AND t.ChannelId = pChannelId
-			SET n.Status = t.Status ,n.StatusID = t.StatusID
-			WHERE n.NotificationID = pLastInsert;
+			IF pIsTest = 1 THEN
+				UPDATE Notification
+				SET Status = DRAFT_NOTIFICATION_STATUS
+					,StatusID = DRAFT_NOTIFICATION_STATUSID
+				WHERE NotificationID = pNotificationID;
+	
+				UPDATE NotificationRecipientList
+				SET Status = DRAFT_NOTIFICATION_STATUS
+					,StatusID = DRAFT_NOTIFICATION_STATUSID
+				WHERE NotificationID = pNotificationID;
+			ELSE
+				UPDATE Notification n
+				INNER JOIN (SELECT DISTINCT nrl.NotificationId, nrl.SiteNameGroup, nrl.ChannelId, nrl.Status, nrl.StatusID FROM tmp_NotificationRecipientList nrl) AS t 
+					ON t.NotificationId = pNotificationID AND t.SiteNameGroup = pSiteNameGroup AND t.ChannelId = pChannelId
+				SET n.Status = t.Status ,n.StatusID = t.StatusID
+				WHERE n.NotificationID = pLastInsert;
+			END IF;
 			
 			INSERT INTO NotificationReference (NotificationID, ReferenceId, DataSource)
 			VALUES (pLastInsert, pNotificationID, 'DBCRM.MessageNotification.dbo.Notification');

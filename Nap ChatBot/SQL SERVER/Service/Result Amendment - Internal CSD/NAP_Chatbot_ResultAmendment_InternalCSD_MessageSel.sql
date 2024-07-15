@@ -4,7 +4,7 @@ GO
 
 ALTER PROCEDURE [dbo].[NAP_Chatbot_ResultAmendment_InternalCSD_MessageSel]
 @LastModifiedTime      DATETIME
-, @NewLastModifiedTime DATETIME OUTPUT
+, @NewLastModifiedTime DATETIME = NULL OUTPUT
 AS
 
 /*
@@ -45,6 +45,7 @@ BEGIN
             DEFAULT 111 --hardcode as 111 for now
       , SiteNameGroup   VARCHAR(50)   NOT NULL
       , Content         NVARCHAR(MAX) NOT NULL
+      , IsTest          BIT           NOT NULL
     )
 
     --loop through each notification and build message content
@@ -58,32 +59,37 @@ BEGIN
     WHILE @@FETCH_STATUS = 0
     BEGIN
         DECLARE @Content NVARCHAR(MAX)
+        DECLARE @Test BIT = 1
 
         BEGIN TRY
             EXEC [dbo].[NAP_Chatbot_ResultAmendment_InternalCSD_MessageBuilder] @NotificationID
                                                                               , @TargetGroupFilter = 'Normal'
                                                                               , @Debug = 0
                                                                               , @OutputContent = @Content OUTPUT
+                                                                              , @IsTest = @Test OUTPUT
 
             IF @Content IS NOT NULL BEGIN
-                INSERT INTO @Messages (NotificationID, MessageID, SiteNameGroup, Content)
+                INSERT INTO @Messages (NotificationID, MessageID, SiteNameGroup, Content, IsTest)
                 VALUES
-                (@NotificationID, @MessageID, 'Normal', @Content)
+                (@NotificationID, @MessageID, 'Normal', @Content, @Test)
 
                 SET @Content = NULL
+                SET @Test = 1
             END
 
             EXEC [dbo].[NAP_Chatbot_ResultAmendment_InternalCSD_MessageBuilder] @NotificationID
                                                                               , @TargetGroupFilter = '777'
                                                                               , @Debug = 0
                                                                               , @OutputContent = @Content OUTPUT
+                                                                              , @IsTest = @Test OUTPUT
 
             IF @Content IS NOT NULL BEGIN
-                INSERT INTO @Messages (NotificationID, MessageID, SiteNameGroup, Content)
+                INSERT INTO @Messages (NotificationID, MessageID, SiteNameGroup, Content, IsTest)
                 VALUES
-                (@NotificationID, @MessageID, '777', @Content)
+                (@NotificationID, @MessageID, '777', @Content, @Test)
 
                 SET @Content = NULL
+                SET @Test = 1
             END
         END TRY
         BEGIN CATCH
