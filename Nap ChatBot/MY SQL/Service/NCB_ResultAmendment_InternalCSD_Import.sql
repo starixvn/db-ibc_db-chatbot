@@ -111,11 +111,8 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 				,SiteNameGroup 		TEXT            	PATH "$.SiteNameGroup"
 				,IsTest 			BOOL         		PATH "$.IsTest"
 			)
-		) AS t;
-		
-	DELETE m 
-	FROM tmp_MsgHeader m
-	WHERE EXISTS (SELECT 1 FROM NotificationReference nr WHERE nr.DataSource = 'DBCRM.MessageNotification.dbo.Notification' AND nr.ReferenceId = m.NotificationId);
+		) AS t
+	WHERE NOT EXISTS (SELECT 1 FROM NotificationReference nr WHERE nr.DataSource = 'DBCRM.MessageNotification.dbo.Notification' AND nr.ReferenceId = t.NotificationId);
 	
 	IF NOT EXISTS (SELECT 1 FROM tmp_MsgHeader) THEN
 		LEAVE NCB_ResultAmendment_InternalCSD_Import;
