@@ -287,12 +287,12 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 				UPDATE Notification
 				SET Status = DRAFT_NOTIFICATION_STATUS
 					,StatusID = DRAFT_NOTIFICATION_STATUSID
-				WHERE NotificationID = pNotificationID;
+				WHERE NotificationID = pLastInsert;
 	
 				UPDATE NotificationRecipientList
 				SET Status = DRAFT_NOTIFICATION_STATUS
 					,StatusID = DRAFT_NOTIFICATION_STATUSID
-				WHERE NotificationID = pNotificationID;
+				WHERE NotificationID = pLastInsert;
 			ELSE
 				UPDATE Notification n
 				INNER JOIN (SELECT DISTINCT nrl.NotificationId, nrl.SiteNameGroup, nrl.ChannelId, nrl.Status, nrl.StatusID FROM tmp_NotificationRecipientList nrl) AS t 
