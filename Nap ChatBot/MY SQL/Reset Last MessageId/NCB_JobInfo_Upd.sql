@@ -13,10 +13,10 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_JobInfo_Upd`(
         Revisions:
 			- 20211010@Malcolm: Get information of Job [RedmineID: #162825]
 			- 20220414@Malcolm: Add Job [RedmineID: #170182]
-			- 20220414@Malcolm: Add Job Monitered Player [RedmineID: #174402]
-			- 20220414@Malcolm: Add Job Settledment - Internal CSD, Settledment - Licensee [RedmineID: #195404]
+			- 20220414@Malcolm: Add Job Monitored Player [RedmineID: #174402]
+			- 20220414@Malcolm: Add Job Settlement - Internal CSD, Settlement - Licensee [RedmineID: #195404]
 			- 20231122@Malcolm: Add Setting name [RedmineID: #196660]
-			- 20240129@Malcolm: Add result amendment - Licness/ Internal CSD [RedmineID: #197620]
+			- 20240129@Malcolm: Add result amendment - Licensee/ Internal CSD [RedmineID: #197620]
 			
 		Param:
 				- @JobInfo
@@ -54,7 +54,7 @@ BEGIN
 		JSON_TABLE
         (
 			JobInfo,
-            "$[*]"
+            '$[*]'
             COLUMNS
             (
 				JobIdentify 	TINYINT PATH "$.JobIdentify", 
@@ -64,7 +64,7 @@ BEGIN
         ) AS t;
 		
 	UPDATE tmp_JobInfo
-		SET ReferenceValue = CONVERT(DATE_ADD(CONVERT(ReferenceValue, DATETIME), INTERVAL -12 HOUR), NCHAR)
+		SET ReferenceValue = SUBSTR(DATE_ADD(ReferenceValue, INTERVAL -12 HOUR), 1, 23)
 	WHERE JobIdentify = 9 AND SettingName = 'LastModifiedTime';
 		
 	INSERT INTO tmp_JobDetail (JobIdentify, NotificationId)
@@ -73,7 +73,7 @@ BEGIN
 		JSON_TABLE
         (
 			JobDetail,
-            "$[*]"
+            '$[*]'
             COLUMNS
             (
 				JobIdentify TINYINT UNSIGNED PATH "$.JobIdentify", 
@@ -83,7 +83,8 @@ BEGIN
         
     UPDATE SystemSetting AS s
 	INNER JOIN tmp_JobInfo AS j ON j.JobIdentify = s.JobIdentify AND s.SettingName = j.SettingName
-		SET s.Value = j.ReferenceValue;
+		SET s.Value = j.ReferenceValue
+    WHERE TRUE;
 
     UPDATE SystemSetting AS s
 	INNER JOIN tmp_JobInfo AS j ON j.JobIdentify = s.JobIdentify

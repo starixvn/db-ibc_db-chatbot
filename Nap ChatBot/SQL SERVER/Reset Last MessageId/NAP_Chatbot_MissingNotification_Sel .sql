@@ -32,7 +32,7 @@ BEGIN
 	
 	DECLARE @LastModifiedTime DATETIME
 
-	SELECT @LastModifiedTime = t.c.value ('@ReferenceValue', 'DATETIME') 
+	SELECT @LastModifiedTime = DATEADD(HOUR, -12, t.c.value ('@ReferenceValue', 'DATETIME'))
 	FROM @Setting.nodes('root/r') t(c)
 	WHERE t.c.value ('@JobIdentify', 'TINYINT') = 9 AND t.c.value ('@SettingName', 'VARCHAR(200)') = 'LastModifiedTime'
 	OPTION (OPTIMIZE FOR (@Setting = NULL))

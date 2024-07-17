@@ -56,7 +56,7 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 	SET startTime = UTC_TIMESTAMP();
 	SET errCode = 0, errMsg = '';
 
-	SET LastModifiedTime = DATE_FORMAT(LastModifiedTime, '%Y-%m-%d %H:%i:%s');
+	SET LastModifiedTime = DATE_FORMAT(LastModifiedTime, '%Y-%m-%d %H:%i:%s.%f');
 
 	DROP TEMPORARY TABLE IF EXISTS tmp_Notification;
 	CREATE TEMPORARY TABLE IF NOT EXISTS tmp_Notification(
