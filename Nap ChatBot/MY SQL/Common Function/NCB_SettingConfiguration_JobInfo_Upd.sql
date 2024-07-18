@@ -27,7 +27,7 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_SettingConfiguration_JobInfo_U
     */
 )
 SQL SECURITY DEFINER
-BEGIN
+NCB_SettingConfiguration_JobInfo_Upd:BEGIN
 	DECLARE startTime	DATETIME(3) DEFAULT UTC_TIMESTAMP(3);
     DECLARE finishTime	DATETIME(3); 
     DECLARE duration	INT;

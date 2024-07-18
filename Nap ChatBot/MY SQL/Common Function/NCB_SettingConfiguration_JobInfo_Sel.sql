@@ -19,7 +19,7 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_SettingConfiguration_JobInfo_S
     */
 )
 SQL SECURITY DEFINER
-BEGIN
+NCB_SettingConfiguration_JobInfo_Sel:BEGIN
 
     DROP TEMPORARY TABLE IF EXISTS transformed_settings;
     CREATE TEMPORARY TABLE transformed_settings
@@ -32,7 +32,7 @@ BEGIN
         SettingName    VARCHAR(200)
     );
 
-    # scan Value column of transformed_settings, check if it matches datetime format, then add 12 hours to it's value
+    # scan Value column of transformed_settings, check if it matches datetime format, then add 12 hours to its value
     # to display on web at GMT+8
     # Note that using DATE(Value) or DAY(Value) to check if a value is DATETIME in WHERE condition may not work
     # (It worked as a stand-alone SELECT but not when combined with INSERT), maybe MySQL just sucks
