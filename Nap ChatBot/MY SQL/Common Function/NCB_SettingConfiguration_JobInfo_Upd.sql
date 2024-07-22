@@ -43,7 +43,8 @@ NCB_SettingConfiguration_JobInfo_Upd:BEGIN
 	# check if Value matches datetime format, then minus 12 hours to convert back to GMT-4 (see NCB_SettingConfiguration_JobInfo_Sel.sql)
     INSERT INTO tmp_JobInfo (JobIdentify, SettingValue, SettingName)
     SELECT t.JobIdentify
-         , IF(DATE(t.SettingValue) IS NOT NULL, DATE_SUB(t.SettingValue, INTERVAL -12 HOUR), t.SettingValue) AS SettingValue
+         , IF(t.SettingValue REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}.[0-9]{3,6}$',
+              SUBSTR(DATE_ADD(t.SettingValue, INTERVAL -12 HOUR), 1, 23), t.SettingValue) AS SettingValue
          , t.SettingName
     FROM
 		JSON_TABLE

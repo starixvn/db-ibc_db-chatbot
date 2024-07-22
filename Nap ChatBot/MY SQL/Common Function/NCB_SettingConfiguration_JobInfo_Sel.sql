@@ -34,8 +34,7 @@ NCB_SettingConfiguration_JobInfo_Sel:BEGIN
 
     # scan Value column of transformed_settings, check if it matches datetime format, then add 12 hours to its value
     # to display on web at GMT+8
-    # Note that using DATE(Value) or DAY(Value) to check if a value is DATETIME in WHERE condition may not work
-    # (It worked as a stand-alone SELECT but not when combined with INSERT), maybe MySQL just sucks
+    # Note that using DATE(Value) or DAY(Value) to check if a value is DATETIME does not work when used with INSERT
     INSERT INTO transformed_settings
     SELECT ID
          , Description
