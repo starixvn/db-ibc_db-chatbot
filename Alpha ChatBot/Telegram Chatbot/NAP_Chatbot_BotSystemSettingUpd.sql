@@ -1,4 +1,4 @@
-/*<info serverAlias="DBBOT-bodb_ChatBot" executers="bodbAdminNet" viewers="" selecters=""></info>*/
+/*<info serverAlias="DBBOT-bodb_ChatBot" executers="wsv_nap" viewers="" selecters=""></info>*/
 
 ALTER PROCEDURE [dbo].[NAP_Chatbot_BotSystemSettingUpd] 	
 	@ID 		INT,		
@@ -15,6 +15,7 @@ AS
 		
 		Revisions:
 			- 20220701@Johnson: initial sp [redmine: #167819]
+			- 20240530@Luke: Telegram Chatbot - Notify Member Last bets [Redmine: #193689]
 			
 		Paramter's Explantion:
 	*/
@@ -28,7 +29,7 @@ BEGIN
 	
 	DECLARE @SettingName VARCHAR(100),
 			@ServiceName VARCHAR(100),
-			@Old_Value VARCHAR(1000)
+			@Old_Value VARCHAR(MAX)
 			
 	SELECT @SettingName = SettingName,
 		@ServiceName = ServiceName,

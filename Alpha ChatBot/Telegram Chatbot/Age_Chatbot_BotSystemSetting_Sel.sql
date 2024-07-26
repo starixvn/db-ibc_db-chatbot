@@ -1,4 +1,4 @@
-/*<info serverAlias="DBBOT-bodb_ChatBot" executers="bodbDownlineNet" isFunction="0" isNested="0"></info>*/
+/*<info serverAlias="DBBOT-bodb_ChatBot" executers="wsv_alp" isFunction="0" isNested="0"></info>*/
 ALTER PROCEDURE [dbo].[Age_Chatbot_BotSystemSetting_Sel]
 	@ServiceName VARCHAR(100) 
 	,@Environment VARCHAR(50) = 'LIVE'
@@ -11,6 +11,7 @@ AS
 
 	Revisions:
 		- 20220509@Malcolm: Initialize SP [RedmineID: #167819]
+		- 20240530@Luke: Telegram Chatbot - Notify Member Last bets [Redmine: #193689]
 
 */
 
@@ -19,7 +20,7 @@ BEGIN
 
 	SELECT @Environment = ISNULL(@Environment, '')
 
-	DECLARE @TmpSetting TABLE (SettingName VARCHAR(100), Value VARCHAR(1000))
+	DECLARE @TmpSetting TABLE (SettingName VARCHAR(100), Value VARCHAR(MAX))
 
 	INSERT INTO @TmpSetting (SettingName, Value)
 	SELECT SettingName, Value
