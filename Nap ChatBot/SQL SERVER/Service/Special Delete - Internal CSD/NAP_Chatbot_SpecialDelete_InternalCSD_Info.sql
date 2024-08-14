@@ -194,11 +194,16 @@ BEGIN
 		) AS n
 
 		UPDATE d
-			SET d.Custid = t.CustID, d.Status = t.status, d.Stake = t.stake, d.Transdate = t.CreatedDate, d.SiteNameGroup = CASE WHEN st.SiteLabel = '777' THEN '777' ELSE 'Normal' END
+			SET d.Custid = t.CustID, d.Status = t.status, d.Stake = t.stake, d.Transdate = n.transdate, d.SiteNameGroup = CASE WHEN st.SiteLabel = '777' THEN '777' ELSE 'Normal' END
 		FROM #DuplicatedInfo d
 			INNER JOIN bodb02.dbo.TicketVoiding_VoidedTransaction t WITH(NOLOCK) ON t.TransId = d.VoidedTransId AND t.MessageId = d.MessageId
 			INNER JOIN bodb02.dbo.Customer c WITH(NOLOCK) ON c.CustId = t.CustId
 			INNER JOIN bodb02.dbo.Site st WITH(NOLOCK) ON st.site = c.site
+			CROSS APPLY (
+				SELECT transdate FROM dbo.bettrans WITH (NOLOCK) WHERE transid = d.VoidedTransId
+				UNION ALL
+				SELECT transdate FROM dbo.bettrans14 WITH (NOLOCK) WHERE transid = d.VoidedTransId
+			) AS n
 			
 	END
 
