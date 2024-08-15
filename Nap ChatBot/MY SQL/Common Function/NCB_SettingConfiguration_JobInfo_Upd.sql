@@ -17,6 +17,7 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_SettingConfiguration_JobInfo_U
             - 20200422@Merlin: Update job info - RedmineID: #132039
 			- 20210513@Malcolm: Integrate Telegram [RedmineID: #151807]
             - 20231208@Malcolm: Update Jobstatus [RedmineID: #191062]
+		    - 20240716@Jaden: Refactor, handle and DATETIME value types in GMT+8 [#197620]
             
 		Param:
 				- @JobInfo
@@ -26,7 +27,7 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_SettingConfiguration_JobInfo_U
     */
 )
 SQL SECURITY DEFINER
-BEGIN
+NCB_SettingConfiguration_JobInfo_Upd:BEGIN
 	DECLARE startTime	DATETIME(3) DEFAULT UTC_TIMESTAMP(3);
     DECLARE finishTime	DATETIME(3); 
     DECLARE duration	INT;
@@ -38,17 +39,21 @@ BEGIN
 
 	DROP TEMPORARY TABLE IF EXISTS tmp_JobInfo;
     CREATE TEMPORARY TABLE IF NOT EXISTS tmp_JobInfo (JobIdentify TINYINT, SettingValue TEXT, SettingName VARCHAR(200));
-    
+
+	# check if Value matches datetime format, then minus 12 hours to convert back to GMT-4 (see NCB_SettingConfiguration_JobInfo_Sel.sql)
     INSERT INTO tmp_JobInfo (JobIdentify, SettingValue, SettingName)
-    SELECT t.JobIdentify, t.SettingValue, t.SettingName
-    FROM 
+    SELECT t.JobIdentify
+         , IF(t.SettingValue REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}.[0-9]{3,6}$',
+              SUBSTR(DATE_ADD(t.SettingValue, INTERVAL -12 HOUR), 1, 23), t.SettingValue) AS SettingValue
+         , t.SettingName
+    FROM
 		JSON_TABLE
         (
 			JobInfo,
-            "$[*]"
+            '$[*]'
             COLUMNS
             (
-				JobIdentify  TINYINT 		PATH "$.JobIdentify", 
+				JobIdentify  TINYINT 		PATH "$.JobIdentify",
 				SettingValue TEXT 			PATH "$.SettingValue",
 				SettingName  VARCHAR(200) 	PATH "$.SettingName"
             )
@@ -61,7 +66,8 @@ BEGIN
         
     UPDATE SystemSetting AS s
 	INNER JOIN tmp_JobInfo AS j ON j.JobIdentify = s.JobIdentify AND s.SettingName = j.SettingName
-		SET s.Value = j.SettingValue;
+		SET s.Value = j.SettingValue
+    WHERE TRUE;
     
     #Get Finish Time to calcualte execution duration
     SET finishTime = UTC_TIMESTAMP(3);

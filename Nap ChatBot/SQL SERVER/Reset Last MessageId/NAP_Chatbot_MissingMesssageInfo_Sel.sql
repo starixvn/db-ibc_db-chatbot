@@ -1,4 +1,4 @@
-/*<info serverAlias="DBMSG-bodb_Message" executers="bodbAdminNet" isFunction="0" isNested="0"></info>*/
+/*<info serverAlias="DBMSG-bodb_Message" executers="wsv_nap" isFunction="0" isNested="0"></info>*/
 ALTER PROCEDURE [dbo].[NAP_Chatbot_MissingMesssageInfo_Sel]
 	@MessageList			XML
 	,@MsgContentsTypeList	XML
@@ -18,13 +18,15 @@ AS
 		- 20231101@Malcolm: Add Settledment - Internal CSD, Settledment - Licensee [RedmineID: #195404]
 		- 20231123@Malcolm: Add void by betID [RedmineID: #196660]
 		- 20231204@Malcolm: Only get member level for Settlement - Internal CSD Job [RedmineID: #195404]
+		- 20240129@Malcolm: Add result amendment - Licness/ Internal CSD [RedmineID: #197620]
 	
 	. @MessageList
 			<root>
-				<r JobIdentify="1" ReferenceId="1" SettingName=""/>
-				<r JobIdentify="3" ReferenceId="1" SettingName=""/>
-				<r JobIdentify="6" ReferenceId="1" SettingName=""/>
-				<r JobIdentify="7" ReferenceId="1" SettingName=""/>
+				<r JobIdentify="1" ReferenceValue="1" SettingName=""/>
+				<r JobIdentify="3" ReferenceValue="1" SettingName=""/>
+				<r JobIdentify="6" ReferenceValue="1" SettingName=""/>
+				<r JobIdentify="7" ReferenceValue="1" SettingName=""/>
+				<r JobIdentify="8" ReferenceValue="1" SettingName=""/>
 			</root>
 
 	. @MsgContentsTypeList
@@ -33,6 +35,7 @@ AS
 				<r JobIdentify="3" MsgContentsType="2"/>
 				<r JobIdentify="6" MsgContentsType="2"/>
 				<r JobIdentify="7" MsgContentsType="2"/>
+				<r JobIdentify="8" MsgContentsType="111"/>
 			</root>
 
 	. @RequestList
@@ -91,10 +94,10 @@ BEGIN
 	INSERT INTO @Message (JobIdentify, FromReferenceId, SettingName)
 	SELECT 
 		t.c.value ('@JobIdentify', 'TINYINT') AS JobIdentify
-		,t.c.value ('@ReferenceId', 'INT') AS FromReferenceId
+		,t.c.value ('@ReferenceValue', 'INT') AS FromReferenceId
 		,t.c.value ('@SettingName', 'VARCHAR(200)') AS SettingName
 	FROM @MessageList.nodes('root/r') t(c)
-	WHERE t.c.value ('@JobIdentify', 'TINYINT') <> 0
+	WHERE t.c.value ('@JobIdentify', 'TINYINT') <> 9
 	OPTION (OPTIMIZE FOR (@MessageList = NULL))
 
 	DECLARE @Request TABLE (VoidingHistoryCollectionId INT, MessageId INT, RequestId INT)
@@ -233,6 +236,21 @@ BEGIN
 			INNER JOIN dbo.Msg m WITH(NOLOCK) ON m.MessageId = mt.MessageId
 			INNER JOIN @DepositSuper d ON d.CustId = mt.TargetId
 		WHERE m.MsgType = 1 AND (m.MsgContentsType = 110 OR m.MsgContentsType = 105 AND m.IsBatch = 1 AND m.MatchId > 0)
+			AND mt.MsgTargetId > @FromReferenceId AND mt.MsgTargetId <= @MaxMsgTargetId
+	END
+	
+	IF EXISTS (SELECT 1 FROM @Message WHERE JobIdentify = 8)
+	BEGIN
+		SELECT @FromReferenceId = NULL, @ToReferenceId = @MaxMsgTargetId
+
+		SELECT @FromReferenceId = FromReferenceId FROM @Message WHERE JobIdentify = 8
+
+		INSERT INTO @Msg (VoidingHistoryCollectionId, MsgTargetId, MessageId, Content_en, JobIdentify, Posttime)
+		SELECT mt.MsgTargetId, mt.MsgTargetId, m.MessageId, m.Content_en, 8, m.PostTime
+		FROM dbo.MsgTarget mt WITH(NOLOCK)
+			INNER JOIN dbo.Msg m WITH(NOLOCK) ON m.MessageId = mt.MessageId
+			INNER JOIN @DepositSuper d ON d.CustId = mt.TargetId
+		WHERE m.MsgContentsType = 111
 			AND mt.MsgTargetId > @FromReferenceId AND mt.MsgTargetId <= @MaxMsgTargetId
 	END
 

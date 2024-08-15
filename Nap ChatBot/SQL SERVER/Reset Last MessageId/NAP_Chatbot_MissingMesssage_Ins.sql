@@ -1,4 +1,4 @@
-/*<info serverAlias="DBMSG-bodb_Message" executers="bodbAdminNet" isFunction="0" isNested="0"></info>*/
+/*<info serverAlias="DBMSG-bodb_Message" executers="wsv_nap" isFunction="0" isNested="0"></info>*/
 ALTER PROCEDURE [dbo].[NAP_Chatbot_MissingMesssage_Ins]
 	@MessageList		XML
 	,@Environment		VARCHAR(20)
@@ -16,6 +16,7 @@ AS
 		- 20211007@Malcolm: Initialize SP [RedmineID: #162825]
 		- 20230118@Malcolm: Scale out for ChatBot [RedmineID: #181907]
 		- 20230515@Roy: Database - HA DB061/DB062 [RedmineID: #169643]
+		- 20240129@Malcolm: Add result amendment - Licness/ Internal CSD [RedmineID: #197620]
 
 	. @MessageList
 			<root>
@@ -60,7 +61,7 @@ BEGIN
 		t.c.value ('@JobIdentify', 'TINYINT') AS JobIdentify
 		,t.c.value ('@MessageId', 'INT') AS MessageId
 	FROM @MessageList.nodes('root/r') t(c)
-	WHERE t.c.value ('@JobIdentify', 'TINYINT') <> 0
+	WHERE t.c.value ('@JobIdentify', 'TINYINT') <> 9
 	OPTION (OPTIMIZE FOR (@MessageList = NULL))
 
 	BEGIN TRY 
