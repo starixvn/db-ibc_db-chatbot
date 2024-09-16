@@ -19,6 +19,8 @@ AS
 		- 20231123@Malcolm: Add void by betID [RedmineID: #196660]
 		- 20231204@Malcolm: Only get member level for Settlement - Internal CSD Job [RedmineID: #195404]
 		- 20240129@Malcolm: Add result amendment - Licness/ Internal CSD [RedmineID: #197620]
+		- 20240917@Jaden: Bug fix, show only Void-by-betid or Void-by-request messages (jobIdentify = 2) when popup edit
+						  previously it didn't categorize (RedmineID: #209696)
 	
 	. @MessageList
 			<root>
@@ -149,8 +151,12 @@ BEGIN
 		OPTION (RECOMPILE)	
 	END
 	
-	IF EXISTS (SELECT 1 FROM @Request)
+	--void by request
+	IF EXISTS (SELECT 1 FROM @Message WHERE JobIdentify = 2)
 	BEGIN
+		SELECT @FromReferenceId = NULL
+		SELECT TOP(1) @FromReferenceId = FromReferenceId FROM @Message WHERE JobIdentify = 2 AND SettingName = 'LastVoidingHistoryCollectionId'
+
 		;WITH CTE_Session AS
 		(	
 			SELECT 
@@ -158,6 +164,7 @@ BEGIN
 				,MIN(MessageId) AS MessageId
 				,STRING_AGG(CONVERT(VARCHAR(50), r.MessageId), ',') WITHIN GROUP(ORDER BY r.MessageId) AS MessageIds
 			FROM @Request r
+			WHERE r.VoidingHistoryCollectionId > @FromReferenceId
 			GROUP BY r.VoidingHistoryCollectionId
 		)
 		INSERT INTO @Msg (VoidingHistoryCollectionId, MessageIds, Content_en, JobIdentify, Posttime)
@@ -166,6 +173,8 @@ BEGIN
 			INNER JOIN dbo.Msg m WITH(NOLOCK) ON m.MessageId = c.MessageId
 	END
 	
+	--void by betid
+	--@Request is data from VoidingHistoryCollectionDetail, not being in it means voiding is generated from direct betid input
 	IF EXISTS (SELECT 1 FROM @Message WHERE JobIdentify = 2)
 	BEGIN
 		SELECT @FromReferenceId = NULL, @ToReferenceId = @MaxMsgTargetId
@@ -176,6 +185,7 @@ BEGIN
 		FROM dbo.Msg m WITH(NOLOCK)
 			INNER JOIN dbo.MsgTarget mt WITH(NOLOCK) ON mt.MessageId = m.MessageId
 		WHERE m.MsgContentsType = 103 AND mt.MsgTargetId > @FromReferenceId AND mt.MsgTargetId <= @MaxMsgTargetId
+		  AND m.MessageId NOT IN (SELECT MessageId FROM @Request)
 	END
 
 	IF EXISTS (SELECT 1 FROM @Message WHERE JobIdentify = 3)
