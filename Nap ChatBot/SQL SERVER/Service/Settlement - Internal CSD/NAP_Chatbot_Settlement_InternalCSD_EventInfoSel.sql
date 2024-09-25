@@ -14,7 +14,7 @@ AS
 		- 20231204@Malcolm: Only get member level data [RedmineId: #191062]
 		- 20240201@Malcolm: Get data of 777 Site [RedmineId: #198905]
 		- 20240710@Jaden: Support VS5 [RedmineId : #207626]
-		
+		- 20240924@Jaden: Support VS2 [RedmineId : #210786]
 
 	Param's Explanation:
 		+ @MessageInfo
@@ -119,14 +119,15 @@ BEGIN
 	
 	;WITH CTE_CommonInfo AS (
 		SELECT m.MessageId, m.SiteNameGroup, m.MsgContentsType, m.MatchId, 
-			COALESCE(m3.StartTime, mt.kickofftime) AS EventDate, 
+			COALESCE(m3.StartTime, v3.EventTime, mt.kickofftime) AS EventDate, 
 			m.Content_en,  
 			m.Content_cs, 
-			COALESCE(s3.SportName, s.SportName, '') AS SportName, 
+			COALESCE(s3.SportName, v3.SportType, s.SportName, '') AS SportName, 
 			t.TotalTickets, t.IsTest
 		FROM #MessageInfo m
 			LEFT JOIN bodb02.dbo.match mt WITH(NOLOCK) ON mt.matchid = m.MatchId
 			LEFT JOIN bodb02.dbo.Match3rd m3 WITH(NOLOCK) ON m3.Match3rdId = m.MatchId
+			LEFT JOIN bodb02.dbo.VSRaceInfo v3 WITH(NOLOCK) ON v3.EventID = m.MatchId --let's hope this number won't crash with match3rd!
 			LEFT JOIN bodb02.dbo.Sports s WITH(NOLOCK) ON s.SportType = mt.sporttype
 			LEFT JOIN bodb02.dbo.Sports s3 WITH(NOLOCK) ON s3.SportType = m3.sporttype
 			OUTER APPLY (

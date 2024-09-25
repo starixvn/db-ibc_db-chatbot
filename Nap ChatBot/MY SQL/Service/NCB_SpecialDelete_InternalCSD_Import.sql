@@ -46,6 +46,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_SpecialDelete_InternalCSD_Imp
 
     Revisions :
       - 20240201@Malcolm: Initiliaze SP [RedmineID: #198905]
+	  - 20240924@Jaden: Support VS2 [RedmineId : #210786]
 	  
 	Param's Explanation:
 		- IssueTypeId = 15 : AB real member, 13 : Abnormal accounts, 11: Abnormal Bet, 20: Duplicated Tickets
@@ -424,7 +425,7 @@ NCB_SpecialDelete_InternalCSD_Import:BEGIN
 				,'\r\n'
 				,'League: ', IFNULL(LeagueName, '')
 				,'\r\n'
-				,'Match: ', IF(HomeName <> 'N/A' OR AwayName <> 'N/A', CONCAT(IFNULL(HomeName, '') , ' - vs - ' , IFNULL(AwayName, '')), 'N/A')
+				,'Match: ', IF(HomeName <> 'N/A' OR AwayName <> 'N/A', CONCAT(IFNULL(HomeName, '') , IF(AwayName IS NOT NULL, ' - vs - ', '') , IFNULL(AwayName, '')), 'N/A')
 				,'\r\n', '\r\n'
 			)
 			,''
