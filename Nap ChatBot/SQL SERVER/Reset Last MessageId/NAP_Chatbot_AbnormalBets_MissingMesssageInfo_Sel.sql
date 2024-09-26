@@ -1,6 +1,6 @@
 /*<info serverAlias="DBACC-bodb02" executers="wsv_nap" isFunction="0" isNested="0"></info>*/
-CREATE PROCEDURE [dbo].[NAP_Chatbot_AbnormalBets_MissingMesssageInfo_Sel]
-	@MessageList XML
+ALTER PROCEDURE [dbo].[NAP_Chatbot_AbnormalBets_MissingMesssageInfo_Sel]
+	@MessageList XML = NULL
 AS
 /*
 	Created: 20211007@Malcolm
@@ -13,9 +13,10 @@ AS
 		- 20231122@Malcolm: Get setting for Internal - CSD [RedmineID: #196660]
 		- 20240108@Malcolm: Remove SABA text for TVS [RedmineID: #199482]
 		- 20240129@Malcolm: Add result amendment - Licness/ Internal CSD [RedmineID: #197620]	
+		- 20240917@Jaden: Back scan to get messsages, no longer require keeping track of Settings (RedmineID: #209696)
 
 	Param's Explanation:
-	@MessageList: 
+	@MessageList (no longer required since #209696): 
 			<root>
 				<r JobIdentify="1" ReferenceValue="1" SettingName="LastVoidingHistoryCollectionId" />
 				<r JobIdentify="3" ReferenceValue="12" SettingName="LastVoidingHistoryCollectionId"/>
@@ -24,20 +25,28 @@ AS
 BEGIN
 	SET NOCOUNT ON
 
-	DECLARE @RequestInfo TABLE (VoidingHistoryCollectionId INT, MessageId INT, RequestId INT)
-	
-	DECLARE @FromVoidingHistoryCollectionId INT, @MaxVoidingHistoryCollectionId INT
+	--Void by request: uses VoidingCollectionId to track
+	--Void by betid: uses MsgTargetId to track
 
-	SELECT @FromVoidingHistoryCollectionId = t.c.value ('@ReferenceValue', 'INT') 
-	FROM @MessageList.nodes('root/r') t(c)
-	WHERE t.c.value ('@JobIdentify', 'TINYINT') = 2 AND t.c.value ('@SettingName', 'VARCHAR(200)') = 'LastVoidingHistoryCollectionId'
-	OPTION (OPTIMIZE FOR (@MessageList = NULL))
+	--Optimally we should use SystemSetting values LastVoidingHistoryCollectionId and LastMsgTargetId,
+	--but since VoidingHistoryCollection tables do not have msgTargetID, now we just scan back a day or two
+	--to get all the neccessary reference data for the next step
 	
-	SELECT @MaxVoidingHistoryCollectionId = MAX(VoidingHistoryCollectionId) FROM dbo.VoidingHistoryCollection WITH(NOLOCK)
+	--Here we're assuming LastVoidingHistoryCollectionId and LastMsgTargetId is ALWAYS within last 2 days
 
-	SELECT vcd.VoidingHistoryCollectionId, vcd.MessageId, vcd.RequestId
-	FROM dbo.VoidingHistoryCollectionDetail vcd WITH(NOLOCK)
-	WHERE vcd.VoidingHistoryCollectionId > @FromVoidingHistoryCollectionId AND vcd.VoidingHistoryCollectionId <= @MaxVoidingHistoryCollectionId
-	ORDER BY VoidingHistoryCollectionId, MessageId, RequestId
+	CREATE TABLE #BackScannedVoidingCollection (
+		VoidingHistoryCollectionId INT PRIMARY KEY
+	)
+
+	INSERT INTO #BackScannedVoidingCollection (VoidingHistoryCollectionId)
+	SELECT VoidingHistoryCollectionId FROM VoidingHistoryCollection WITH (NOLOCK) 
+	WHERE CreatedDate > DATEADD(DAY, -2, GETDATE())
+
+	--Pass into next SP NAP_Chatbot_MissingMesssageInfo_Sel as @RequestList, it is used as reference data for the case of JobIdentify = 2
+	SELECT VoidingHistoryCollectionId, MessageId, RequestId
+	FROM dbo.VoidingHistoryCollectionDetail AS vcd
+	WHERE vcd.VoidingHistoryCollectionId IN (SELECT VoidingHistoryCollectionId FROM #BackScannedVoidingCollection)	
+
+	DROP TABLE IF EXISTS #BackScannedVoidingCollection
 END
 GO

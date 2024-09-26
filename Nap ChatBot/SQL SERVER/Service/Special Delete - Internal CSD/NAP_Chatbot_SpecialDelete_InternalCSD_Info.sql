@@ -12,6 +12,7 @@ AS
 	Revisions:
 		- 20231229@Malcolm: Initialize SP [RedmineID: #199482]
 		- 20240329@Jaden: Account for the case of filterBy = 2 (System parlay void) from TVS changes [RedmineID: #203054]
+		- 20240904@Jaden: Add support for void by betid [RedmineID: #209696]
 
 	Param's Explanation:
 		+ @MessageInfo
@@ -419,9 +420,24 @@ BEGIN
 
 		/*RequestInfo with MessageId <> 0 and VoidingHistoryCollectionId = 0: Void by BetID*/
 		;WITH CTE_Message AS (
-			SELECT DISTINCT VoidingHistoryCollectionId, MessageId, CreatorName, IsSpecialMember FROM #MessageInfo WHERE VoidingHistoryCollectionId = 0
+			SELECT DISTINCT m.MessageId, CreatorName, IsSpecialMember,
+				--if there is a message with bettype in (9, 29) in #VoidedTicket, then it should render with parlay template in next steps
+				--in reality a void message can either void single tickets or parlay, not both
+				CASE 
+					WHEN EXISTS (
+						SELECT 1 FROM #VoidedTicket v 
+						WHERE v.VoidingHistoryCollectionId = 0 
+							AND v.MessageId = m.MessageId
+							AND v.Bettype IN (9, 29)
+					) THEN 1 
+					ELSE 0 END 
+				AS IsParlayMessage
+			FROM #MessageInfo m
+			WHERE m.VoidingHistoryCollectionId = 0
 		), CTE_ReasonList AS (
-			SELECT n.MessageId, n.SiteNameGroup, STRING_AGG(CONVERT(NVARCHAR(MAX), n.SubIssueTypeName), ', ') WITHIN GROUP (ORDER BY n.SubIssueTypeName) AS ReasonList
+			SELECT n.MessageId, 
+				n.SiteNameGroup,
+				STRING_AGG(CONVERT(NVARCHAR(MAX), n.SubIssueTypeName), ', ') WITHIN GROUP (ORDER BY n.SubIssueTypeName) AS ReasonList
 			FROM (
 				SELECT DISTINCT v.MessageId, v.SiteNameGroup, t.SubIssueTypeName
 				FROM #VoidedTicket v
@@ -431,12 +447,12 @@ BEGIN
 			GROUP BY n.MessageId, n.SiteNameGroup
 		), CTE_Result AS (
 			SELECT 
-			    m.VoidingHistoryCollectionId
+			    0 AS VoidingHistoryCollectionId
 				,r.SiteNameGroup
 			    ,m.MessageId
 				,m.IsSpecialMember
 			    ,0 AS IssueTypeId
-			    ,0 AS IsParlay
+			    ,m.IsParlayMessage AS IsParlay
 			    ,'N/A' AS RequestIdList
 			    ,'N/A' AS RequestByList
 			    ,'N/A' AS DecidedByList
@@ -552,8 +568,11 @@ BEGIN
 				m.VoidingHistoryCollectionId
 				,IIF(m.VoidingHistoryCollectionId = 0, m.MessageId, 0) AS MessageId
 				,m.SiteNameGroup
-				,CASE WHEN m.liveindicator = 0 THEN 'Non-Live ' + ISNULL(d.typenamee, b.typenamee)
-				 ELSE 'Live ' + ISNULL(d.typenamee, b.typenamee) END  AS TypeName
+				,CASE 
+					WHEN b.typeid IN (9, 29) THEN 'Parlay'
+					WHEN m.liveindicator = 0 THEN 'Non-Live ' + ISNULL(d.typenamee, b.typenamee)
+				 	ELSE 'Live ' + ISNULL(d.typenamee, b.typenamee) 
+				END AS TypeName
 			FROM #VoidedTicket m	
 				INNER JOIN dbo.bettype b WITH (NOLOCK) ON m.bettype = b.typeId
 				LEFT JOIN dbo.bettype d WITH (NOLOCK) ON b.DisplayedTypeId = d.typeId
@@ -561,8 +580,11 @@ BEGIN
 				m.VoidingHistoryCollectionId
 				,IIF(m.VoidingHistoryCollectionId = 0, m.MessageId, 0)
 				,m.SiteNameGroup
-				,CASE WHEN m.liveindicator = 0 THEN 'Non-Live ' + ISNULL(d.typenamee, b.typenamee)
-				 ELSE 'Live ' + ISNULL(d.typenamee, b.typenamee) END 
+				,CASE 
+					WHEN b.typeid IN (9, 29) THEN 'Parlay'
+					WHEN m.liveindicator = 0 THEN 'Non-Live ' + ISNULL(d.typenamee, b.typenamee)
+				 	ELSE 'Live ' + ISNULL(d.typenamee, b.typenamee) 
+				END
 		), CTE_BettypeList AS (
 			SELECT 
 				VoidingHistoryCollectionId
