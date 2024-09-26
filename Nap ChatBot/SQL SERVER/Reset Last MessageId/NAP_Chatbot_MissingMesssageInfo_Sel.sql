@@ -2,7 +2,8 @@
 ALTER PROCEDURE [dbo].[NAP_Chatbot_MissingMesssageInfo_Sel]
 	@MessageList			XML
 	,@MsgContentsTypeList	XML
-	,@RequestList		    XML
+	,@VoidingCollectionRequestList XML
+	,@VoidingHistoryRequestList XML
 	,@SiteAsJSON		NVARCHAR(MAX)
 	,@DepCustSAsJSON	NVARCHAR(MAX)
 AS
@@ -21,6 +22,7 @@ AS
 		- 20240129@Malcolm: Add result amendment - Licness/ Internal CSD [RedmineID: #197620]
 		- 20240917@Jaden: Bug fix, show only Void-by-betid or Void-by-request messages (jobIdentify = 2) when popup edit
 						  previously it didn't categorize (RedmineID: #209696)
+		- 20240926@Jaden: Add param @VoidingHistoryRequestList, see NAP_Chatbot_AbnormalBets_MissingMesssageInfo_Sel (#210886)
 	
 	. @MessageList
 			<root>
@@ -40,10 +42,14 @@ AS
 				<r JobIdentify="8" MsgContentsType="111"/>
 			</root>
 
-	. @RequestList
+	. @VoidingCollectionRequestList
 			<root>
 				<r VoidingHistoryCollectionId="1" MessageId="1" RequestId="1"/>
 				<r VoidingHistoryCollectionId="2" MessageId="12" RequestId="2"/>
+			</root>
+	. @VoidingHistoryRequestList
+			<root>
+				<r MessageID="1" />
 			</root>
 	@SiteAsJSON
 		[
@@ -102,15 +108,23 @@ BEGIN
 	WHERE t.c.value ('@JobIdentify', 'TINYINT') <> 9
 	OPTION (OPTIMIZE FOR (@MessageList = NULL))
 
-	DECLARE @Request TABLE (VoidingHistoryCollectionId INT, MessageId INT, RequestId INT)
-	INSERT INTO @Request (VoidingHistoryCollectionId, MessageId, RequestId)
+	DECLARE @VoidingCollectionRequest TABLE (VoidingHistoryCollectionId INT, MessageId INT, RequestId INT)
+	INSERT INTO @VoidingCollectionRequest (VoidingHistoryCollectionId, MessageId, RequestId)
 	SELECT
 		t.c.value ('@VoidingHistoryCollectionId', 'INT') AS VoidingHistoryCollectionId
 		,t.c.value ('@MessageId', 'INT') AS MessageId
 		,t.c.value ('@RequestId', 'INT') AS RequestId
-	FROM @RequestList.nodes('root/r') t(c)
+	FROM @VoidingCollectionRequestList.nodes('root/r') t(c)
 	WHERE t.c.value ('@RequestId', 'INT') <> 0
-	OPTION (OPTIMIZE FOR (@RequestList = NULL))
+	OPTION (OPTIMIZE FOR (@VoidingCollectionRequestList = NULL))
+
+	--see dataset 2 of NAP_Chatbot_AbnormalBets_MissingMesssageInfo_Sel for explaination
+	DECLARE @VoidingHistoryRequest TABLE (MessageID INT)
+	INSERT INTO @VoidingHistoryRequest (MessageID)
+	SELECT 
+		t.c.value ('@MessageID', 'INT') AS MessageID
+	FROM @VoidingHistoryRequestList.nodes('root/r') t(c)
+	OPTION (OPTIMIZE FOR (@VoidingHistoryRequestList = NULL))
 
 	DECLARE @DepositSuper TABLE (CustId INT PRIMARY KEY, Site VARCHAR(50))
 	INSERT INTO @DepositSuper (CustId, Site)
@@ -163,7 +177,7 @@ BEGIN
 				r.VoidingHistoryCollectionId
 				,MIN(MessageId) AS MessageId
 				,STRING_AGG(CONVERT(VARCHAR(50), r.MessageId), ',') WITHIN GROUP(ORDER BY r.MessageId) AS MessageIds
-			FROM @Request r
+			FROM @VoidingCollectionRequest r
 			WHERE r.VoidingHistoryCollectionId > @FromReferenceId
 			GROUP BY r.VoidingHistoryCollectionId
 		)
@@ -174,7 +188,8 @@ BEGIN
 	END
 	
 	--void by betid
-	--@Request is data from VoidingHistoryCollectionDetail, not being in it means voiding is generated from direct betid input
+	--@VoidingCollectionRequest is data from VoidingHistoryCollectionDetail and @VoidingHistoryRequest is data from TicketVoiding_VoidingHistory
+	--not being in them means voiding is generated from direct betid input
 	IF EXISTS (SELECT 1 FROM @Message WHERE JobIdentify = 2)
 	BEGIN
 		SELECT @FromReferenceId = NULL, @ToReferenceId = @MaxMsgTargetId
@@ -185,7 +200,8 @@ BEGIN
 		FROM dbo.Msg m WITH(NOLOCK)
 			INNER JOIN dbo.MsgTarget mt WITH(NOLOCK) ON mt.MessageId = m.MessageId
 		WHERE m.MsgContentsType = 103 AND mt.MsgTargetId > @FromReferenceId AND mt.MsgTargetId <= @MaxMsgTargetId
-		  AND m.MessageId NOT IN (SELECT MessageId FROM @Request)
+		  AND m.MessageId NOT IN (SELECT MessageId FROM @VoidingCollectionRequest)
+		  AND m.MessageId NOT IN (SELECT MessageId FROM @VoidingHistoryRequest)
 	END
 
 	IF EXISTS (SELECT 1 FROM @Message WHERE JobIdentify = 3)

@@ -1,4 +1,4 @@
-/*<info serverAlias="DBACC-bodb02" executers="bodbAdminNet" isFunction="0" isNested="0"></info>*/
+/*<info serverAlias="DBACC-bodb02" executers="wsv_nap" isFunction="0" isNested="0"></info>*/
 CREATE PROCEDURE [dbo].[NAP_Chatbot_MissingMessage_Sel]
 	@MessageList XML
 AS
@@ -11,6 +11,7 @@ AS
 		- 20231122@Malcolm: Exclude abnormal bet void by request [RedmineID: #196660]
 		- 20231208@Malcolm: Only get member level data [RedmineID: #191062]
 		- 20240108@Malcolm: Remove SABA text for TVS [RedmineID: #199482]
+		- 20240926@Jaden: Clean up (#210786)
 
 	Param's Explanation:
 	
@@ -48,8 +49,6 @@ BEGIN
 	
 	SELECT m.VoidingHistoryCollectionId, m.MsgTargetId, m.MessageId, m.MessageIds, m.Content_en, m.PostTime, m.JobIdentify
 	FROM #Message m
-		LEFT JOIN dbo.VoidingHistoryCollectionDetail vh WITH(NOLOCK) ON m.MessageId = vh.MessageId AND m.JobIdentify = 2 AND m.VoidingHistoryCollectionId = 0
-	WHERE vh.MessageId IS NULL
 	ORDER BY m.JobIdentify ASC, m.VoidingHistoryCollectionId DESC, ISNULL(m.MsgTargetId, 0) DESC, m.MessageId DESC
 	
 	DROP TABLE #Message
