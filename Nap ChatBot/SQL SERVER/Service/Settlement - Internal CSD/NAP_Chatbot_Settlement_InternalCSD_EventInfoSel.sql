@@ -122,7 +122,7 @@ BEGIN
 			COALESCE(m3.StartTime, v3.EventTime, mt.kickofftime) AS EventDate, 
 			m.Content_en,  
 			m.Content_cs, 
-			COALESCE(s3.SportName, v3.SportType, s.SportName, '') AS SportName, 
+			COALESCE(s3.SportName, CAST(v3.SportType AS VARCHAR(10)), s.SportName, '') AS SportName, 
 			t.TotalTickets, t.IsTest
 		FROM #MessageInfo m
 			LEFT JOIN bodb02.dbo.match mt WITH(NOLOCK) ON mt.matchid = m.MatchId
