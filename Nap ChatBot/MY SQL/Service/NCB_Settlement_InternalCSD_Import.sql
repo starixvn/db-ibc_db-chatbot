@@ -26,6 +26,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_Settlement_InternalCSD_Import
       - 20231031@Malcolm: Initiliaze SP [RedmineID: #127944]
 	  - 20231204@Malcolm: Only get member level data [RedmineId: #191062]
 	  - 20230201@Malcolm: Get data of 777 Site [RedmineId: #198905]
+	  - 20241002@Jaden: Add error notification for easier debugging (#210786)
 	  
 	Param's Explanation:
     
@@ -278,6 +279,8 @@ NCB_Settlement_InternalCSD_Import:BEGIN
     WHERE ID = 31 AND Value = VALUE_DONE;
 
 	IF ROW_COUNT() = 0 THEN
+		SET errCode = 1803;
+		SET errMsg = CONCAT('Value is SystemSetting (ID = 31) is still running', errMsg);
 		LEAVE NCB_Settlement_InternalCSD_Import;
     END IF;
 
