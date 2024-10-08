@@ -61,6 +61,7 @@ BEGIN
 	SELECT vh.MessageId
 	FROM dbo.TicketVoiding_VoidingHistory vh
 	WHERE RequestId >= (SELECT MIN(RequestId) FROM #BackScannedVoidingCollectionDetail) 
+	  AND StatusId = 2 --get completed messages
 
 	DROP TABLE IF EXISTS #BackScannedVoidingCollection
 	DROP TABLE IF EXISTS #BackScannedVoidingCollectionDetail
