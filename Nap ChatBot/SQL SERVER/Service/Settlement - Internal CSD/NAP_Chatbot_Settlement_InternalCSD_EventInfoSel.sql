@@ -122,7 +122,7 @@ BEGIN
 			COALESCE(m3.StartTime, v3.EventTime, mt.kickofftime) AS EventDate, 
 			m.Content_en,  
 			m.Content_cs, 
-			COALESCE(s3.SportName, CAST(v3.SportType AS VARCHAR(10)), s.SportName, '') AS SportName, 
+			COALESCE(s3.SportName, vs3.SportName, s.SportName, '') AS SportName, 
 			t.TotalTickets, t.IsTest
 		FROM #MessageInfo m
 			LEFT JOIN bodb02.dbo.match mt WITH(NOLOCK) ON mt.matchid = m.MatchId
@@ -130,6 +130,7 @@ BEGIN
 			LEFT JOIN bodb02.dbo.VSRaceInfo v3 WITH(NOLOCK) ON v3.EventID = m.MatchId --let's hope this number won't crash with match3rd!
 			LEFT JOIN bodb02.dbo.Sports s WITH(NOLOCK) ON s.SportType = mt.sporttype
 			LEFT JOIN bodb02.dbo.Sports s3 WITH(NOLOCK) ON s3.SportType = m3.sporttype
+			LEFT JOIN bodb02.dbo.Sports vs3 WITH(NOLOCK) ON vs3.SportType = v3.sporttype
 			OUTER APPLY (
 				SELECT COUNT(DISTINCT md.TransId) AS TotalTickets, MIN(CONVERT(TINYINT, IsTest)) AS IsTest
 				FROM #MessageDetail md
