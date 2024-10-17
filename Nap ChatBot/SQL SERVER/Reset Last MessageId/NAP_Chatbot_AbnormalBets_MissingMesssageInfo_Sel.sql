@@ -1,6 +1,5 @@
 /*<info serverAlias="DBACC-bodb02" executers="wsv_nap" isFunction="0" isNested="0"></info>*/
 ALTER PROCEDURE [dbo].[NAP_Chatbot_AbnormalBets_MissingMesssageInfo_Sel]
-	@MessageList XML = NULL
 AS
 /*
 	Created: 20211007@Malcolm
@@ -14,13 +13,7 @@ AS
 		- 20240108@Malcolm: Remove SABA text for TVS [RedmineID: #199482]
 		- 20240129@Malcolm: Add result amendment - Licness/ Internal CSD [RedmineID: #197620]	
 		- 20240917@Jaden: Back scan to get messsages, no longer require keeping track of Settings (RedmineID: #209696)
-
-	Param's Explanation:
-	@MessageList (no longer required since #209696): 
-			<root>
-				<r JobIdentify="1" ReferenceValue="1" SettingName="LastVoidingHistoryCollectionId" />
-				<r JobIdentify="3" ReferenceValue="12" SettingName="LastVoidingHistoryCollectionId"/>
-			</root>
+		- 20240926@Jaden: Clean up, also return dataset from TicketVoiding_Request
 */
 BEGIN
 	SET NOCOUNT ON
@@ -42,11 +35,35 @@ BEGIN
 	SELECT VoidingHistoryCollectionId FROM VoidingHistoryCollection WITH (NOLOCK) 
 	WHERE CreatedDate > DATEADD(DAY, -2, GETDATE())
 
-	--Pass into next SP NAP_Chatbot_MissingMesssageInfo_Sel as @RequestList, it is used as reference data for the case of JobIdentify = 2
+	CREATE TABLE #BackScannedVoidingCollectionDetail (
+		VoidingHistoryCollectionId INT,
+		MessageId INT,
+		RequestId INT
+	)
+
+	INSERT INTO #BackScannedVoidingCollectionDetail (VoidingHistoryCollectionId, MessageId, RequestId)
 	SELECT VoidingHistoryCollectionId, MessageId, RequestId
 	FROM dbo.VoidingHistoryCollectionDetail AS vcd
 	WHERE vcd.VoidingHistoryCollectionId IN (SELECT VoidingHistoryCollectionId FROM #BackScannedVoidingCollection)	
 
+	--dataset 1
+	--Pass into next SP NAP_Chatbot_MissingMesssageInfo_Sel as @VoidingCollectionRequestList
+	--it is used as reference data for the case of JobIdentify = 2
+	SELECT * FROM #BackScannedVoidingCollectionDetail
+
+	-- Also retrieve corresponding requests from TicketVoiding_VoidingHistory
+	-- The VoidingHistoryCollection table updates every 20 seconds, which may cause us to miss some messages
+	-- This may lead to misidentifying these "haven't-been-inserted" messages as Void By BetID in the next step
+
+	--dataset 2
+	--Pass into next SP NAP_Chatbot_MissingMesssageInfo_Sel as @VoidingHistoryRequestList
+	--it is used as reference data for the case of JobIdentify = 2
+	SELECT vh.MessageId
+	FROM dbo.TicketVoiding_VoidingHistory vh
+	WHERE RequestId >= (SELECT MIN(RequestId) FROM #BackScannedVoidingCollectionDetail) 
+	  AND StatusId = 2 --get completed messages
+
 	DROP TABLE IF EXISTS #BackScannedVoidingCollection
+	DROP TABLE IF EXISTS #BackScannedVoidingCollectionDetail
 END
 GO

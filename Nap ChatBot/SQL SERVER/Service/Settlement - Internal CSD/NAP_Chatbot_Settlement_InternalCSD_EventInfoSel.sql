@@ -1,4 +1,4 @@
-﻿/*<info serverAlias="DBACC-bodb02" executers="bodbAdminNet" isFunction="0" isNested="0"></info>*/
+﻿/*<info serverAlias="DBACC-bodb02" executers="wsv_nap" isFunction="0" isNested="0"></info>*/
 CREATE PROCEDURE [dbo].[NAP_Chatbot_Settlement_InternalCSD_EventInfoSel]
 	@MessageInfo		XML
 	,@MessageDetail		XML
@@ -13,7 +13,8 @@ AS
 		- 20231031@Malcolm: Initialize SP [RedmineId: #195404]
 		- 20231204@Malcolm: Only get member level data [RedmineId: #191062]
 		- 20240201@Malcolm: Get data of 777 Site [RedmineId: #198905]
-		
+		- 20240710@Jaden: Support VS5 [RedmineId : #207626]
+		- 20240924@Jaden: Support VS2 [RedmineId : #210786]
 
 	Param's Explanation:
 		+ @MessageInfo
@@ -117,10 +118,19 @@ BEGIN
 	OPTION (OPTIMIZE FOR (@MessageInfo = NULL)) 
 	
 	;WITH CTE_CommonInfo AS (
-		SELECT m.MessageId, m.SiteNameGroup, m.MsgContentsType, m.MatchId, mt.kickofftime AS EventDate, m.Content_en,  m.Content_cs, ISNULL(s.SportName, '') AS SportName, t.TotalTickets, t.IsTest
+		SELECT m.MessageId, m.SiteNameGroup, m.MsgContentsType, m.MatchId, 
+			COALESCE(m3.StartTime, v3.EventTime, mt.kickofftime) AS EventDate, 
+			m.Content_en,  
+			m.Content_cs, 
+			COALESCE(s3.SportName, vs3.SportName, s.SportName, '') AS SportName, 
+			t.TotalTickets, t.IsTest
 		FROM #MessageInfo m
 			LEFT JOIN bodb02.dbo.match mt WITH(NOLOCK) ON mt.matchid = m.MatchId
+			LEFT JOIN bodb02.dbo.Match3rd m3 WITH(NOLOCK) ON m3.Match3rdId = m.MatchId
+			LEFT JOIN bodb02.dbo.VSRaceInfo v3 WITH(NOLOCK) ON v3.EventID = m.MatchId --let's hope this number won't crash with match3rd!
 			LEFT JOIN bodb02.dbo.Sports s WITH(NOLOCK) ON s.SportType = mt.sporttype
+			LEFT JOIN bodb02.dbo.Sports s3 WITH(NOLOCK) ON s3.SportType = m3.sporttype
+			LEFT JOIN bodb02.dbo.Sports vs3 WITH(NOLOCK) ON vs3.SportType = v3.sporttype
 			OUTER APPLY (
 				SELECT COUNT(DISTINCT md.TransId) AS TotalTickets, MIN(CONVERT(TINYINT, IsTest)) AS IsTest
 				FROM #MessageDetail md

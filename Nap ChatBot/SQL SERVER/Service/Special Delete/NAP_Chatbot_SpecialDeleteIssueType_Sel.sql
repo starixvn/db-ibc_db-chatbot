@@ -1,4 +1,4 @@
-/*<info serverAlias="DBACC-bodb02" executers="bodbAdminNet" isFunction="0" isNested="0"></info>*/
+/*<info serverAlias="DBACC-bodb02" executers="wsv_nap" isFunction="0" isNested="0"></info>*/
 ALTER PROCEDURE [dbo].[NAP_Chatbot_SpecialDeleteIssueType_Sel]
 	@Message		XML
 	,@MessageDetail XML
@@ -13,6 +13,8 @@ AS
 		- 20230817@Malcolm: Initialize SPs [RedmineId : #191355]
 		- 20230925@Malcolm: Add LeagueName [RedmineId : #193252]
 		- 20240108@Malcolm: Remove SABA text for TVS [RedmineID: #199482]
+		- 20240710@Jaden: Support VS5 [RedmineId : #207626]
+		- 20240924@Jaden: Support VS2 [RedmineId : #210786]
 
 	Param's Explanation:
 		+ @Message:
@@ -108,6 +110,16 @@ BEGIN
 			FROM bodb02.dbo.match m WITH(NOLOCK) 
 				INNER JOIN bodb02.dbo.league l WITH(NOLOCK) ON l.leagueid = m.leagueid
 			WHERE m.matchid = ms.MatchId
+			UNION
+			SELECT l.LeagueName, l.LeagueNameSC
+			FROM bodb02.dbo.Match3rd m WITH(NOLOCK)
+				INNER JOIN bodb02.dbo.League3rd l WITH(NOLOCK) ON l.League3rdId = m.League3rdId
+			WHERE m.Match3rdId = ms.MatchId
+			UNION
+			SELECT l.LeagueName, l.LeagueNameSC
+			FROM bodb02.dbo.VSRaceInfo m WITH(NOLOCK)
+				INNER JOIN bodb02.dbo.League3rd l WITH(NOLOCK) ON l.League3rdId = m.LeagueID
+			WHERE m.EventID = ms.MatchId
 		) AS l
 
 	SELECT MessageId, TargetId, Site, LeagueGroupId, IsChinaView, SpecialPlatform
