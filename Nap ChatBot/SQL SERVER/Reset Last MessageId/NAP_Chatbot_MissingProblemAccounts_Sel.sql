@@ -1,4 +1,4 @@
-/*<info serverAlias="DBCUST-CustDB" executers="bodbAdminNet" isFunction="0" isNested="0"></info>*/
+/*<info serverAlias="DBCUST-CustDB" executers="wsv_nap" isFunction="0" isNested="0"></info>*/
 ALTER PROCEDURE [dbo].[NAP_Chatbot_MissingProblemAccounts_Sel]
 	@FromLogId  BIGINT
 AS
@@ -13,6 +13,7 @@ AS
 		- 20220607@Malcolm: Get customer class from 1 to 7 [RedmineId: #173799]
 		- 20220607@Malcolm: Get customer class from 200 to 299 [RedmineId: #175973]
 		- 20230128@Malcolm: Scale for ChatBot [RedmineId : #181907] 
+		- 20241105@Tacy: CC - Change datatype [Redmine: #213308]
 */
 
 BEGIN
@@ -24,7 +25,7 @@ BEGIN
 
 	WAITFOR DELAY '00:00:00.200'
 
-	CREATE TABLE #CategoryConfig (CustomerClass SMALLINT PRIMARY KEY)
+	CREATE TABLE #CategoryConfig (CustomerClass INT PRIMARY KEY)
 
 	INSERT INTO #CategoryConfig (CustomerClass)
 	SELECT DISTINCT CustomerClass
