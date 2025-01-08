@@ -20,6 +20,7 @@ AS
 		- 20240531@Jaden: Initialize SP
 		- 20241107@Tacy: Implement Message Notifications Center for Result Amendment of basketball and E-Sports [#212035]
 		- 20241217@Tacy: NCB - Remark section [RedmineId: #214619]
+		- 20250108@Tacy: Offer Direct Member for Super and Master [Redmine: #215809]
 
 	Param's Explanation:
 		@NotificationID: inner param passed from NAP_Chatbot_ResultAmendment_InternalCSD_MessageSel
@@ -206,9 +207,9 @@ BEGIN
         /* 
         NotificationTarget also contains records of higher lines of the resettled customer (agent, master, super)
 
-        Cust | Agent | Master | Super | TargetSite (from agent's Site) | TransID of Cust
-        c1   | a1    | m1     | s1    | A                              | 10000, 10001
-        c2   | a2    | m1     | s1    | B                              | 10002
+        Cust | Agent | Master | Super | TargetSite | TransID of Cust
+        c1   | a1    | m1     | s1    | A          | 10000, 10001
+        c2   | a2    | m1     | s1    | B		   | 10002
 
         NotificationTarget:
         NotificationID | TargetID | TargetSite | ExtraInfo
@@ -232,16 +233,19 @@ BEGIN
           , [HasNegativeBalance] BIT
                 DEFAULT 0
         );
-        WITH NotificationTarget
-        AS (SELECT TargetSite
+        WITH NotificationTarget AS (
+			SELECT TargetSite
                  -- count the number of times the word "TransID" appears in ExtraInfo
                  , SUM((LEN(ExtraInfo) - LEN(REPLACE(ExtraInfo, 'TransID', ''))) / LEN('TransID')) AS BetCount
             FROM [dbo].[NotificationTarget] t
             WHERE t.NotificationID = @NotificationID
-              AND t.TargetID IN ( SELECT CustID FROM bodb02.dbo.vw_Customer c WITH (NOLOCK) WHERE c.RoleID = 2 )
-            GROUP BY TargetSite)
-           , BalanceNegativeHist
-        AS (SELECT [Site] FROM [dbo].[BalanceNegativeHist] WHERE SessionID = @SessionID)
+              AND t.TargetID IN ( SELECT CustID FROM bodb02.dbo.vw_Customer c WITH (NOLOCK) WHERE c.RoleID = 1 )
+            GROUP BY TargetSite
+		)
+        , BalanceNegativeHist AS (
+			SELECT [Site] FROM [dbo].[BalanceNegativeHist] 
+			WHERE SessionID = @SessionID
+		)
         INSERT INTO @DetailSiteInfo ([Site], [Type], [Label], [BetCount], [HasNegativeBalance])
         SELECT [site].[site]
              , CASE WHEN [site].[IsChinaView] = 1 THEN 'CV Licensee'               --ChinaView
