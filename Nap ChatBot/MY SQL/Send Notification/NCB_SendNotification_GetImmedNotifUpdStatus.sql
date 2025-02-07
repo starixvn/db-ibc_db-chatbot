@@ -18,7 +18,8 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_SendNotification_GetImmedNot
         Revisions:
 				- 20190417@Dominic: First Commit
 				- 20210513@Malcolm: Integrate Telegram [RedmineID: #151807]
-        
+				- 20241217@Tacy: NCB - Remark section [RedmineId: #214619]
+                
     */
 )
 SQL SECURITY DEFINER
@@ -79,7 +80,7 @@ NCB_SendNotification_GetImmedNotifUpdStatus:BEGIN
 	WHERE n.NotificationId = notificationID;
     
     #1st dataset: Main Notification Info such as title, content
-	SELECT n.NotificationID, n.Title, n.Content, _ChannelId AS ChannelId, _ChannelName AS ChannelName
+	SELECT n.NotificationID, n.Title, n.Content, n.FileName, _ChannelId AS ChannelId, _ChannelName AS ChannelName
     FROM Notification n
     WHERE n.NotificationID = notificationID;
 

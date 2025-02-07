@@ -7,6 +7,7 @@ CREATE DEFINER=`ChatBotSystem` PROCEDURE `NCB_Conversation_AddMessageLog`(
 	, IN fromConversationId VARCHAR(200)  
     , IN toConversationId VARCHAR(200)  
     , IN content TEXT CHARACTER SET utf8mb4
+    , IN FileName VARCHAR(2000) CHARACTER SET utf8mb4
 	, IN isSuccessfull BIT
     , IN errorMessage VARCHAR(4000) CHARACTER SET utf8mb4
 	, OUT errCode SMALLINT
@@ -25,6 +26,7 @@ CREATE DEFINER=`ChatBotSystem` PROCEDURE `NCB_Conversation_AddMessageLog`(
 				- 20190814@Quinn: First Commit
                 - 20191224@Oliver: Add ReferenceID Column -- RedmineID: #124743
 				- 20221212@Malcolm: Change data type [Redminid: #181498]
+                - 20241217@Tacy: NCB - Remark section [RedmineId: #214619]
         
     */
 )
@@ -38,6 +40,7 @@ BEGIN
 		FromConversationID,
         ToConversationID,
         Content,
+        FileName,
         SentTime,
         IsSuccessfull,
         ErrorMessage
@@ -47,6 +50,7 @@ BEGIN
 		fromConversationId,
         toConversationId,
         content,
+        FileName,
         currentTime,
         isSuccessfull,
         errorMessage

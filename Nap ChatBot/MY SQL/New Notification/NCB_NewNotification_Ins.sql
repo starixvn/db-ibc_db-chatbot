@@ -10,6 +10,7 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_NewNotification_Ins`(
 	,IN InRecipientIds 			TEXT
 	,IN InTitle 				VARCHAR(300) CHARACTER SET utf8mb4
 	,IN InContentLst 			JSON
+	,IN InFileName				VARCHAR(2000) CHARACTER SET utf8mb4
 	,IN InConfigSendTime 		DATETIME
     ,IN InSendImmediately 		BIT
 	,IN InCreatorID 			INT
@@ -35,7 +36,8 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_NewNotification_Ins`(
                 - 20220907@Malcolm: Update content [RedmineId: 174402]
 				- 20220705@Malcolm: Get those integrating/Upcomming licensees [RedmineId: 174425]		
                 - 20230913@Malcolm: Add Integration Method for licensee [RedmineID: #191062]
-				
+				- 20241217@Tacy: NCB - Remark section [RedmineId: #214619]
+                
 		Param's Explanation:
 		- InContentLst:
 				[
@@ -265,6 +267,7 @@ NCB_NewNotification_Ins:BEGIN
 		    ,ProductID
             ,Title
 		    ,Content
+            ,FileName
 			,ConfigSendTime
 			,SendImmediately
 			,CreatorID
@@ -278,6 +281,7 @@ NCB_NewNotification_Ins:BEGIN
 			,InProductId
 			,InTitle
 			,zContent
+            ,InFileName
 			,InConfigSendTime
 			,InSendImmediately
 			,InCreatorID
@@ -335,10 +339,11 @@ NCB_NewNotification_Ins:BEGIN
 				,'RecipientIDLst', 		InRecipientIds
 				,'Title', 				InTitle
 				,'ChannelId', 			zChannelId
-				,'content', 			InContentLst
+				,'Content', 			InContentLst
+                ,'FileName', 			InFileName
 				,'ConfigSendTime', 		InConfigSendTime
 				,'SendImmediately', 	InSendImmediately
-				,'notificationID', 		zNotificationId
+				,'NotificationID', 		zNotificationId
 		 );
                     
 		#Write User Log

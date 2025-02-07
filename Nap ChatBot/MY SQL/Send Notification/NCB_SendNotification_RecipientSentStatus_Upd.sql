@@ -23,7 +23,8 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_SendNotification_RecipientSe
 								"SentTime":"2019-04-01 12:23:22.000000",
 								"IsSuccess":false,
                                 "Retry":false,
-								"ErrMsg":"Bot Is Removed"
+								"ErrMsg":"Bot Is Removed",
+                                "FailedImages":""
 							},
 							{  
 								"NotificationID":1,
@@ -32,7 +33,8 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_SendNotification_RecipientSe
 								"ConversationBotID":1,
 								"SentTime":"2019-04-01 12:23:22.000000",
 								"Retry":false,
-								"ErrMsg":""
+								"ErrMsg":"",
+                                "FailedImages":""
 							}
 						]
         Revisions:
@@ -41,6 +43,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_SendNotification_RecipientSe
 				- 20200113@Oliver: showing MessageID, RedmineID: #126986
 				- 20200302@Oliver: get additional notificationTypeId - RedmineID: #129339
 				- 20221212@Malcolm: Change data type [RedmineId : #181498]
+                - 20241217@Tacy: NCB - Remark section [RedmineId: #214619]
         
     */
 )
@@ -81,6 +84,7 @@ NCB_SendNotification_RecipientSentStatus_Upd:BEGIN
                                                                     , IsSuccess TINYINT
 																	, Retry TINYINT
                                                                     , ErrMsg VARCHAR(4000) CHARACTER SET utf8mb4
+                                                                    , FailedImages VARCHAR(2000) CHARACTER SET utf8mb4
                                                                     , INDEX INDEX_ChatGroupID USING BTREE (NotificationID, RecipientID, ConversationGroupID)
 																);
 
@@ -95,6 +99,7 @@ NCB_SendNotification_RecipientSentStatus_Upd:BEGIN
 																		, IsSuccess 
                                                                         , Retry
 																		, ErrMsg
+                                                                        , FailedImages
 																	)
 		SELECT JSON_EXTRACT(SentStatus, CONCAT('$[', iLoop, '].NotificationID')) 
 						, JSON_UNQUOTE(JSON_EXTRACT(SentStatus, CONCAT('$[', iLoop, '].RecipientID')))
@@ -103,7 +108,9 @@ NCB_SendNotification_RecipientSentStatus_Upd:BEGIN
                         , JSON_UNQUOTE(JSON_EXTRACT(SentStatus, CONCAT('$[', iLoop, '].SentTime')))
                         , JSON_EXTRACT(SentStatus, CONCAT('$[', iLoop, '].IsSuccess'))
                         , JSON_EXTRACT(SentStatus, CONCAT('$[', iLoop, '].Retry'))
-                        , JSON_UNQUOTE(JSON_EXTRACT(SentStatus, CONCAT('$[', iLoop, '].ErrMsg')));
+                        , JSON_UNQUOTE(JSON_EXTRACT(SentStatus, CONCAT('$[', iLoop, '].ErrMsg')))
+                        , IF(JSON_UNQUOTE(JSON_EXTRACT(SentStatus, CONCAT('$[', iLoop, '].FailedImages')))='NULL',NULL
+							,JSON_UNQUOTE(JSON_EXTRACT(SentStatus, CONCAT('$[', iLoop, '].FailedImages'))));
                         
 		SET iLoop = iLoop +1;
         
@@ -116,6 +123,7 @@ NCB_SendNotification_RecipientSentStatus_Upd:BEGIN
                 AND  tmp.RecipientID = nrl.RecipientID
     SET nrl.SentTime = tmp.SentTime
 			, nrl.ErrMsg = tmp.ErrMsg
+            , nrl.FailedImages = tmp.FailedImages
             , nrl.StatusID = CASE 
 										WHEN tmp.Retry = 1 AND tmp.IsSuccess = 0 AND IFNULL(nrl.RetryTime, 0) < 5 THEN NOTIFICATION_STATUSID_RETRYING
 										WHEN tmp.IsSuccess = 0 THEN NOTIFICATION_STATUSID_ERROR
