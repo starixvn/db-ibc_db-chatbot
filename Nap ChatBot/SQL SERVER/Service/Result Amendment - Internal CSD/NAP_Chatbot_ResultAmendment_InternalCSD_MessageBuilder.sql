@@ -18,6 +18,7 @@ AS
 
 	Revisions:
 		- 20240531@Jaden: Initialize SP
+		- 20241217@Tacy: NCB - Remark section [RedmineId: #214619]
 
 	Param's Explanation:
 		@NotificationID: inner param passed from NAP_Chatbot_ResultAmendment_InternalCSD_MessageSel
@@ -312,9 +313,9 @@ BEGIN
 
     --get notification contents
     BEGIN
-        DECLARE @Contents TABLE (Content_en VARCHAR(MAX), Content_cs NVARCHAR(MAX))
-        INSERT INTO @Contents (Content_en, Content_cs)
-        SELECT Content_en, Content_cs FROM dbo.Notification WHERE NotificationID = @NotificationID
+        DECLARE @Contents TABLE (Content_en VARCHAR(MAX), Content_cs NVARCHAR(MAX), Remark NVARCHAR(4000))
+        INSERT INTO @Contents (Content_en, Content_cs, Remark)
+        SELECT Content_en, Content_cs, Remark FROM dbo.Notification WHERE NotificationID = @NotificationID
     END
 
     -- build content
@@ -329,6 +330,7 @@ BEGIN
               , @mReCalcTime              VARCHAR(MAX)  = ''
               , @mContent_en              VARCHAR(MAX)  = ''
               , @mContent_cs              NVARCHAR(MAX) = N''
+			  , @mRemark				  NVARCHAR(MAX) = ''
 
         SELECT @mMatchInfo =
             'MatchID: ' + CAST(MatchID AS VARCHAR) + CHAR(10) + 'Event Date: '
@@ -395,6 +397,7 @@ BEGIN
 
         SELECT @mContent_en = REPLACE(Content_en, '@@', '')
              , @mContent_cs = REPLACE(Content_cs, '@@', '')
+			 , @mRemark = Remark
         FROM @Contents
     END
 
@@ -426,7 +429,8 @@ BEGIN
               , CHAR(10)
               , CHAR(10)
                 ) + CONCAT(ISNULL(@mContent_en, ''), CHAR(10), CHAR(10))
-        + CONCAT(ISNULL(@mContent_cs, ''), CHAR(10))
+		+ CONCAT(ISNULL(@mContent_cs, ''), CHAR(10), CHAR(10))
+        + CONCAT(ISNULL('**Remark:** ' + @mRemark, ''), CHAR(10), CHAR(10))
 
     SELECT @IsTest = IsTest FROM @MatchInfo
 

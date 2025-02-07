@@ -15,6 +15,7 @@ AS
 
 	Revisions:
 		- 20240531@Jaden: Initialize SP
+		- 20241217@Tacy: NCB - Remark section [RedmineId: #214619]
 
 	Param's Explanation:
 		@LastModifiedTime: only select a number of notifications since this time (setting is from MySQL SystemSetting)
@@ -24,13 +25,18 @@ AS
 BEGIN
     SET NOCOUNT ON
 
-    DECLARE @Notifications TABLE (NotificationID INT NOT NULL PRIMARY KEY, MessageID INT NOT NULL, LastModifiedTime DATETIME)
+    DECLARE @Notifications TABLE (
+		NotificationID	INT NOT NULL PRIMARY KEY 
+		,MessageID		INT NOT NULL 
+		,[FileName]     NVARCHAR(2000) NULL
+		,LastModifiedTime DATETIME)
 
-    INSERT INTO @Notifications (NotificationID, MessageID, LastModifiedTime)
+    INSERT INTO @Notifications (NotificationID, MessageID, [FileName], LastModifiedTime)
     SELECT NotificationID
          , RefID AS MessageID
+		 , [Filename]
          , LastModifiedTime
-    FROM [Notification]
+    FROM [Notification] WITH (NOLOCK)
     WHERE StatusID = (SELECT StatusID FROM NotiStatus WHERE [Status] = 'Sent')
       AND NotificationType = 1 -- Msg
       AND LastModifiedTime > @LastModifiedTime
@@ -45,6 +51,7 @@ BEGIN
             DEFAULT 111 --hardcode as 111 for now
       , SiteNameGroup   VARCHAR(50)   NOT NULL
       , Content         NVARCHAR(MAX) NOT NULL
+      , [FileName]      NVARCHAR(2000) NULL
       , IsTest          BIT           NOT NULL
     )
 
@@ -68,10 +75,12 @@ BEGIN
                                                                               , @OutputContent = @Content OUTPUT
                                                                               , @IsTest = @Test OUTPUT
 
-            IF @Content IS NOT NULL BEGIN
-                INSERT INTO @Messages (NotificationID, MessageID, SiteNameGroup, Content, IsTest)
-                VALUES
-                (@NotificationID, @MessageID, 'Normal', @Content, @Test)
+            IF @Content IS NOT NULL
+			BEGIN
+                INSERT INTO @Messages (NotificationID, MessageID, SiteNameGroup, Content, [FileName], IsTest)
+                SELECT NotificationID, MessageID, 'Normal', @Content, [FileName], @Test
+				FROM @Notifications
+				WHERE NotificationID=@NotificationID
 
                 SET @Content = NULL
                 SET @Test = 1
@@ -83,10 +92,12 @@ BEGIN
                                                                               , @OutputContent = @Content OUTPUT
                                                                               , @IsTest = @Test OUTPUT
 
-            IF @Content IS NOT NULL BEGIN
-                INSERT INTO @Messages (NotificationID, MessageID, SiteNameGroup, Content, IsTest)
-                VALUES
-                (@NotificationID, @MessageID, '777', @Content, @Test)
+            IF @Content IS NOT NULL
+			BEGIN
+                INSERT INTO @Messages (NotificationID, MessageID, SiteNameGroup, Content, [FileName], IsTest)
+                SELECT NotificationID, MessageID, '777', @Content, [FileName], @Test
+				FROM @Notifications
+				WHERE NotificationID=@NotificationID
 
                 SET @Content = NULL
                 SET @Test = 1
@@ -115,6 +126,9 @@ BEGIN
     FROM @Notifications
     ORDER BY LastModifiedTime DESC
 
-    SELECT * FROM @Messages ORDER BY NotificationID
+    SELECT NotificationID, MessageID, MsgContentsType 
+      , SiteNameGroup, Content, [FileName], IsTest 
+	FROM @Messages 
+	ORDER BY NotificationID
 END
 GO

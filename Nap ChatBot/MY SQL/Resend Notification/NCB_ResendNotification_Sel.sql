@@ -24,6 +24,7 @@ CREATE DEFINER=`ChatBotSystem`@`%` PROCEDURE `NCB_ResendNotification_Sel`(
 				- 20210513@Malcolm: Integrate Telegram - RedmineID: #151807
 				- 20220218@Malcolm: Add Platform for licensee [RedmineID: #167946]
                 - 20230913@Malcolm: Add Integration Method for licensee [RedmineID: #191062]
+                - 20241217@Tacy: NCB - Remark section [RedmineId: #214619]
     */
 )
 BEGIN
@@ -68,6 +69,7 @@ BEGIN
 		,p.ProductName
 		,n.Title
         ,n.Content
+        ,n.FileName
 		,n.ChannelId
 		,cc.ChannelName
 		,1 AS SendImmediately

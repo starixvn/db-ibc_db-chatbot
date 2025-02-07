@@ -9,16 +9,16 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_ResultAmendment_InternalCSD_I
   ,OUT errMsg 				VARCHAR(200)
 
   /*
-    Creator   : 20240129@Malcolm
-    Task      : ResultAmendment for internal csd
+	Creator   : 20240129@Malcolm
+	Task      : ResultAmendment for internal csd
 	DB: DBCB-ChatBot
-    Params    :
-    - @message: [{"NotificationId":"1", "MessageId":"1", "SiteNameGroup":"777", "Content":"Content", "MsgContentsType":"111", "IsTest": 0}]
+
     Revisions :
-      - 20240129@Malcolm: Initialize SP [RedmineID: #197620]
-
-	Param's Explanation:
-
+		- 20240129@Malcolm: Initialize SP [RedmineID: #197620]
+		- 20241217@Tacy: NCB - Remark section [RedmineId: #214619]
+	
+    Param's Explanation:
+		- @message: [{"NotificationId":"1", "MessageId":"1", "SiteNameGroup":"777", "Content":"Content", "FileName":"img1.png", "MsgContentsType":"111", "IsTest": 0}]
   */
 )
 SQL SECURITY DEFINER
@@ -75,6 +75,7 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
         MNC_NotificationId INT,
         MessageId          INT,
         Content_Detail     TEXT,
+        FileName     	   VARCHAR(2000) CHARACTER SET utf8mb4,
         MsgContentsType    TINYINT UNSIGNED,
         SiteNameGroup      VARCHAR(30),
         IsTest             BOOL,
@@ -85,12 +86,14 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
     ( MNC_NotificationId
     , MessageId
     , Content_Detail
+    , FileName
     , MsgContentsType
     , SiteNameGroup
     , IsTest)
     SELECT t.MNC_NotificationId
          , t.MessageId
          , t.Content
+		 , IF(t.FileName='NULL',NULL,t.FileName) as FileName
          , t.MsgContentsType
          , t.SiteNameGroup
          , t.IsTest
@@ -103,6 +106,7 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
                      MNC_NotificationId INT PATH "$.NotificationId"
                      ,MessageId INT PATH "$.MessageId"
                      ,Content TEXT PATH "$.Content"
+                     ,FileName VARCHAR(2000) CHARACTER SET utf8mb4 PATH "$.FileName"
                      ,MsgContentsType TINYINT UNSIGNED PATH "$.MsgContentsType"
                      ,SiteNameGroup TEXT PATH "$.SiteNameGroup"
                      ,IsTest BOOL PATH "$.IsTest"
@@ -260,8 +264,11 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 			SELECT ChannelId INTO pChannelId FROM tmpMessageChannel m WHERE m.MNC_NotificationId = pMNCNotificationId AND m.SiteNameGroup = pSiteNameGroup LIMIT 1;
 
 			# Insert Notification
-			INSERT INTO Notification(NotificationTypeID, Title, Content, ConfigSendTime, SendImmediately, CreatorID, CreatedDate, Status, StatusID, ChannelId)
-			SELECT DISTINCT ct.NotificationTypeID, ct.TemplateTitle, REPLACE(REPLACE(ct.TemplateContent, '{General Info}', h.Content_Detail), '@@', '') AS Content, startTime, 0 AS SendImmediately, STARIXIT_CUSTID, CreatedDate, CREATING_NOTIFICATION_STATUS, CREATING_NOTIFICATION_STATUSID, pChannelId
+			INSERT INTO Notification(NotificationTypeID, Title, Content, FileName, ConfigSendTime, SendImmediately, CreatorID, CreatedDate, Status, StatusID, ChannelId)
+			SELECT DISTINCT ct.NotificationTypeID, ct.TemplateTitle
+				, REPLACE(REPLACE(ct.TemplateContent, '{General Info}', h.Content_Detail), '@@', '') AS Content
+                , h.FileName
+                , startTime, 0 AS SendImmediately, STARIXIT_CUSTID, CreatedDate, CREATING_NOTIFICATION_STATUS, CREATING_NOTIFICATION_STATUSID, pChannelId
 			FROM json_message h
 				INNER JOIN tmp_MsgContentsTypeTemplate ct ON ct.MsgContentsType = h.MsgContentsType AND ct.SiteNameGroup = h.SiteNameGroup
 			WHERE h.MNC_NotificationId = pMNCNotificationId AND h.SiteNameGroup = pSiteNameGroup;
@@ -397,14 +404,15 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 		NotificationID 		INT UNSIGNED
         ,Title 				VARCHAR(300)
         ,Content 			MEDIUMTEXT
+        ,FileName     	    VARCHAR(2000) CHARACTER SET utf8mb4
         ,ChannelID 			TINYINT UNSIGNED
         ,ChannelName 		VARCHAR(45)
         ,NotificationTypeID SMALLINT
         ,SiteNameGroup		VARCHAR(50)
     );
 
-	INSERT INTO tmp_NotificationCarbon (NotificationID, Title, Content, ChannelID, ChannelName, NotificationTypeID, SiteNameGroup)
-	SELECT DISTINCT n.NotificationID, n.Title, n.Content, n.ChannelID, c.ChannelName, n.NotificationTypeID, gc.SiteNameGroup
+	INSERT INTO tmp_NotificationCarbon (NotificationID, Title, Content, FileName, ChannelID, ChannelName, NotificationTypeID, SiteNameGroup)
+	SELECT DISTINCT n.NotificationID, n.Title, n.Content, n.FileName, n.ChannelID, c.ChannelName, n.NotificationTypeID, gc.SiteNameGroup
 	FROM Notification n
 		INNER JOIN ConversationChannel c ON c.ChannelID = n.ChannelId
         INNER JOIN NotificationChatGroupType ng ON ng.NotificationTypeID = n.NotificationTypeID
@@ -414,7 +422,7 @@ NCB_ResultAmendment_InternalCSD_Import:BEGIN
 	SELECT ChatGroupConversationID, ServiceUrl, ChannelID, ChannelName, BotConversationID, BotName, SiteNameGroup
     FROM tmp_ConversationGroupCarbon;
 
-    SELECT NotificationID, Title, Content, ChannelID, ChannelName, SiteNameGroup
+    SELECT NotificationID, Title, Content, FileName, ChannelID, ChannelName, SiteNameGroup
     FROM tmp_NotificationCarbon;
 
 	#Get Finish Time to calculate execution duration

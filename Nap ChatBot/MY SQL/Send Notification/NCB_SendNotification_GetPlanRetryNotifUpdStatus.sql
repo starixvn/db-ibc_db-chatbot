@@ -21,6 +21,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_SendNotification_GetPlanRetr
 				- 20200302@Oliver: get additional notificationTypeId - RedmineID: #129339
 				- 20210513@Malcolm: Integrate Telegram - RedmineID: #151807
 				- 20240520@Jaden: Increase size of notificationIds
+                - 20241217@Tacy: NCB - Remark section [RedmineId: #214619]
         
     */
 )
@@ -104,7 +105,7 @@ NCB_SendNotification_GetPlanRetryNotifUpdStatus:BEGIN
 	 WHERE n.StatusID = NOTIFICATION_STATUSID_RETRYING;
     
     #1st dataset: Main Notification Info such as title, content
-	SELECT n.NotificationID, n.Title, n.Content, n.ChannelId, c.ChannelName
+	SELECT n.NotificationID, n.Title, n.Content, n.FileName, n.ChannelId, c.ChannelName
     FROM Notification n
 		INNER JOIN ConversationChannel c ON c.ChannelId = n.ChannelId
     WHERE n.NotificationID IN (
@@ -155,6 +156,7 @@ NCB_SendNotification_GetPlanRetryNotifUpdStatus:BEGIN
                     , bot.ConversationBotID AS BotID 
                     , bot.Name AS BotName
                     , bot.ConversationID AS BotConversationID 
+                    , nrl.FailedImages
                     , CASE 
 								WHEN gri.ChatGroupTypeID IS NULL  THEN 1 #Not Mapped
                                 WHEN gri.ChatGroupTypeID <> nrl.ChatGroupTypeID THEN 5 #Chat Group Type has been changed
@@ -184,6 +186,7 @@ NCB_SendNotification_GetPlanRetryNotifUpdStatus:BEGIN
                     , bot.ConversationBotID AS BotID 
                     , bot.Name AS BotName
                     , bot.ConversationID AS BotConversationID 
+                    , nrl.FailedImages
                     , CASE 
 								WHEN gri.ChatGroupTypeID IS NULL  OR cgr.RecipientID IS NULL THEN 1 #Not Mapped
                                 WHEN gri.ChatGroupTypeID <> nrl.ChatGroupTypeID THEN 5 #Chat Group Type has been changed
