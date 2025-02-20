@@ -1,0 +1,1 @@
+Nap ChatBot\SQL SERVER\Service\Result Amendment - Internal CSD\NAP_Chatbot_ResultAmendment_InternalCSD_MessageSel.sql

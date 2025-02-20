@@ -18,6 +18,7 @@ AS
 
 	Revisions:
 		- 20240531@Jaden: Initialize SP
+		- 20241107@Tacy: Implement Message Notifications Center for Result Amendment of basketball and E-Sports [#212035]
 		- 20241217@Tacy: NCB - Remark section [RedmineId: #214619]
 
 	Param's Explanation:
@@ -116,14 +117,16 @@ BEGIN
         DECLARE @AmendmentInfo TABLE
         (
             ResourceID  NVARCHAR(100) PRIMARY KEY --might have multiple Amendments for one match/one notificationd
+          , ResourceOrder INT
           , ResultName  NVARCHAR(500)
           , WrongValue  NVARCHAR(500)
           , ActualValue NVARCHAR(500)
           , CalcTime    DATETIME
           , ReCalcTime  DATETIME
         )
-        INSERT INTO @AmendmentInfo (ResourceID, ResultName, WrongValue, ActualValue)
+        INSERT INTO @AmendmentInfo (ResourceID, ResourceOrder, ResultName, WrongValue, ActualValue)
         SELECT ResourceID
+			 , ResourceOrder
              , ResultName
              , WrongValue
              , ActualValue
@@ -132,6 +135,7 @@ BEGIN
         WITH
            (
            ResourceID NVARCHAR(100) '$.ResourceID'
+         , ResourceOrder NVARCHAR(50) '$.ResourceOrder'
          , ResultName NVARCHAR(500) '$.ResultName_en'
          , WrongValue NVARCHAR(500) '$.WrongValue_en'
          , ActualValue NVARCHAR(500) '$.ActualValue_en'
@@ -371,15 +375,15 @@ BEGIN
                 @mTotalAffectedBetsCounts + CHAR(10)
                 + CONCAT('\- Negative Balance: ', 'x', @NegativeBalanceLicenseeCount, '(Licensee)')
 
-        SELECT @mWrongResult = STRING_AGG(CONCAT('\- ', ResultName, ': ', WrongValue), CHAR(10))
-             , @mActualResult = STRING_AGG(CONCAT('\- ', ResultName, ': ', ActualValue), CHAR(10))
+        SELECT @mWrongResult = STRING_AGG(CONCAT('\- ', ResultName, ': ', WrongValue), CHAR(10))WITHIN GROUP(ORDER BY ResourceOrder)
+             , @mActualResult = STRING_AGG(CONCAT('\- ', ResultName, ': ', ActualValue), CHAR(10))WITHIN GROUP(ORDER BY ResourceOrder)
         FROM @AmendmentInfo
 
         SELECT @mCalcTime = STRING_AGG(str, CHAR(10))
         FROM
            (
            SELECT '\- Calculation time: ' + FORMAT(CalcTime, 'MMM dd, yyyy hh:mm:ss tt') + ' ['
-                  + STRING_AGG(ResultName + '; ' + WrongValue, ' | ')WITHIN GROUP(ORDER BY CalcTime)
+                  + STRING_AGG(ResultName + '; ' + WrongValue, ' | ')WITHIN GROUP(ORDER BY CalcTime, ResourceOrder)
                   + ']'
            FROM @AmendmentInfo
            GROUP BY CalcTime
@@ -389,7 +393,7 @@ BEGIN
         FROM
            (
            SELECT '\- ReCalculation time: ' + FORMAT(ReCalcTime, 'MMM dd, yyyy hh:mm:ss tt') + ' ['
-                  + STRING_AGG(ResultName + '; ' + ActualValue, ' | ')WITHIN GROUP(ORDER BY ReCalcTime)
+                  + STRING_AGG(ResultName + '; ' + ActualValue, ' | ')WITHIN GROUP(ORDER BY ReCalcTime, ResourceOrder)
                   + ']'
            FROM @AmendmentInfo
            GROUP BY ReCalcTime
