@@ -14,6 +14,7 @@ AS
 		- 20240329@Jaden: Account for the case of filterBy = 2 (System parlay void) from TVS changes [RedmineID: #203054]
 		- 20240904@Jaden: Add support for void by betid [RedmineID: #209696]
 		- 20240710@Jaden: Support VS5 [RedmineId : #207626]
+		- 20250108@Tacy: Offer Direct Member for Super and Master [Redmine: #215809]
 
 	Param's Explanation:
 		+ @MessageInfo
@@ -666,7 +667,7 @@ BEGIN
 				 ELSE c.site END AS site
 				,CASE WHEN s.custId IS NULL THEN 0 ELSE 1 END AS isDeposit
 			FROM #VoidedTicket t
-				INNER JOIN dbo.Customer c WITH(NOLOCK) ON t.recommend = c.custId
+				INNER JOIN dbo.Customer c WITH(NOLOCK) ON t.CustId = c.custId
 				INNER JOIN dbo.Site st WITH(NOLOCK) ON st.site = c.site
 				LEFT JOIN dbo.Dep_CustSuper s WITH (NOLOCK) ON c.srecommend = s.custId
 		), CTE_SiteList AS (
