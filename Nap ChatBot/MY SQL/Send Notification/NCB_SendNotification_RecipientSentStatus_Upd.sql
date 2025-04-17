@@ -44,6 +44,7 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE  NCB_SendNotification_RecipientSe
 				- 20200302@Oliver: get additional notificationTypeId - RedmineID: #129339
 				- 20221212@Malcolm: Change data type [RedmineId : #181498]
                 - 20241217@Tacy: NCB - Remark section [RedmineId: #214619]
+                - 20250417@Tacy: NCB - Extend retrytime to 10 attempts to prevent message sending errors [RedmineId: #224529]
         
     */
 )
@@ -125,12 +126,12 @@ NCB_SendNotification_RecipientSentStatus_Upd:BEGIN
 			, nrl.ErrMsg = tmp.ErrMsg
             , nrl.FailedImages = tmp.FailedImages
             , nrl.StatusID = CASE 
-										WHEN tmp.Retry = 1 AND tmp.IsSuccess = 0 AND IFNULL(nrl.RetryTime, 0) < 5 THEN NOTIFICATION_STATUSID_RETRYING
+										WHEN tmp.Retry = 1 AND tmp.IsSuccess = 0 AND IFNULL(nrl.RetryTime, 0) < 10 THEN NOTIFICATION_STATUSID_RETRYING
 										WHEN tmp.IsSuccess = 0 THEN NOTIFICATION_STATUSID_ERROR
 										WHEN tmp.IsSuccess = 1 THEN NOTIFICATION_STATUSID_SENT
 									END
 			 , nrl.Status = CASE 
-										WHEN tmp.Retry = 1 AND tmp.IsSuccess = 0 AND IFNULL(nrl.RetryTime, 0) < 5 THEN NOTIFICATION_STATUS_RETRYING
+										WHEN tmp.Retry = 1 AND tmp.IsSuccess = 0 AND IFNULL(nrl.RetryTime, 0) < 10 THEN NOTIFICATION_STATUS_RETRYING
 										WHEN tmp.IsSuccess = 0 THEN NOTIFICATION_STATUS_ERROR
 										WHEN tmp.IsSuccess = 1 THEN NOTIFICATION_STATUS_SENT
 									END;
