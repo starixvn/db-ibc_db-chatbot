@@ -14,6 +14,7 @@ AS
 		- 20220607@Malcolm: Get customer class from 1 to 7 [RedmineId: #173799]
 		- 20220607@Malcolm: Get customer class from 200 to 299 [RedmineId: #175973]
 		- 20241105@Tacy: CC - Change datatype [Redmine: #213308]
+		- 20250610@Tacy: Performance Tunning [Redmine: #229643]
 */
 
 BEGIN
@@ -43,10 +44,13 @@ BEGIN
 		AND d.LogID <= @MaxLogId
 	ORDER BY d.LogID ASC
 
-	SELECT t.LogID, t.custid, ISNULL(SUBSTRING(c.username2, CHARINDEX('$', c.username2) + 1, 50), '')  AS username2 , c.username, ISNULL(d.site, '') AS [SiteName], t.CategoryID, t.CustomerClass, t.CreatedDate, CASE WHEN c.currency IN (20, 27, 28) THEN 1 ELSE 0 END AS IsTest
+	SELECT t.LogID, t.custid
+			, ISNULL(SUBSTRING(c.username2, CHARINDEX('$', c.username2) + 1, 50), '')  AS username2 
+			, c.username, c.site AS [SiteName]
+			, t.CategoryID, t.CustomerClass, t.CreatedDate
+			, CASE WHEN c.currency IN (20, 27, 28) THEN 1 ELSE 0 END AS IsTest
 	FROM @Tmp t
 		INNER JOIN dbo.Customer c WITH(NOLOCK) ON t.custid = c.custid
-		LEFT JOIN dbo.Dep_CustSuper d WITH(NOLOCK) ON d.custid = c.srecommend
 	ORDER BY t.LogID ASC
 
 	SELECT DISTINCT t.CategoryID FROM @Tmp t

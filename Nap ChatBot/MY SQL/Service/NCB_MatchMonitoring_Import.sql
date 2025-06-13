@@ -15,11 +15,16 @@ CREATE DEFINER = 'ChatBotSystem'@'%' PROCEDURE NCB_MatchMonitoring_Import(
 	Task      : NAP ChatBot - Import data from monitored Match
 	DB: DBCB-ChatBot
 	Params    :
-	  - @Message : [{"LogId":1, "MatchId":123, "HomeTeam":"LA Clippers", "AwayTeam":"NewYork Knicks", "EventDate":"2025-05-19 18:30:00", 
-					"IsLive":0, "HomeScore":0, "AwayScore":0, "BaseCurrency":"PHP", "IsTest":0,
-					"NegProfitForecast":1000000.02, "HomeStakePercentage":70.00, "AwayStakePercentage":30.00}]
+	  - @Message : 
+			  [
+					{"LogId":1, "LicenseeName":"Athena000", "MatchId":123, "HomeTeam":"LA Clippers", "AwayTeam":"NewYork Knicks", "EventDate":"2025-05-19 18:30:00", "IsLive":0, "HomeScore":0, "AwayScore":0, "BaseCurrency":"PHP", "NegProfitForecast":1000000.02,
+					"HomeStakePercentage":70.00, "AwayStakePercentage":30.00}, "IsTest":1,
+					"SettingInfo":[{"SettingName":"Test2","AmountThreshold":0.00,"BaseCurrency":"USD","ConditionType":0,"RatioThreshold":1.00}]
+				]
+
 	Revisions :
 	  - 20250523@Tacy: Initialize SP [Redmine: #227856]
+	  - 20250605@Tacy: Change Message and Template of Match Monitoring Notification [Redmine: #229643]
 */
 )
 SQL SECURITY DEFINER
@@ -79,25 +84,33 @@ NCB_MatchMonitoring_Import:BEGIN
         AwayScore             SMALLINT,
         BaseCurrency          VARCHAR(10),
         IsTest                BIT,
-        NegProfitForecast     DECIMAL(20,4),
+        NegProfitForecast     DECIMAL(20,2),
         HomeStakePercentage             DECIMAL(5,2),
         AwayStakePercentage             DECIMAL(5,2),
         LicenseeName          VARCHAR(50),
         RecipientID           INT,
-        LicenseeStatusID      TINYINT UNSIGNED
+        LicenseeStatusID      TINYINT UNSIGNED,
+        SettingName          VARCHAR(200) CHARACTER SET 'utf8mb4',
+        AmountThreshold      DECIMAL(20,2),
+        SettingBaseCurrency  VARCHAR(10),
+        ConditionType        VARCHAR(10),
+        RatioThreshold       DECIMAL(5,2)
     );
-     
-	INSERT INTO tmp_Message (
+         INSERT INTO tmp_Message (
         LogId, MatchId, HomeTeam, AwayTeam, EventDate,
         IsLive, HomeScore, AwayScore, BaseCurrency, IsTest,
         NegProfitForecast, HomeStakePercentage, AwayStakePercentage,
-        LicenseeName
+        LicenseeName, SettingName, AmountThreshold, SettingBaseCurrency,
+        ConditionType, RatioThreshold
     )   
     SELECT 
         t.LogId, t.MatchId, t.HomeTeam, t.AwayTeam, t.EventDate,
         t.IsLive, t.HomeScore, t.AwayScore, t.BaseCurrency, t.IsTest,
         t.NegProfitForecast, t.HomeStakePercentage, t.AwayStakePercentage,
-        t.LicenseeName
+        t.LicenseeName,
+        t.SettingName, t.AmountThreshold, t.SettingBaseCurrency,
+        CASE WHEN t.ConditionType = 1 THEN 'And' ELSE 'Or' END, 
+		t.RatioThreshold
     FROM 
         JSON_TABLE
         (
@@ -118,7 +131,14 @@ NCB_MatchMonitoring_Import:BEGIN
                 NegProfitForecast     DECIMAL(20,2)   PATH "$.NegProfitForecast",
                 HomeStakePercentage             DECIMAL(5,2)    PATH "$.HomeStakePercentage",
                 AwayStakePercentage             DECIMAL(5,2)    PATH "$.AwayStakePercentage",
-                LicenseeName          VARCHAR(50)     PATH "$.LicenseeName"
+                LicenseeName          VARCHAR(50)     PATH "$.LicenseeName",
+                NESTED PATH "$.SettingInfo[*]" COLUMNS (
+                    SettingName          VARCHAR(200) CHARACTER SET 'utf8mb4' PATH "$.SettingName",
+                    AmountThreshold      DECIMAL(20,2)   PATH "$.AmountThreshold",
+                    SettingBaseCurrency  VARCHAR(10)     PATH "$.BaseCurrency",
+                    ConditionType        TINYINT        PATH "$.ConditionType",
+                    RatioThreshold       DECIMAL(5,2)    PATH "$.RatioThreshold"
+                )
             )
         ) AS t;
 
@@ -256,15 +276,21 @@ NCB_MatchMonitoring_Import:BEGIN
     )
     SELECT 
         h.LogId
-        ,h.MatchId
-        ,CONCAT(
-        #  CASE WHEN h.IsTest = 1 THEN '[TEST] ' ELSE '' END,
+        ,h.MatchId        
+		,CONCAT(
             HomeTeam, ' - ', AwayTeam,
             ' (', CASE WHEN IsLive = 1 THEN CONCAT('Live ', HomeScore, '-', AwayScore) ELSE 'Non-Live' END, ') | ',
             DATE_FORMAT(EventDate, '%c/%d/%Y %H:%i'), ' (GMT+8) | ',
-            BaseCurrency, ' | ',
             REPLACE(FORMAT(NegProfitForecast, 2), '.00', ''), ' | ',
-            REPLACE(CAST(HomeStakePercentage AS CHAR), '.00', ''), '% : ', REPLACE(CAST(AwayStakePercentage AS CHAR), '.00', ''), '%'
+			BaseCurrency, ' | ',
+            REPLACE(CAST(HomeStakePercentage AS CHAR), '.00', ''), '% : ', REPLACE(CAST(AwayStakePercentage AS CHAR), '.00', ''), '%',
+			CHAR(10),
+            '     **Reached Criteria:** ', h.SettingName, ' | ', 
+            REPLACE(FORMAT(h.AmountThreshold, 2), '.00', ''), ' | ', 
+			h.SettingBaseCurrency, ' | ',
+            h.ConditionType, ' | ',
+            REPLACE(FORMAT(h.RatioThreshold, 2), '.00', ''), '%',
+			CHAR(10)
         ) AS MatchInfo
         ,h.RecipientID
         ,gr.ConversationGroupID
@@ -353,8 +379,8 @@ NCB_MatchMonitoring_Import:BEGIN
         Status,
         ChannelId,
         OrderId
-    FROM CTE_Group;
-
+    FROM CTE_Group;    
+	
 	DROP TEMPORARY TABLE IF EXISTS tmp_Notification;
     CREATE TEMPORARY TABLE tmp_Notification 
     (
