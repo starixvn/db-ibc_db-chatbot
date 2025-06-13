@@ -86,7 +86,7 @@ BEGIN
         INNER JOIN bodb02.dbo.Team ta WITH(NOLOCK) ON ta.teamid = m.awayid
 		CROSS APPLY OPENJSON (h.ExtraInfo) 
 			WITH (
-					NegativeProfit		DECIMAL(10,2),
+					NegativeProfit		DECIMAL(20,2),
 					BaseCurrency		VARCHAR(10),
 					HomeStakePercentage DECIMAL(5,2),
 					AwayStakePercentage DECIMAL(5,2)
