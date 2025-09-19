@@ -4,6 +4,7 @@ GO
 
 ALTER PROCEDURE [dbo].[NAP_Chatbot_ResultAmendment_InternalCSD_MessageSel]
 @LastModifiedTime      DATETIME
+, @Environment VARCHAR(10) = 'LIVE'
 , @NewLastModifiedTime DATETIME = NULL OUTPUT
 AS
 
@@ -16,6 +17,7 @@ AS
 	Revisions:
 		- 20240531@Jaden: Initialize SP
 		- 20241217@Tacy: NCB - Remark section [RedmineId: #214619]
+		- 20250918@Tacy: RA - Support UAT env [RedmineID: #228007]
 
 	Param's Explanation:
 		@LastModifiedTime: only select a number of notifications since this time (setting is from MySQL SystemSetting)
@@ -31,6 +33,18 @@ BEGIN
 		,[FileName]     NVARCHAR(2000) NULL
 		,LastModifiedTime DATETIME)
 
+	DECLARE @Sports TABLE (SportType SMALLINT, ActionType TINYINT)
+	
+	INSERT INTO @Sports (SportType, ActionType)
+	SELECT DISTINCT SportType, ActionType
+	FROM NotiTemplateMapping WITH (NOLOCK)
+	WHERE NotificationType=1
+	UNION ALL
+	SELECT DISTINCT SportType, ActionType
+	FROM NotiTemplateMapping_UAT WITH (NOLOCK)
+	WHERE NotificationType=1
+	 AND @Environment = 'UAT'
+	
     INSERT INTO @Notifications (NotificationID, MessageID, [FileName], LastModifiedTime)
     SELECT NotificationID
          , RefID AS MessageID
@@ -40,6 +54,18 @@ BEGIN
     WHERE StatusID = (SELECT StatusID FROM NotiStatus WHERE [Status] = 'Sent')
       AND NotificationType = 1 -- Msg
       AND LastModifiedTime > @LastModifiedTime
+
+	DELETE n
+	FROM @Notifications n
+		INNER JOIN NotificationExtra AS ex WITH (NOLOCK) ON n.NotificationID=ex.NotificationID
+		CROSS APPLY OPENJSON(ex.ExtraInfo)
+			WITH
+				(
+					SportType SMALLINT '$.SportType'
+					, ActionType TINYINT '$.ActionType'
+				) AS ext
+		LEFT JOIN @Sports s ON s.SportType=ext.SportType AND s.ActionType=ext.ActionType
+	WHERE s.SportType IS NULL
 
     DECLARE @NotificationID INT
     DECLARE @MessageID INT
