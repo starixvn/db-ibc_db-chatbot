@@ -1,4 +1,4 @@
-/*<info serverAlias="DBCust-CustDB" executers="bodbAdminNet" viewers="" isFunction="0"></info>*/
+/*<info serverAlias="DBCust-CustDB" executers="wsv_nap" viewers="" isFunction="0" isNested="0"></info>*/
 ALTER PROCEDURE [dbo].[Task_Chatbot_CustWinLossReachLimitIns] 	
 	@SettingStatus TINYINT = 0,
 	@Banlance_Data VARCHAR(MAX) = NULL, --Json format
@@ -17,6 +17,7 @@ AS
 		- 20230414@Eden: Scale out DBTRANS for Credit [Redmine: #181595]
 		- 20230728@Eden: Simplify Live Casino Customer Setting [RedmineID: #189389]
 		- 20230928@Luke: Modify SPs to adapt in-house replication setup [Redmine: #194414]
+		- 20251105@Dave: Adjust Live Casino PT & Commission [Redmine: #242260]
 		
 	-Parameter's Explanation:
 		@Banlance_Data = '[
@@ -34,6 +35,7 @@ BEGIN
 	SET NOCOUNT ON;	
 		
 	CREATE TABLE #tmpData (custid INT, bettype INT, Winlost MONEY, WinlostDate DATETIME, BettypeRefSetting INT,
+							siteid int,  site varchar(50), currency smallint,
 							PRIMARY KEY(custid,bettype))
 	CREATE TABLE #CustWinLossLimitReach (Custid INT, 
 										bettype INT, 
@@ -72,22 +74,43 @@ BEGIN
 
 	CREATE TABLE #ProductSettingDetail(
 		[SportType] [smallint],
-		[BetType] [smallint]
+		[BetType] [smallint],
+		[siteid] [int],
+		[site] [varchar](50),
+		[currency] [smallint]
+	);
+
+	UPDATE td
+	SET site = Cus.site,
+		siteid = si.siteid,
+		currency = Cus.currency
+	FROM #tmpData AS td 
+		INNER JOIN dbo.Customer AS Cus WITH (NOLOCK)
+			ON td.custid = Cus.custid
+		INNER JOIN dbo.Site AS si WITH (NOLOCK)
+			ON Cus.site = si.Site;
+
+	WITH tmp AS(
+		SELECT DISTINCT site, siteid, currency
+		FROM #tmpData
 	)
-	INSERT INTO #ProductSettingDetail(SportType,BetType)
-	SELECT SportType,bettype
-	FROM dbo.f_CustSetting_ProductSettingDetailSel(@SettingStatus) d 
+	INSERT INTO #ProductSettingDetail(SportType,BetType,site,siteid,currency)
+	SELECT d.SportType, d.bettype, tmp.site, tmp.siteid, tmp.currency
+	FROM tmp
+		CROSS APPLY dbo.f_CustSetting_ProductProfileSel(NULL, @SettingStatus, tmp.siteid, tmp.currency) d 
 		INNER JOIN ProductSettingType t WITH(NOLOCK) ON d.SettingType = t.SettingType
 	WHERE t.SettingName = 'Win Loss Limit'
 
 	UPDATE t 
 	SET t.BettypeRefSetting = ISNULL(d.BetType,t.bettype) 
 	FROM #tmpData t
-		LEFT JOIN SportBettypeSettingMatrix mt WITH(NOLOCK) 
+		LEFT JOIN dbo.f_CustSetting_SportBetTypeSettingMatrix(@SettingStatus) mt
 			ON t.bettype = mt.bettype
-			AND mt.isLicensee = 0 AND mt.Site = 'ALL' AND mt.isDeleted = 0
+			AND mt.isLicensee = 0 AND mt.Site IN ('All', t.site) AND mt.isDeleted = 0
 		LEFT JOIN #ProductSettingDetail d  
 			ON mt.BettypeRefWinlossLimit  = d.BetType
+			AND t.siteid = d.siteid
+			AND t.currency = d.currency
 	
 	;WITH Tmp AS (
 	SELECT t.custid, t.bettype, 
@@ -97,7 +120,7 @@ BEGIN
 	FROM #tmpData t
 		INNER JOIN custinfo ci WITH(NOLOCK) ON t.custid = ci.custid
 		INNER JOIN CustWinLossLimit_Member cm WITH(NOLOCK) ON t.custid = cm.custid AND t.BettypeRefSetting = cm.bettype
-		INNER JOIN #ProductSettingDetail d ON cm.SportType = d.SportType AND cm.BetType = d.BetType
+		INNER JOIN #ProductSettingDetail d ON cm.SportType = d.SportType AND cm.BetType = d.BetType AND t.siteid = d.siteid AND t.currency = d.currency
 	)
 	INSERT INTO #CustWinLossLimitReach(custid,bettype,winlostdate,winlost,credit,MaxLossLimit,MaxWinLimit,WinPercent,LossPercent)
 	SELECT custid,bettype,winlostdate,winlost,credit,MaxLossLimit,MaxWinLimit,WinPercent,LossPercent
