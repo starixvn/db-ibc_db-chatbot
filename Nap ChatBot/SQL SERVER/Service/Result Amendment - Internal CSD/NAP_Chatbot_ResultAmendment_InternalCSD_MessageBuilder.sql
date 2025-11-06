@@ -22,6 +22,7 @@ AS
 		- 20241217@Tacy: NCB - Remark section [RedmineId: #214619]
 		- 20250108@Tacy: Offer Direct Member for Super and Master [Redmine: #215809]
 		- 20250605@Tacy: RA - Fast Market and Time Machine [Redmine: #228007]
+		- 20251105@Tacy: Upgrade SprottypeID Datatype [RedmineID: #241348]
 
 	Param's Explanation:
 		@NotificationID: inner param passed from NAP_Chatbot_ResultAmendment_InternalCSD_MessageSel
@@ -65,7 +66,7 @@ BEGIN
           , MatchNameEN    NVARCHAR(500)
           , AffectedResult NVARCHAR(MAX)
           , IsTest         BIT
-          , SportType      TINYINT
+          , SportType      SMALLINT
         )
         INSERT INTO @MatchInfo (MatchID, EventDate, KOTime, LeagueNameEN, MatchNameEN, AffectedResult, IsTest, SportType)
         SELECT ext.MatchID
@@ -88,7 +89,7 @@ BEGIN
          , NeutralEN NVARCHAR(10) '$.NeutralEN'
          , AwayNameEN NVARCHAR(500) '$.AwayNameEN'
          , IsTest BIT '$.IsTest'
-         , SportType TINYINT '$.SportType'
+         , SportType SMALLINT '$.SportType'
          , AffectedResult NVARCHAR(MAX) AS JSON
            ) AS ext
         WHERE ex.NotificationID = @NotificationID
@@ -100,7 +101,8 @@ BEGIN
         FROM @MatchInfo
 
         IF @Debug = 1
-            SELECT * FROM @MatchInfo
+            SELECT MatchID, EventDate, KOTime, LeagueNameEN, MatchNameEN, AffectedResult, IsTest, SportType 
+            FROM @MatchInfo
     END
 
     BEGIN --error check
@@ -149,7 +151,7 @@ BEGIN
                     r.ResourceId,
                     r.Resource_en,
                     r.Resource_cs,
-                    ROW_NUMBER() OVER (ORDER BY r.ResourceId) - 1 AS BitPosition
+                    ROW_NUMBER() OVER (ORDER BY r.ResourceId ASC) - 1 AS BitPosition
                 FROM dbo.f_NAP_Chatbot_RefResource_Sel('ResultSettlement') r
                 WHERE ResourceId LIKE 'b[0-7]'
 				UNION ALL
@@ -339,11 +341,14 @@ BEGIN
 
         IF @Debug = 1
         BEGIN
-            SELECT *
+            SELECT SettlementLogID, SessionID, StatusID, SiteDBGroupID, SeqNo, CreatedTime, ExtraInfo, 
+                   WrongResult, ActualResult, MatchID, IsTest, ActionType, ResultType, SportType
             FROM SettlementResultHist
             WHERE SettlementLogID IN ( SELECT SettlementLogID FROM @SettlementLogs )
 
-            SELECT * FROM @AmendmentInfo
+            SELECT ResourceID, ResourceOrder, Pos, BitMap, ResultName, ResultName_cs, 
+                   WrongValue, WrongValue_cs, ActualValue, ActualValue_cs, CalcTime, ReCalcTime, PosName
+            FROM @AmendmentInfo
         END
     END
 
@@ -481,8 +486,11 @@ BEGIN
 
         IF @Debug = 1
         BEGIN
-            SELECT * FROM @DetailSiteInfo
-            SELECT * FROM @SumSiteType
+            SELECT [Site], [Type], [Label], [BetCount], [HasNegativeBalance]
+            FROM @DetailSiteInfo
+            
+            SELECT [Type], [ShowTotal], [BetCount], [SiteCount], [NegativeBalanceCount], [Order]
+            FROM @SumSiteType
         END
     END
 
@@ -538,7 +546,7 @@ BEGIN
                                 , '')
                             )
                     , CHAR(10)
-                      )WITHIN GROUP(ORDER BY [Order]) AS NVARCHAR(MAX))
+                      )WITHIN GROUP(ORDER BY [Order] ASC) AS NVARCHAR(MAX))
         FROM @SumSiteType
 
         IF @NegativeBalanceLicenseeCount IS NOT NULL
@@ -585,7 +593,7 @@ BEGIN
 			SELECT @mReCalcTime = CAST(STRING_AGG(
 				'\- ReCalculation time: ' + FORMAT(ReCalcTime, 'MMM dd, yyyy hh:mm:ss tt') + ' [' + ActualValue + ']',
 				CHAR(10)
-			)WITHIN GROUP(ORDER BY ReCalcTime) AS NVARCHAR(MAX))
+			)WITHIN GROUP(ORDER BY ReCalcTime ASC) AS NVARCHAR(MAX))
 			FROM DistinctReCalc;
 		END
 
@@ -606,7 +614,7 @@ BEGIN
 						 ELSE '' END
 					END,
 					', '
-				) WITHIN GROUP (ORDER BY BitMap) AS NVARCHAR(MAX)) AS ActualValueGroup,
+				) WITHIN GROUP (ORDER BY BitMap ASC) AS NVARCHAR(MAX)) AS ActualValueGroup,
 				CAST(STRING_AGG(
 					CASE WHEN WrongValue IS NOT NULL 
 					THEN WrongValue + 
@@ -615,7 +623,7 @@ BEGIN
 						 ELSE '' END
 					END,
 					', '
-				) WITHIN GROUP (ORDER BY BitMap) AS NVARCHAR(MAX)) AS WrongValueGroup
+				) WITHIN GROUP (ORDER BY BitMap ASC) AS NVARCHAR(MAX)) AS WrongValueGroup
 			FROM @AmendmentInfo
 			GROUP BY 
 				ResourceID,
@@ -638,7 +646,7 @@ BEGIN
 							ActualValueGroup
 						),
 						CHAR(10)
-					) WITHIN GROUP (ORDER BY ResourceOrder, Pos) AS NVARCHAR(MAX)) 
+					) WITHIN GROUP (ORDER BY ResourceOrder ASC, Pos ASC) AS NVARCHAR(MAX)) 
 			END
 		,@mWrongResult =
 			CAST(STRING_AGG(
@@ -651,7 +659,7 @@ BEGIN
 					WrongValueGroup
 				),
 				CHAR(10)
-			) WITHIN GROUP (ORDER BY ResourceOrder, Pos) AS NVARCHAR(MAX))
+			) WITHIN GROUP (ORDER BY ResourceOrder ASC, Pos ASC) AS NVARCHAR(MAX))
 		FROM GroupedResults
 		WHERE WrongValueGroup IS NOT NULL OR ActualValueGroup IS NOT NULL
 
@@ -667,7 +675,7 @@ BEGIN
 				CAST(STRING_AGG(
 					NULLIF(WrongValue, '')
 					, ', '
-				) WITHIN GROUP (ORDER BY BitMap) AS NVARCHAR(MAX)) AS WrongValueGroup
+				) WITHIN GROUP (ORDER BY BitMap ASC) AS NVARCHAR(MAX)) AS WrongValueGroup
 			FROM @AmendmentInfo
 			GROUP BY 
 				ResourceID,
@@ -686,7 +694,7 @@ BEGIN
                         + '; '
                         + CASE WHEN PosName IS NOT NULL THEN PosName + ': ' ELSE '' END
                         + WrongValueGroup
-                    , ' | ')WITHIN GROUP(ORDER BY CalcTime, ResourceOrder) AS NVARCHAR(MAX))
+                    , ' | ')WITHIN GROUP(ORDER BY CalcTime ASC, ResourceOrder ASC) AS NVARCHAR(MAX))
                   + ']'
            FROM GroupedCalcTime
            GROUP BY CalcTime
@@ -706,7 +714,7 @@ BEGIN
 					CAST(STRING_AGG(
 						NULLIF(ActualValue, '')
 						, ', '
-					) WITHIN GROUP (ORDER BY BitMap) AS NVARCHAR(MAX)) AS ActualValueGroup
+					) WITHIN GROUP (ORDER BY BitMap ASC) AS NVARCHAR(MAX)) AS ActualValueGroup
 				FROM @AmendmentInfo
 				GROUP BY 
 					ResourceID,
@@ -725,7 +733,7 @@ BEGIN
 							+ '; '
 							+ CASE WHEN PosName IS NOT NULL THEN PosName + ': ' ELSE '' END
 							+ ActualValueGroup 
-						, ' | ')WITHIN GROUP(ORDER BY ReCalcTime, ResourceOrder) AS NVARCHAR(MAX))
+						, ' | ')WITHIN GROUP(ORDER BY ReCalcTime ASC, ResourceOrder ASC) AS NVARCHAR(MAX))
 					  + ']'
 			   FROM GroupedReCalcTime
 			   GROUP BY ReCalcTime
