@@ -10,6 +10,7 @@ AS
 
 	Revisions:
 		- 20250613@Tacy: Initial Func [RedmineID: #228007]
+		- 20251201@Tacy: Add IsDeleted filter to RefResource table [RedmineID: #245660]       
 
 	Param's Explanation::		
 */	
@@ -20,3 +21,4 @@ RETURN
 			r.Resource_cs
 	FROM bodb02.dbo.RefResource r WITH (NOLOCK)
 	WHERE RefId=@RefId
+		AND r.IsDeleted=0
